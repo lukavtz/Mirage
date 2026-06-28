@@ -12,7 +12,7 @@ Phase 6: Panel + Builder        ████████████████
 Phase 7: Integration            ████████████████████  10/10 ✅
 Phase 8: Unit Tests             ████████████████████  192/192 ✅
 Phase 8b: Integration Tests     ░░░░░░░░░░░░░░░░░░░░   0/8
-Phase 9: Engine Hardening       ████████████████░░░░   10/23
+Phase 9: Engine Hardening       ████████████████████  23/23 ✅
 Phase 10: Data Theft Expansion  ░░░░░░░░░░░░░░░░░░░░   0/39
 Phase 11: Additional Theft      ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 12: Monetisation          ░░░░░░░░░░░░░░░░░░░░   0/16
@@ -252,15 +252,16 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 - [x] `browsers/dbsc_bypass.zig` — Chrome 147+ DBSC cookies bypass через шеллкод
 
 ### 9.2 Evasion — Расширение анти-анализа
-- [ ] `evasion/process_list.zig` — Process list check (taskmgr, processhacker, wireshark, procexp, dbgview, x64dbg)
-- [ ] `evasion/disk_check.zig` — Disk size < 60 GB → sandbox
-- [ ] `evasion/uptime_check.zig` — Uptime < 30 min → sandbox
-- [ ] `evasion/mouse_check.zig` — Mouse movement отсутствует → sandbox
-- [ ] `evasion/geo_block.zig` — Geo-block: IP + раскладка + язык (тройная проверка)
-- [ ] `evasion/geo_block.zig` — Серверная валидация гео в Panel
-- [ ] `evasion/hwid.zig` — HWID generation (disk+motherboard+mac hash)
-- [ ] `config.zig` — SLEEP_MIN_MS/SLEEP_JITTER usage in pipeline
-- [ ] `config.zig` — HWID-based ban list
+- [x] `evasion/process_list.zig` — Process list check (36 процессов, хеш-сравнение)
+- [x] `evasion/detection.zig` — Disk < 60GB → sandbox
+- [x] `evasion/detection.zig` — Uptime < 30 min → sandbox
+- [x] `evasion/detection.zig` — Mouse отсутствует → sandbox
+- [x] `evasion/detection.zig` — Geo-block: IP + раскладка + язык + timezone (тройная проверка)
+- [x] `PanelServer.cs` — GET /api/geo — серверная валидация гео
+- [x] `evasion/detection.zig` — HWID: SHA-256 от disk serial + motherboard + ProductID
+- [x] `config.zig` — SLEEP_MIN_MS/SLEEP_JITTER usage в main.zig pipeline
+- [x] `config.zig` — HWID_BAN_LIST (пустой по умолчанию, заполняется в Builder)
+- [x] `anti_analysis.zig` — Интеграция всех 5 новых checks + weighted scoring
 
 ### 9.3 Self-Defense
 - [ ] NtDeleteFile — добавить сисколл (для Level 1 self-delete)

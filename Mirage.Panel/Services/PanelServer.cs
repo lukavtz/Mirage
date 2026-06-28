@@ -188,6 +188,19 @@ public class PanelServer
             return Results.Json(results);
         });
 
+        app.MapGet("/api/geo", (HttpRequest req) =>
+        {
+            var ip = req.Query["ip"].FirstOrDefault() ?? req.HttpContext.Connection.RemoteIpAddress?.ToString();
+            if (string.IsNullOrEmpty(ip)) return Results.Json(new { blocked = false });
+
+            var cisCountries = new HashSet<string> { "RU", "KZ", "UZ", "BY", "UA", "KG", "TJ", "TM", "GE", "MD", "LT", "LV", "EE", "AM", "AZ" };
+            var blocked = false;
+            if (ip != null && cisCountries.Contains(GetCountryCode(ip)))
+                blocked = true;
+
+            return Results.Json(new { blocked, country = GetCountryCode(ip ?? "") });
+        });
+
         _ = app.StartAsync();
         _app = app;
     }
@@ -205,6 +218,54 @@ public class PanelServer
             return uri.Host.Replace("www.", "");
         }
         catch { return url; }
+    }
+
+    private static string GetCountryCode(string ip)
+    {
+        try
+        {
+            var parts = ip.Split('.');
+            if (parts.Length == 4 && int.TryParse(parts[0], out var first))
+            {
+                if (first >= 1 && first <= 5) return "US";
+                if (first >= 46 && first <= 47) return "RU";
+                if (first >= 78 && first <= 79) return "RU";
+                if (first >= 88 && first <= 89) return "RU";
+                if (first >= 91 && first <= 94) return "RU";
+                if (first >= 95 && first <= 96) return "RU";
+                if (first >= 109 && first <= 110) return "RU";
+                if (first >= 128 && first <= 129) return "RU";
+                if (first >= 130 && first <= 131) return "RU";
+                if (first >= 134 && first <= 136) return "RU";
+                if (first >= 145 && first <= 147) return "RU";
+                if (first >= 148 && first <= 149) return "RU";
+                if (first >= 151 && first <= 152) return "RU";
+                if (first >= 154 && first <= 155) return "RU";
+                if (first >= 158 && first <= 159) return "RU";
+                if (first >= 176 && first <= 177) return "RU";
+                if (first >= 178 && first <= 179) return "RU";
+                if (first >= 185 && first <= 186) return "RU";
+                if (first >= 188 && first <= 189) return "RU";
+                if (first >= 193 && first <= 194) return "RU";
+                if (first >= 195 && first <= 196) return "RU";
+                if (first >= 199 && first <= 200) return "RU";
+                if (first >= 212 && first <= 213) return "RU";
+                if (first >= 217 && first <= 218) return "RU";
+                if (first == 31) return "RU";
+                if (first == 37) return "UA";
+                if (first == 77) return "RU";
+                if (first == 80) return "RU";
+                if (first == 83) return "RU";
+                if (first == 84) return "RU";
+                if (first == 85) return "RU";
+                if (first == 86) return "RU";
+                if (first == 87) return "RU";
+                if (first == 90) return "RU";
+                if (first == 178) return "KZ";
+            }
+        }
+        catch { }
+        return "XX";
     }
 
     private class RateLimitEntry

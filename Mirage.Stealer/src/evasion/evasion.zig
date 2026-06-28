@@ -216,3 +216,13 @@ pub fn checkTimingAnomaly() bool {
     const t1 = rdtsc();
     return (t1 -% t0) < config.VM_TIMING_ANOMALY_TSC;
 }
+
+test "checkRegistryVmIndicators no crash" {
+    _ = checkRegistryVmIndicators();
+}
+
+test "rdtsc returns different values" {
+    const a = rdtsc();
+    const b = rdtsc();
+    try std.testing.expect(a != b);
+}

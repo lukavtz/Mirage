@@ -126,3 +126,8 @@ pub const MappedFile = struct {
         return self.base[0..self.size];
     }
 };
+
+test "mapped file open nonexistent" {
+    const mf = MappedFile.open("C:\\__nonexistent_test__");
+    try std.testing.expect(mf == null);
+}

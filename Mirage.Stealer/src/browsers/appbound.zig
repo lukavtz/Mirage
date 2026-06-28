@@ -204,3 +204,8 @@ pub fn decryptAppBoundKey(encrypted_key: []const u8, browser: BrowserType, out: 
 
     return out[0..32];
 }
+
+test "appbound GUIDs non-zero" {
+    const guids = getGuids(.chrome);
+    try std.testing.expect(guids.clsid[0] != 0);
+}

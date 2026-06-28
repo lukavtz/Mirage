@@ -228,19 +228,6 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
             try w.print("  None found\n", .{});
         }
     }
-    {
-        const rg = regex_grabber.scanFiles(grabber.DEFAULT_RULES, allocator) catch |e| blk: {
-            break :blk try std.fmt.allocPrint(allocator, "Failed to scan for secrets: {}\n", .{e});
-        };
-        defer allocator.free(rg);
-        if (rg.len > 0) {
-            for (rg) |s| {
-                try w.print("[{s}] {s}: {s}\n", .{ s.secret_type, s.file_path, s.value });
-            }
-        } else {
-            try w.print("No secrets found\n", .{});
-        }
-    }
 
     return try report.toOwnedSlice();
 }

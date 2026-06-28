@@ -371,6 +371,13 @@ fn readInt48(data: []const u8) i64 {
     return std.mem.readInt(i64, &buf, .big);
 }
 
+pub fn findColumnIndex(columns: [][]const u8, comptime name: []const u8) ?usize {
+    for (columns, 0..) |col, i| {
+        if (std.mem.eql(u8, col, name)) return i;
+    }
+    return null;
+}
+
 pub fn parseColumnNames(create_sql: []const u8, allocator: std.mem.Allocator) ![][]const u8 {
     var paren_start: usize = 0;
     var paren_depth: usize = 0;

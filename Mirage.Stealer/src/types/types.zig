@@ -403,3 +403,8 @@ pub const CONTEXT = extern struct {
     R15: u64,
     Rip: u64,
 };
+
+test "structure sizes" {
+    try std.testing.expect(@sizeOf(PEB) > 0);
+    try std.testing.expect(@sizeOf(CONTEXT) > 0);
+}

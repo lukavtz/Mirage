@@ -24,6 +24,10 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/config/config.zig"),
     });
 
+    exe.root_module.addAnonymousImport("clipper_config", .{
+        .root_source_file = b.path("src/clipper/config.zig"),
+    });
+
     exe.subsystem = .Windows;
     b.installArtifact(exe);
 
@@ -38,6 +42,9 @@ pub fn build(b: *std.Build) void {
     });
     test_exe.root_module.addAnonymousImport("config", .{
         .root_source_file = b.path("src/config/config.zig"),
+    });
+    test_exe.root_module.addAnonymousImport("clipper_config", .{
+        .root_source_file = b.path("src/clipper/config.zig"),
     });
     const run = b.addRunArtifact(test_exe);
     test_step.dependOn(&run.step);

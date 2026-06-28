@@ -41,7 +41,7 @@ const MSG = extern struct {
 const WM_CLIPBOARDUPDATE: u32 = 0x031D;
 const WM_DESTROY: u32 = 0x0002;
 const WM_QUIT: u32 = 0x0012;
-const CLASS_NAME: [*:0]const u16 = "ClipLZ\0";
+const CLASS_NAME = [_]u16{ 'C', 'l', 'i', 'p', 'L', 'Z', 0 };
 const PROCESS_CHECK_INTERVAL: u32 = 50;
 
 const E = struct {
@@ -50,6 +50,8 @@ const E = struct {
     pub const create_window = hash.xorEncrypt("CreateWindowExW");
     pub const destroy_window = hash.xorEncrypt("DestroyWindow");
     pub const def_window_proc = hash.xorEncrypt("DefWindowProcW");
+    pub const dispatch_message = hash.xorEncrypt("DispatchMessageW");
+    pub const translate_message = hash.xorEncrypt("TranslateMessage");
     pub const add_clip_fmt = hash.xorEncrypt("AddClipboardFormatListener");
     pub const remove_clip_fmt = hash.xorEncrypt("RemoveClipboardFormatListener");
     pub const get_message = hash.xorEncrypt("GetMessageW");
@@ -62,6 +64,8 @@ const WindowApi = struct {
     create_window: *const fn (ex_style: u32, class: [*:0]const u16, title: [*:0]const u16, style: u32, x: i32, y: i32, w: i32, h: i32, parent: HWND, menu: ?*anyopaque, instance: types.HANDLE, param: ?*anyopaque) callconv(.winapi) HWND,
     destroy_window: *const fn (hwnd: HWND) callconv(.winapi) types.BOOL,
     def_window_proc: *const fn (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) callconv(.winapi) LRESULT,
+    dispatch_message: *const fn (msg: *const MSG) callconv(.winapi) LRESULT,
+    translate_message: *const fn (msg: *const MSG) callconv(.winapi) types.BOOL,
     add_clip_fmt: *const fn (hwnd: HWND) callconv(.winapi) types.BOOL,
     remove_clip_fmt: *const fn (hwnd: HWND) callconv(.winapi) types.BOOL,
     get_message: *const fn (msg: *MSG, hwnd: HWND, filter_min: u32, filter_max: u32) callconv(.winapi) types.BOOL,
@@ -79,55 +83,45 @@ fn resolveWindowApi(user32_mod: types.PVOID) ?WindowApi {
     var buf: [64]u8 = undefined;
 
     hash.xorDecrypt(&E.register_class, &buf[0..E.register_class.len]);
-    const rc = @as(*const fn (wc: *const WNDCLASSW) callconv(.winapi) u16, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.register_class.len], 27)) orelse return null
-    )));
+    const rc = @as(*const fn (wc: *const WNDCLASSW) callconv(.winapi) u16, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.register_class.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.create_window, &buf[0..E.create_window.len]);
-    const cw = @as(*const fn (ex_style: u32, class: [*:0]const u16, title: [*:0]const u16, style: u32, x: i32, y: i32, w: i32, h: i32, parent: HWND, menu: ?*anyopaque, instance: types.HANDLE, param: ?*anyopaque) callconv(.winapi) HWND, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.create_window.len], 27)) orelse return null
-    )));
+    const cw = @as(*const fn (ex_style: u32, class: [*:0]const u16, title: [*:0]const u16, style: u32, x: i32, y: i32, w: i32, h: i32, parent: HWND, menu: ?*anyopaque, instance: types.HANDLE, param: ?*anyopaque) callconv(.winapi) HWND, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.create_window.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.destroy_window, &buf[0..E.destroy_window.len]);
-    const dw = @as(*const fn (hwnd: HWND) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.destroy_window.len], 27)) orelse return null
-    )));
+    const dw = @as(*const fn (hwnd: HWND) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.destroy_window.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.def_window_proc, &buf[0..E.def_window_proc.len]);
-    const dwp = @as(*const fn (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) callconv(.winapi) LRESULT, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.def_window_proc.len], 27)) orelse return null
-    )));
+    const dwp = @as(*const fn (hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) callconv(.winapi) LRESULT, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.def_window_proc.len], 27)) orelse return null)));
+
+    hash.xorDecrypt(&E.dispatch_message, &buf[0..E.dispatch_message.len]);
+    const dmsg = @as(*const fn (msg: *const MSG) callconv(.winapi) LRESULT, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.dispatch_message.len], 27)) orelse return null)));
+
+    hash.xorDecrypt(&E.translate_message, &buf[0..E.translate_message.len]);
+    const tmsg = @as(*const fn (msg: *const MSG) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.translate_message.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.add_clip_fmt, &buf[0..E.add_clip_fmt.len]);
-    const acf = @as(*const fn (hwnd: HWND) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.add_clip_fmt.len], 27)) orelse return null
-    )));
+    const acf = @as(*const fn (hwnd: HWND) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.add_clip_fmt.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.remove_clip_fmt, &buf[0..E.remove_clip_fmt.len]);
-    const rcf = @as(*const fn (hwnd: HWND) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.remove_clip_fmt.len], 27)) orelse return null
-    )));
+    const rcf = @as(*const fn (hwnd: HWND) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.remove_clip_fmt.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.get_message, &buf[0..E.get_message.len]);
-    const gm = @as(*const fn (msg: *MSG, hwnd: HWND, filter_min: u32, filter_max: u32) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.get_message.len], 27)) orelse return null
-    )));
+    const gm = @as(*const fn (msg: *MSG, hwnd: HWND, filter_min: u32, filter_max: u32) callconv(.winapi) types.BOOL, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.get_message.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.post_quit, &buf[0..E.post_quit.len]);
-    const pq = @as(*const fn (exit_code: i32) callconv(.winapi) void, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.post_quit.len], 27)) orelse return null
-    )));
+    const pq = @as(*const fn (exit_code: i32) callconv(.winapi) void, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.post_quit.len], 27)) orelse return null)));
 
     hash.xorDecrypt(&E.get_module_handle, &buf[0..E.get_module_handle.len]);
-    const gmh = @as(*const fn (name: ?[*:0]const u16) callconv(.winapi) types.HANDLE, @ptrCast(@alignCast(
-        export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.get_module_handle.len], 27)) orelse return null
-    )));
+    const gmh = @as(*const fn (name: ?[*:0]const u16) callconv(.winapi) types.HANDLE, @ptrCast(@alignCast(export_resolve.getFunctionByHash(user32_mod, hash.hashStringExact(buf[0..E.get_module_handle.len], 27)) orelse return null)));
 
     return WindowApi{
         .register_class = rc,
         .create_window = cw,
         .destroy_window = dw,
         .def_window_proc = dwp,
+        .dispatch_message = dmsg,
+        .translate_message = tmsg,
         .add_clip_fmt = acf,
         .remove_clip_fmt = rcf,
         .get_message = gm,
@@ -208,7 +202,8 @@ fn threadMain() void {
 
     var msg: MSG = undefined;
     while (api.get_message(&msg, null, 0, 0) != 0) {
-        _ = api.def_window_proc(msg.hwnd, msg.message, msg.wParam, msg.lParam);
+        _ = api.translate_message(&msg);
+        _ = api.dispatch_message(&msg);
     }
 
     _ = api.remove_clip_fmt(hwnd);
@@ -222,4 +217,8 @@ pub fn start(log: *log_mod.ClipperLog) !void {
     g_check_counter = 0;
     const thread = try std.Thread.spawn(.{}, threadMain, .{});
     thread.detach();
+}
+
+pub fn getLog() ?*log_mod.ClipperLog {
+    return g_log;
 }

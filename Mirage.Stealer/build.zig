@@ -48,4 +48,21 @@ pub fn build(b: *std.Build) void {
     });
     const run = b.addRunArtifact(test_exe);
     test_step.dependOn(&run.step);
+
+    const integration_step = b.step("integration-test", "Run integration tests");
+    const integration_exe = b.addExecutable(.{
+        .name = "MirageIntegrationTest",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/integration_test.zig"),
+            .target = target,
+            .optimize = .ReleaseSmall,
+            .single_threaded = true,
+        }),
+    });
+    integration_exe.root_module.addAnonymousImport("config", .{
+        .root_source_file = b.path("src/config/config.zig"),
+    });
+    integration_exe.subsystem = .Console;
+    const run_integration = b.addRunArtifact(integration_exe);
+    integration_step.dependOn(&run_integration.step);
 }

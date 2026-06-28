@@ -49,7 +49,6 @@ pub fn collect(allocator: std.mem.Allocator, roaming: []const u8) ![][]const u8 
 
     const config_path = std.fs.path.join(allocator, &[_][]const u8{ base_path, config_buf[0..] }) catch {};
     if (config_path) |p| {
-        defer allocator.free(p);
         const file = std.fs.openFileAbsolute(p, .{}) catch {};
         if (file) |f| {
             f.close();
@@ -65,7 +64,6 @@ pub fn collect(allocator: std.mem.Allocator, roaming: []const u8) ![][]const u8 
         defer allocator.free(sd);
         const db_path = std.fs.path.join(allocator, &[_][]const u8{ sd, db_buf[0..] }) catch {};
         if (db_path) |dp| {
-            defer allocator.free(dp);
             const file = std.fs.openFileAbsolute(dp, .{}) catch {};
             if (file) |f| {
                 f.close();

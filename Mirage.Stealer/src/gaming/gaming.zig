@@ -141,5 +141,5 @@ test "collect aggregates all sub-modules" {
 test "collect gracefully handles partial failures" {
     const result = collect(testing.allocator, "C:\\__nonexistent__local", "C:\\__nonexistent__roaming") catch unreachable;
     defer freeCollectResult(result, testing.allocator);
-    try testing.expectEqual(@as(usize, 5), result.games.len);
+    try testing.expectEqual(@as(usize, 7), result.games.len);
 }

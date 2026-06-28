@@ -40,7 +40,7 @@ pub fn collect(allocator: std.mem.Allocator) ![]ProcessEntry {
         const name_len = entry.ImageName.Length / 2;
         if (name_len > 0 and name_len < 256) {
             const raw_ptr: [*]u8 = @ptrCast(@alignCast(bytes));
-            const name_offset = @intFromPtr(entry.ImageName.Buffer) - @intFromPtr(buf_base.?) + offset;
+            const name_offset = @intFromPtr(entry.ImageName.Buffer) - @intFromPtr(buf_base.?);
             if (name_offset + name_len * 2 <= ret_len) {
                 const name_ptr: [*]u16 = @ptrCast(@alignCast(raw_ptr + name_offset));
                 var name_buf: [256]u8 = undefined;

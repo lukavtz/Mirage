@@ -13,6 +13,7 @@ public class AppDbContext : DbContext
     public DbSet<StolenFile> StolenFiles => Set<StolenFile>();
     public DbSet<Models.SystemInfo> SystemInfos => Set<Models.SystemInfo>();
     public DbSet<Build> Builds => Set<Build>();
+    public DbSet<Ban> Bans => Set<Ban>();
 
     protected override void OnConfiguring(DbContextOptionsBuilder options)
     {

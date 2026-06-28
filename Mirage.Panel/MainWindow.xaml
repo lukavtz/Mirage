@@ -1,0 +1,38 @@
+﻿<Window x:Class="Mirage.Panel.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Mirage Panel" Height="800" Width="1200"
+        Background="#1E1E1E"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0" Background="#2D2D2D">
+            <StackPanel Margin="10">
+                <TextBlock Text="MIRAGE" FontSize="24" FontWeight="Bold"
+                           Foreground="#BB86FC"
+                           Margin="0,0,0,20"/>
+                <RadioButton Content="Dashboard" IsChecked="True" GroupName="nav"
+                             Foreground="White"
+                             Checked="NavChanged" Tag="Dashboard"/>
+                <RadioButton Content="Sessions" GroupName="nav"
+                             Foreground="White"
+                             Checked="NavChanged" Tag="Sessions"/>
+                <RadioButton Content="Build" GroupName="nav"
+                             Foreground="White"
+                             Checked="NavChanged" Tag="Build"/>
+                <RadioButton Content="Search" GroupName="nav"
+                             Foreground="White"
+                             Checked="NavChanged" Tag="Search"/>
+                <RadioButton Content="Settings" GroupName="nav"
+                             Foreground="White"
+                             Checked="NavChanged" Tag="Settings"/>
+            </StackPanel>
+        </Border>
+
+        <Frame x:Name="MainFrame" Grid.Column="1" NavigationUIVisibility="Hidden"/>
+    </Grid>
+</Window>

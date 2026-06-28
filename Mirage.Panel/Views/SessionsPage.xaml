@@ -1,0 +1,25 @@
+<Page x:Class="Mirage.Panel.Views.SessionsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+      Title="Sessions" Background="{StaticResource MaterialDesignPaper}">
+    <Grid Margin="20">
+        <DataGrid x:Name="SessionsGrid" AutoGenerateColumns="False"
+                  Style="{StaticResource MaterialDesignDataGrid}"
+                  MouseDoubleClick="SessionsGrid_MouseDoubleClick"
+                  IsReadOnly="True">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="IP" Binding="{Binding Ip}" Width="*"/>
+                <DataGridTextColumn Header="HWID" Binding="{Binding Hwid}" Width="2*"/>
+                <DataGridTextColumn Header="OS" Binding="{Binding Os}" Width="*"/>
+                <DataGridTextColumn Header="Username" Binding="{Binding Username}" Width="*"/>
+                <DataGridTextColumn Header="Country" Binding="{Binding CountryCode}" Width="*"/>
+                <DataGridTextColumn Header="Date" Binding="{Binding CreatedAt, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}" Width="*"/>
+                <DataGridTextColumn Header="Passwords" Binding="{Binding Passwords.Count}" Width="Auto"/>
+                <DataGridTextColumn Header="Cookies" Binding="{Binding Cookies.Count}" Width="Auto"/>
+                <DataGridTextColumn Header="Cards" Binding="{Binding Cards.Count}" Width="Auto"/>
+                <DataGridTextColumn Header="Wallets" Binding="{Binding Wallets.Count}" Width="Auto"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</Page>

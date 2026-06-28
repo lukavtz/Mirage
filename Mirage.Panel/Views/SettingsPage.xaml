@@ -1,0 +1,46 @@
+<Page x:Class="Mirage.Panel.Views.SettingsPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+      Title="Settings" Background="{StaticResource MaterialDesignPaper}">
+    <ScrollViewer Padding="20">
+        <StackPanel MaxWidth="500">
+            <TextBlock Text="Settings" FontSize="28" FontWeight="Bold" Margin="0,0,0,20"/>
+
+            <Border Style="{StaticResource MaterialDesignCard}" Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="Server" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Server Port" Margin="0,0,0,4"/>
+                    <TextBox x:Name="ServerPort" Text="5000" Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                             materialDesign:HintAssist.Hint="Server Port" Margin="0,0,0,10"/>
+
+                    <TextBlock Text="Auth Token" Margin="0,0,0,4"/>
+                    <TextBox x:Name="AuthTokenDisplay" IsReadOnly="True"
+                             Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                             materialDesign:HintAssist.Hint="Auth Token" Margin="0,0,0,10"/>
+
+                    <WrapPanel>
+                        <Button Content="Save Port" Click="SaveClick"
+                                Style="{StaticResource MaterialDesignFlatButton}" Margin="0,0,10,0"/>
+                        <Button Content="Regenerate Token" Click="RegenerateTokenClick"
+                                Style="{StaticResource MaterialDesignFlatButton}" Margin="0,0,10,0"/>
+                        <Button Content="Restart Server" Click="RestartClick"
+                                Style="{StaticResource MaterialDesignFlatButton}"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
+
+            <Border Style="{StaticResource MaterialDesignCard}" Padding="15" Margin="0,0,0,15">
+                <StackPanel>
+                    <TextBlock Text="Database" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+                    <TextBlock x:Name="DbTotalSessions" Margin="0,0,0,4" Foreground="Gray"/>
+                    <TextBlock x:Name="DbOldestSession" Margin="0,0,0,4" Foreground="Gray"/>
+                    <TextBlock x:Name="DbNewestSession" Foreground="Gray"/>
+                </StackPanel>
+            </Border>
+
+            <TextBlock x:Name="StatusText" Foreground="Gray"/>
+        </StackPanel>
+    </ScrollViewer>
+</Page>

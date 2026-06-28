@@ -12,7 +12,7 @@ Phase 6: Panel + Builder        ████████████████
 Phase 7: Integration            ████████████████████  10/10 ✅
 Phase 8: Unit Tests             ████████████████████  192/192 ✅
 Phase 8b: Integration Tests     ░░░░░░░░░░░░░░░░░░░░   0/8
-Phase 9: Engine Hardening       ████████████████████  23/23 ✅
+Phase 9: Engine Hardening       ████████████████████  27/27 ✅
 Phase 10: Data Theft Expansion  ░░░░░░░░░░░░░░░░░░░░   0/39
 Phase 11: Additional Theft      ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 12: Monetisation          ░░░░░░░░░░░░░░░░░░░░   0/16
@@ -264,10 +264,11 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 - [x] `anti_analysis.zig` — Интеграция всех 5 новых checks + weighted scoring
 
 ### 9.3 Self-Defense
-- [ ] NtDeleteFile — добавить сисколл (для Level 1 self-delete)
-- [ ] `cleanup/self_delete.zig` — NtSetInformationFile(FileDispositionInfo) → MoveFileEx → cmd.exe fallback
-- [ ] `cleanup/temp_wipe.zig` — Temp directory wiping после отработки
-- [ ] `evasion/uac_bypass.zig` — Fodhelper / CMSTPLUA COM UAC bypass
+- [x] `engine.zig` + `stubs.zig` — NtSetInformationFile сисколл для FileDispositionInfo
+- [x] `cleanup/self_delete.zig` — 3 уровня: NtSetInformationFile → MoveFileEx → cmd batch
+- [x] `cleanup/temp_wipe.zig` — Temp directory wiping через NtDeleteFile
+- [x] `evasion/uac_bypass.zig` — Fodhelper UAC bypass (HKCU\ms-settings)
+- [x] `main.zig` — Интеграция self-delete + temp wipe в конец pipeline
 
 ---
 

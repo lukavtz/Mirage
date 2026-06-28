@@ -415,5 +415,19 @@ comptime {
         \\    popq %rdx
         \\    popq %rax
         \\    jmpq *%r11
+
+        \\.global NtSetInformationFile_stub
+        \\NtSetInformationFile_stub:
+        \\    mov ssn_NtSetInformationFile(%rip), %eax
+        \\    pushq %rax
+        \\    pushq %rdx
+        \\    movq %rcx, %r10
+        \\    leaq gadget_pool(%rip), %r11
+        \\    rdtsc
+        \\    andq $63, %rax
+        \\    movq (%r11, %rax, 8), %r11
+        \\    popq %rdx
+        \\    popq %rax
+        \\    jmpq *%r11
     );
 }

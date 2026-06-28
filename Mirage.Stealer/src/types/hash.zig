@@ -57,6 +57,7 @@ pub fn encryptedHashModule(comptime name: []const u8) u32 {
 // Comptime XOR encrypt — returns XOR'd bytes that can be stored in the binary
 // Usage: const encrypted = comptime xorEncrypt("plaintext");
 pub fn xorEncrypt(comptime s: []const u8) [s.len]u8 {
+    @setEvalBranchQuota(100000);
     var buf: [s.len]u8 = undefined;
     inline for (s, 0..) |c, i| {
         buf[i] = c ^ config.STRING_KEY_ENC[i % 16];

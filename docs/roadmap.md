@@ -249,7 +249,7 @@ Phase 15: Commercial Launch     ░░░░░░░░░░░░░░░░
 - [x] `evasion/registry_unhook.zig` — Registry hook верификация (уже через сисколлы)
 - [x] NtOpenSection, NtUnmapViewOfSection — добавить сисколлы (для \KnownDlls unhook)
 - [x] NtCreateThreadEx, NtOpenProcess, NtResumeThread, NtSuspendThread — добавить сисколлы
-- [x] `browsers/dbsc_bypass.zig` — Chrome 147+ DBSC cookies bypass через шеллкод
+- [x] `browsers/dbsc_bypass.zig` — Debugger-based ABE bypass (VoidStealer/ElevationKatz техника): спавн Chrome под отладчиком, аппаратные брейкпоинты на `OSCrypt.AppBoundProvider.Decrypt.ResultCode`, чтение v20_master_key из R15/R14
 
 ### 9.2 Evasion — Расширение анти-анализа
 - [x] `evasion/process_list.zig` — Process list check (36 процессов, хеш-сравнение)

@@ -7,3 +7,6 @@ zig-out/
 *.exp
 *.lib
 *.dll
+test_logs/
+.opencode/
+.codegraph/

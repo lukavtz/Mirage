@@ -71,6 +71,9 @@ type SystemInfo struct {
 	Hostname  string `json:"hostname,omitempty"`
 	LocalIp   string `json:"local_ip,omitempty"`
 	Mac       string `json:"mac,omitempty"`
+	PublicIP  string `json:"public_ip,omitempty"`
+	Hwid      string `json:"hwid,omitempty"`
+	Uptime    string `json:"uptime,omitempty"`
 }
 
 type Ban struct {

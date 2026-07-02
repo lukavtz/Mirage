@@ -79,5 +79,10 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(jwtSecret))
 		r.Get("/api/stats", statsHandler.Dashboard)
+
+		sessionsHandler := NewSessionsHandler(db)
+		r.Get("/api/sessions", sessionsHandler.List)
+		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
+		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
 	})
 }

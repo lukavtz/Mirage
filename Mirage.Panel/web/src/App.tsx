@@ -6,6 +6,8 @@ import { Shell } from '@/components/layout/shell'
 import { wsClient } from '@/lib/ws'
 import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
+import Sessions from '@/pages/Sessions'
+import SessionDetail from '@/pages/SessionDetail'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -15,10 +17,6 @@ const queryClient = new QueryClient({
     },
   },
 })
-
-function Sessions() {
-  return <div className="text-muted-foreground">Sessions — coming in Phase 2</div>
-}
 
 function Build() {
   return <div className="text-muted-foreground">Build — coming in Phase 5</div>
@@ -56,7 +54,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Dashboard /> },
       { path: 'sessions', element: <Sessions /> },
-      { path: 'sessions/:id', element: <Sessions /> },
+      { path: 'sessions/:id', element: <SessionDetail /> },
       { path: 'build', element: <Build /> },
       { path: 'search', element: <Search /> },
       { path: 'settings', element: <Settings /> },

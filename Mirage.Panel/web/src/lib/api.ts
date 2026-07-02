@@ -36,7 +36,17 @@ class ApiClient {
     return res.json()
   }
 
-  get<T>(path: string) { return this.request<T>('GET', path) }
+  get<T>(path: string, params?: Record<string, any>) {
+    let url = path
+    if (params) {
+      const qs = Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== '')
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
+        .join('&')
+      if (qs) url += '?' + qs
+    }
+    return this.request<T>('GET', url)
+  }
   post<T>(path: string, body?: unknown) { return this.request<T>('POST', path, body) }
   put<T>(path: string, body?: unknown) { return this.request<T>('PUT', path, body) }
   del<T>(path: string) { return this.request<T>('DELETE', path) }

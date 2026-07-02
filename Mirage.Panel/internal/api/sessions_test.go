@@ -25,7 +25,7 @@ func setupSessionsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 		t.Fatal(err)
 	}
 
-	api.SetupRoutes(r, d, jwtSecret, "*", nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
 	return r, token
 }
 

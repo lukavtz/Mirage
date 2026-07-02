@@ -65,6 +65,33 @@ export interface SessionPage {
   pages: number
 }
 
+export interface BuildConfig {
+  c2_host: string
+  c2_port: number
+  telegram_token: string
+  telegram_chat_id: string
+  enable_persistence: boolean
+  enable_screenshot: boolean
+  enable_grabber: boolean
+  include_decryptor: boolean
+  build_tag: string
+}
+
+export interface BuildRecord {
+  id: string
+  file_size: number
+  sha256: string
+  build_tag: string
+  download_count: number
+  created_at: string
+}
+
+export interface BuildResponse {
+  build_id: string
+  file_size: number
+  sha256: string
+}
+
 export interface ApiError {
   status: number
   error: string

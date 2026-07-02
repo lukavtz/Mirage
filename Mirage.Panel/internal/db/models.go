@@ -87,3 +87,13 @@ type Setting struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
 }
+
+type Build struct {
+	ID             string `json:"id"`
+	ConfigHash     string `json:"config_hash,omitempty"`
+	FileSize       int64  `json:"file_size"`
+	Sha256         string `json:"sha256,omitempty"`
+	BuildTag       string `json:"build_tag,omitempty"`
+	DownloadCount  int    `json:"download_count"`
+	CreatedAt      string `json:"created_at"`
+}

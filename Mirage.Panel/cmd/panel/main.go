@@ -22,6 +22,7 @@ import (
 	"github.com/user/mirage-panel/internal/api"
 	"github.com/user/mirage-panel/internal/db"
 	"github.com/user/mirage-panel/internal/middleware"
+	"github.com/user/mirage-panel/internal/ws"
 )
 
 //go:embed frontend/dist
@@ -95,7 +96,12 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
-	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins)
+	wsHub := ws.NewHub()
+	go wsHub.Run()
+
+	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret))
+
+	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub)
 
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {

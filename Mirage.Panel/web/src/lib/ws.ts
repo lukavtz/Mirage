@@ -5,12 +5,12 @@ interface WSMessage {
   data?: unknown
 }
 
-export class WSClient {
+class WSClient {
   private ws: WebSocket | null = null
   private url: string
   private handlers = new Map<string, Set<WSMessageHandler>>()
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 3
+  private maxReconnectAttempts = 5
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null
   private shouldReconnect = false
 
@@ -78,15 +78,15 @@ export class WSClient {
     this.ws = null
   }
 
-  subscribe(type: string, handler: WSMessageHandler) {
+  on(type: string, handler: WSMessageHandler) {
     if (!this.handlers.has(type)) {
       this.handlers.set(type, new Set())
     }
     this.handlers.get(type)!.add(handler)
-    return () => this.unsubscribe(type, handler)
+    return () => this.off(type, handler)
   }
 
-  unsubscribe(type: string, handler: WSMessageHandler) {
+  off(type: string, handler: WSMessageHandler) {
     this.handlers.get(type)?.delete(handler)
   }
 
@@ -102,3 +102,4 @@ export class WSClient {
 }
 
 export const ws = new WSClient()
+export const wsClient = ws

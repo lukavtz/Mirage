@@ -5,21 +5,25 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/gorilla/websocket"
 	"github.com/user/mirage-panel/internal/api"
 	"github.com/user/mirage-panel/internal/auth"
+	"github.com/user/mirage-panel/internal/ws"
 )
 
-func setupTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
+func setupTestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string) {
 	t.Helper()
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 
 	userID := createTestUser(t, d, "testuser", "testpass")
 
-	api.SetupRoutes(r, d, jwtSecret, "*")
+	api.SetupRoutes(r, d, jwtSecret, "*", hub)
 
 	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret)
 	if err != nil {
@@ -31,7 +35,7 @@ func setupTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 
 func TestStats_Empty(t *testing.T) {
 	d := openTestDB(t)
-	r, token := setupTestRouter(t, d)
+	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -87,7 +91,7 @@ func TestStats_Empty(t *testing.T) {
 
 func TestStats_WithData(t *testing.T) {
 	d := openTestDB(t)
-	r, token := setupTestRouter(t, d)
+	r, token := setupTestRouter(t, d, nil)
 
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
 		VALUES ('s1', 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', datetime('now', '-1 day'))`)
@@ -215,7 +219,7 @@ func TestStats_WithData(t *testing.T) {
 
 func TestStats_RequiresAuth(t *testing.T) {
 	d := openTestDB(t)
-	r, _ := setupTestRouter(t, d)
+	r, _ := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
 	w := httptest.NewRecorder()
@@ -231,5 +235,67 @@ func TestStats_RequiresAuth(t *testing.T) {
 	}
 	if resp["error"] == "" {
 		t.Error("expected error message")
+	}
+}
+
+func TestStats_BroadcastsViaHub(t *testing.T) {
+	d := openTestDB(t)
+	hub := ws.NewHub()
+	go hub.Run()
+
+	jwtSecret := "test-secret"
+	userID := createTestUser(t, d, "broadcastuser", "testpass")
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := chi.NewRouter()
+	r.Get("/ws", ws.ServeWs(hub, jwtSecret))
+	r.Group(func(r chi.Router) {
+		r.Use(api.AuthMiddleware(jwtSecret))
+		statsHandler := api.NewStatsHandler(d, hub)
+		r.Get("/api/stats", statsHandler.Dashboard)
+	})
+
+	srv := httptest.NewServer(r)
+	defer srv.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?token=" + token
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	time.Sleep(50 * time.Millisecond)
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/stats", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(500 * time.Millisecond))
+	_, msg, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("expected broadcast message: %v", err)
+	}
+
+	var ev struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(msg, &ev); err != nil {
+		t.Fatal(err)
+	}
+	if ev.Type != "stats" {
+		t.Errorf("expected type 'stats', got %q", ev.Type)
 	}
 }

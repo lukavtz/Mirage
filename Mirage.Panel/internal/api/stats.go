@@ -3,10 +3,13 @@ package api
 import (
 	"database/sql"
 	"net/http"
+
+	"github.com/user/mirage-panel/internal/ws"
 )
 
 type StatsHandler struct {
-	db *sql.DB
+	db  *sql.DB
+	hub *ws.Hub
 }
 
 type StatsResponse struct {
@@ -50,8 +53,8 @@ type DomainEntry struct {
 	Count  int    `json:"count"`
 }
 
-func NewStatsHandler(db *sql.DB) *StatsHandler {
-	return &StatsHandler{db: db}
+func NewStatsHandler(db *sql.DB, hub *ws.Hub) *StatsHandler {
+	return &StatsHandler{db: db, hub: hub}
 }
 
 func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
@@ -135,4 +138,13 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+
+	if h.hub != nil {
+		event := ws.NewStatsEvent(ws.StatsPayload{
+			SessionsTotal:  resp.Sessions.Total,
+			SessionsToday:  resp.Sessions.Today,
+			PasswordsTotal: resp.Passwords.Total,
+		})
+		h.hub.Broadcast(event)
+	}
 }

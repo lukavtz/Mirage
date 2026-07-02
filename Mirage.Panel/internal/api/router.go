@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/auth"
+	"github.com/user/mirage-panel/internal/ws"
 )
 
 type ctxKey string
@@ -65,9 +66,9 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 	}
 }
 
-func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string) {
+func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string, hub *ws.Hub) {
 	authHandler := NewAuthHandler(db, jwtSecret)
-	statsHandler := NewStatsHandler(db)
+	statsHandler := NewStatsHandler(db, hub)
 
 	r.Use(CORSMiddleware(allowedOrigins))
 

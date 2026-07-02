@@ -13,12 +13,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Terminal,
+  RotateCcw,
 } from 'lucide-react'
 
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
   { to: '/sessions', label: 'Sessions', icon: Database, end: false },
   { to: '/build', label: 'Build', icon: Hammer, end: false },
+  { to: '/restore', label: 'Restore', icon: RotateCcw, end: false },
   { to: '/search', label: 'Search', icon: Search, end: false },
   { to: '/users', label: 'Users', icon: Users, end: false },
   { to: '/license', label: 'License', icon: KeyRound, end: false },

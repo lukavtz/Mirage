@@ -14,6 +14,7 @@ import BuildPage from '@/pages/Build'
 import Settings from '@/pages/Settings'
 import UsersPage from '@/pages/Users'
 import LicensePage from '@/pages/License'
+import RestorePage from '@/pages/Restore'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,6 +54,7 @@ const router = createBrowserRouter([
       { path: 'search', element: <SearchPage /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'license', element: <LicensePage /> },
+      { path: 'restore', element: <RestorePage /> },
       { path: 'settings', element: <Settings /> },
     ],
   },

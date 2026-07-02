@@ -124,6 +124,9 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 		r.Get("/api/settings", settingsHandler.Get)
 		r.Put("/api/settings", settingsHandler.Update)
 
+		restoreHandler := NewRestoreHandler(db)
+		r.Post("/api/restore/cookies", restoreHandler.Restore)
+
 		r.With(middleware.RequireRole("admin")).Get("/api/users", usersHandler.List)
 		r.With(middleware.RequireRole("admin")).Post("/api/users/invite", usersHandler.CreateInvite)
 	})

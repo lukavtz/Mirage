@@ -1,0 +1,13 @@
+services:
+  panel:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - JWT_SECRET=${JWT_SECRET:-change-me-to-random-64-char-string}
+      - DB_PATH=/data/mirage.db
+      - PORT=8080
+      - TZ=UTC
+    restart: unless-stopped

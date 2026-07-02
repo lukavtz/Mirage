@@ -10,3 +10,4 @@ zig-out/
 test_logs/
 .opencode/
 .codegraph/
+.DS_Store

@@ -97,3 +97,11 @@ export interface ApiError {
   error: string
   message?: string
 }
+
+export interface Note {
+    id: string
+    session_id: string
+    content: string
+    created_by: string
+    created_at: string
+}

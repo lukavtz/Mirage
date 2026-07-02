@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -16,8 +16,14 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu'
 import { FlagIcon } from '@/components/charts/flag-icon'
-import type { SessionDetail } from '@/types'
+import type { SessionDetail, Note } from '@/types'
 
 function formatBytes(bytes?: number): string {
   if (!bytes || bytes === 0) return '0 B'
@@ -36,6 +42,28 @@ export default function SessionDetail() {
     queryKey: ['session', id],
     queryFn: () => api.get<SessionDetail>(`/api/sessions/${id}`),
     enabled: !!id,
+  })
+
+  const queryClient = useQueryClient()
+  const [newNote, setNewNote] = useState('')
+
+  const notesQuery = useQuery<Note[]>({
+    queryKey: ['notes', id],
+    queryFn: () => api.get<Note[]>(`/api/sessions/${id}/notes`),
+    enabled: !!id,
+  })
+
+  const addNoteMutation = useMutation({
+    mutationFn: (content: string) => api.post(`/api/sessions/${id}/notes`, { content }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notes', id] })
+      setNewNote('')
+    },
+  })
+
+  const deleteNoteMutation = useMutation({
+    mutationFn: (noteId: string) => api.del(`/api/notes/${noteId}`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notes', id] }),
   })
 
   const toggleReveal = (id: string) => {
@@ -81,6 +109,22 @@ export default function SessionDetail() {
             <ArrowLeft className="h-4 w-4 mr-1" />
             Sessions
           </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Download className="h-4 w-4 mr-2" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => window.open(`/api/export/session/${id}?format=json`)}>
+                Export as JSON
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => window.open(`/api/export/session/${id}?format=html`)}>
+                Export as HTML
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -123,6 +167,10 @@ export default function SessionDetail() {
           <TabsTrigger value="system">
             <Monitor className="h-4 w-4 mr-1" />
             System Info
+          </TabsTrigger>
+          <TabsTrigger value="notes">
+            <MessageSquare className="h-4 w-4 mr-1" />
+            Notes
           </TabsTrigger>
         </TabsList>
 
@@ -398,6 +446,60 @@ export default function SessionDetail() {
               </div>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="notes">
+          <Card>
+            <CardContent className="space-y-4 pt-6">
+              <div className="flex gap-2">
+                <textarea
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                  placeholder="Add a note..."
+                  value={newNote}
+                  onChange={e => setNewNote(e.target.value)}
+                />
+                <Button
+                  className="self-end"
+                  size="sm"
+                  onClick={() => addNoteMutation.mutate(newNote)}
+                  disabled={!newNote.trim() || addNoteMutation.isPending}
+                >
+                  Add Note
+                </Button>
+              </div>
+
+              {notesQuery.isLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-16 w-full" />
+                </div>
+              ) : notesQuery.data?.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">No notes yet</p>
+              ) : (
+                <div className="space-y-2">
+                  {notesQuery.data?.map(note => (
+                    <div key={note.id} className="flex items-start justify-between rounded-md border p-3">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <p className="text-sm whitespace-pre-wrap break-words">{note.content}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {note.created_by} &middot; {formatDistanceToNow(new Date(note.created_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="ml-2 shrink-0"
+                        onClick={() => deleteNoteMutation.mutate(note.id)}
+                        disabled={deleteNoteMutation.isPending}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

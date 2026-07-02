@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/auth"
+	"github.com/user/mirage-panel/internal/services"
 	"github.com/user/mirage-panel/internal/ws"
 )
 
@@ -69,6 +70,8 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string, hub *ws.Hub) {
 	authHandler := NewAuthHandler(db, jwtSecret)
 	statsHandler := NewStatsHandler(db, hub)
+	logProc := services.NewLogProcessor(db, hub)
+	logsHandler := NewLogsHandler(logProc)
 
 	r.Use(CORSMiddleware(allowedOrigins))
 
@@ -87,5 +90,12 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 
 		searchHandler := NewSearchHandler(db)
 		r.Get("/api/search", searchHandler.Search)
+
+		r.Post("/api/log", logsHandler.Ingest)
+		r.Post("/api/log/chunk", logsHandler.Chunk)
+		r.Post("/api/log/complete", logsHandler.CompleteChunked)
+
+		sspHandler := NewSSPHandler(logProc)
+		r.Post("/api/log/ssp", sspHandler.ProcessSSP)
 	})
 }

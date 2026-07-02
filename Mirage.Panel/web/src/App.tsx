@@ -8,6 +8,7 @@ import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import Sessions from '@/pages/Sessions'
 import SessionDetail from '@/pages/SessionDetail'
+import SearchPage from '@/pages/Search'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -20,10 +21,6 @@ const queryClient = new QueryClient({
 
 function Build() {
   return <div className="text-muted-foreground">Build — coming in Phase 5</div>
-}
-
-function Search() {
-  return <div className="text-muted-foreground">Search — coming in Phase 3</div>
 }
 
 function Settings() {
@@ -56,7 +53,7 @@ const router = createBrowserRouter([
       { path: 'sessions', element: <Sessions /> },
       { path: 'sessions/:id', element: <SessionDetail /> },
       { path: 'build', element: <Build /> },
-      { path: 'search', element: <Search /> },
+      { path: 'search', element: <SearchPage /> },
       { path: 'settings', element: <Settings /> },
     ],
   },

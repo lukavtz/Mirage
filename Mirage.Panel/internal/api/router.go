@@ -84,5 +84,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 		r.Get("/api/sessions", sessionsHandler.List)
 		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
 		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
+
+		searchHandler := NewSearchHandler(db)
+		r.Get("/api/search", searchHandler.Search)
 	})
 }

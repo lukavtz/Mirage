@@ -1,0 +1,34 @@
+# Binaries
+cmd/panel/panel
+*.exe
+*.dll
+*.so
+
+# Env
+.env
+
+# Data
+data/mirage.db
+data/mirage.db-*
+data/logs/*
+!data/.gitkeep
+
+# Frontend
+web/node_modules/
+web/dist/
+
+# Embed copy for cmd/panel build
+cmd/panel/frontend/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+vendor/

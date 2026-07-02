@@ -335,3 +335,12 @@ Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░�
 - Phase 12.4: Eidos Webcam
 - Phase 12.5: Eidos Resident
 - Phase 15.4: OpSec cleanup + launch
+
+---
+
+## ⬜ Missing Components
+
+### MirageDecryptor.dll (C++ COM Elevator DLL)
+- [ ] Найти исходный код `DllExtractChromiumSecrets/DllMain.cpp` (Maldev-Academy)
+- [ ] Положить в `Mirage.Stealer/src/` или отдельную директорию `MirageDecryptor/`
+- [ ] Проверить совместимость с App-Bound текущих версий Chrome/Edge/Brave

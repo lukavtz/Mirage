@@ -55,6 +55,7 @@ func TestRunMigrations(t *testing.T) {
 		"users", "sessions", "passwords", "cookies",
 		"cards", "wallets", "stolen_files", "system_info",
 		"settings", "bans", "_migrations",
+		"invite_codes", "session_locks",
 	}
 	for _, table := range tables {
 		var name string

@@ -12,6 +12,8 @@ import SessionDetail from '@/pages/SessionDetail'
 import SearchPage from '@/pages/Search'
 import BuildPage from '@/pages/Build'
 import Settings from '@/pages/Settings'
+import UsersPage from '@/pages/Users'
+import LicensePage from '@/pages/License'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -49,6 +51,8 @@ const router = createBrowserRouter([
       { path: 'sessions/:id', element: <SessionDetail /> },
       { path: 'build', element: <BuildPage /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'users', element: <UsersPage /> },
+      { path: 'license', element: <LicensePage /> },
       { path: 'settings', element: <Settings /> },
     ],
   },

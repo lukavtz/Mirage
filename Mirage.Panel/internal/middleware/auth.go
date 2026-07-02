@@ -18,6 +18,10 @@ func ClaimsFromContext(ctx context.Context) *auth.Claims {
 	return claims
 }
 
+func ContextWithClaims(ctx context.Context, claims *auth.Claims) context.Context {
+	return context.WithValue(ctx, claimsKey, claims)
+}
+
 func Auth(secret string, skipPaths ...string) func(http.Handler) http.Handler {
 	skipSet := make(map[string]bool, len(skipPaths))
 	for _, p := range skipPaths {

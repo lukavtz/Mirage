@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/user/mirage-panel/internal/auth"
 	"github.com/user/mirage-panel/internal/db"
 )
 
@@ -367,4 +369,92 @@ func querySystemInfo(d *sql.DB, sessionID string) *db.SystemInfo {
 		return nil
 	}
 	return &info
+}
+
+type LockInfo struct {
+	SessionID string `json:"session_id"`
+	LockedBy  string `json:"locked_by"`
+	LockedAt  string `json:"locked_at"`
+}
+
+func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "id")
+
+	claims, ok := r.Context().Value(claimsKey).(*auth.Claims)
+	if !ok || claims == nil {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var exists int
+	err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", sessionID).Scan(&exists)
+	if err != nil || exists == 0 {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	var currentLockedBy string
+	err = h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&currentLockedBy)
+	if err == nil {
+		if currentLockedBy != claims.UserID {
+			writeError(w, http.StatusConflict, "session is locked by another user")
+			return
+		}
+		writeError(w, http.StatusConflict, "session is already locked by you")
+		return
+	}
+
+	now := time.Now().UTC().Format("2006-01-02 15:04:05")
+	_, err = h.db.Exec(
+		"INSERT INTO session_locks (session_id, locked_by, locked_at) VALUES (?, ?, ?)",
+		sessionID, claims.UserID, now,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to lock session")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, LockInfo{
+		SessionID: sessionID,
+		LockedBy:  claims.UserID,
+		LockedAt:  now,
+	})
+}
+
+func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "id")
+
+	claims, ok := r.Context().Value(claimsKey).(*auth.Claims)
+	if !ok || claims == nil {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var lockedBy string
+	err := h.db.QueryRow(
+		"SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID,
+	).Scan(&lockedBy)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusNotFound, "session is not locked")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query lock")
+		return
+	}
+
+	if lockedBy != claims.UserID {
+		writeError(w, http.StatusForbidden, "session is locked by another user")
+		return
+	}
+
+	_, err = h.db.Exec("DELETE FROM session_locks WHERE session_id = ?", sessionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to unlock session")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"message": "session unlocked",
+	})
 }

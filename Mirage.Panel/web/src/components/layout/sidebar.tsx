@@ -7,6 +7,8 @@ import {
   Database,
   Hammer,
   Search,
+  Users,
+  KeyRound,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -18,6 +20,8 @@ const navItems = [
   { to: '/sessions', label: 'Sessions', icon: Database, end: false },
   { to: '/build', label: 'Build', icon: Hammer, end: false },
   { to: '/search', label: 'Search', icon: Search, end: false },
+  { to: '/users', label: 'Users', icon: Users, end: false },
+  { to: '/license', label: 'License', icon: KeyRound, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]
 

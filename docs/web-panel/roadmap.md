@@ -210,13 +210,13 @@
 | 2 | Sessions & Data (table, detail, tabs) | 3 | ✅ Done |
 | 3 | Search (full-text across all data) | 1 | ✅ Done |
 | 4 | Log Ingestion (multipart, chunked, SSP) | 3 | ✅ Done |
-| 5 | Build & Telegram | 2 | ⬜ |
-| 6 | SSP & Enterprise (export, notes) | 3 | ⬜ |
-| 7 | Hardening & Polish | 2 | ⬜ |
+| 5 | Build & Telegram | 2 | ✅ Done |
+| 6 | SSP & Enterprise (export, notes) | 3 | ✅ Done |
+| 7 | Hardening & Polish | 2 | ✅ Done |
 | 8 | Multi-User & Licensing | 3 | ⬜ |
 | 9 | Cookie Restore | 2 | ⬜ |
 | 10 | Commercial & Ops | 2 | ⬜ |
-| **Total** | | **~26 дней** | **5/11 ✅** |
+| **Total** | | **~26 дней** | **8/11 ✅** |
 
 ---
 

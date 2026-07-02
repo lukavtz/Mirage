@@ -3,14 +3,20 @@ package main
 import (
 	"context"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"embed"
 	"encoding/hex"
+	"encoding/pem"
 	"io/fs"
 	"log/slog"
+	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -44,11 +50,72 @@ func generateSecret() string {
 	return hex.EncodeToString(b)
 }
 
+func generateSelfSignedCert(certDir string) (string, string, error) {
+	certPath := filepath.Join(certDir, "cert.pem")
+	keyPath := filepath.Join(certDir, "key.pem")
+
+	if _, err := os.Stat(certPath); err == nil {
+		return certPath, keyPath, nil
+	}
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return "", "", err
+	}
+
+	template := x509.Certificate{
+		SerialNumber: big.NewInt(time.Now().UnixNano()),
+		Subject: pkix.Name{
+			Organization: []string{"Mirage Panel"},
+			CommonName:   "localhost",
+		},
+		NotBefore:             time.Now(),
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour),
+		KeyUsage:              x509.KeyUsageKeyEncipherment | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		DNSNames:              []string{"localhost"},
+	}
+
+	certDER, err := x509.CreateCertificate(rand.Reader, &template, &template, &key.PublicKey, key)
+	if err != nil {
+		return "", "", err
+	}
+
+	if err := os.MkdirAll(certDir, 0700); err != nil {
+		return "", "", err
+	}
+
+	certOut, err := os.Create(certPath)
+	if err != nil {
+		return "", "", err
+	}
+	defer certOut.Close()
+	if err := pem.Encode(certOut, &pem.Block{Type: "CERTIFICATE", Bytes: certDER}); err != nil {
+		return "", "", err
+	}
+
+	keyOut, err := os.Create(keyPath)
+	if err != nil {
+		return "", "", err
+	}
+	defer keyOut.Close()
+	if err := pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}); err != nil {
+		return "", "", err
+	}
+
+	slog.Info("generated self-signed certificate", "cert", certPath, "key", keyPath)
+	return certPath, keyPath, nil
+}
+
 func main() {
 	port := getEnv("PORT", "8080")
 	dbPath := getEnv("DB_PATH", "data/mirage.db")
 	jwtSecret := getEnv("JWT_SECRET", "")
 	allowedOrigins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173")
+
+	tlsEnabled, _ := strconv.ParseBool(os.Getenv("TLS_ENABLED"))
+	useSelfSigned, _ := strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
 
 	if jwtSecret == "" {
 		jwtSecret = generateSecret()
@@ -58,6 +125,7 @@ func main() {
 	slog.Info("starting Mirage Panel",
 		"port", port,
 		"db", dbPath,
+		"tls", tlsEnabled,
 		"allowed_origins", allowedOrigins,
 	)
 
@@ -156,10 +224,34 @@ func main() {
 	}
 
 	go func() {
-		slog.Info("listening", "addr", srv.Addr)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("server error", "err", err)
-			os.Exit(1)
+		addr := srv.Addr
+		if tlsEnabled {
+			scheme := "https"
+			if useSelfSigned {
+				certDir := filepath.Join(filepath.Dir(dbPath), "certs")
+				certFile, keyFile, err := generateSelfSignedCert(certDir)
+				if err != nil {
+					slog.Error("failed to generate self-signed cert", "err", err)
+					os.Exit(1)
+				}
+				slog.Info("listening", "addr", addr, "scheme", scheme, "tls", "self-signed")
+				if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+					slog.Error("server error", "err", err)
+					os.Exit(1)
+				}
+			} else {
+				slog.Info("listening", "addr", addr, "scheme", scheme, "tls", "lets-encrypt")
+				if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
+					slog.Error("server error", "err", err)
+					os.Exit(1)
+				}
+			}
+		} else {
+			slog.Info("listening", "addr", addr, "scheme", "http")
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("server error", "err", err)
+				os.Exit(1)
+			}
 		}
 	}()
 

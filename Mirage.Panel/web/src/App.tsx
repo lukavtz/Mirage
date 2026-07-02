@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/hooks/use-auth'
+import { ThemeProvider } from '@/lib/theme-provider'
 import { Shell } from '@/components/layout/shell'
 import { wsClient } from '@/lib/ws'
 import Login from '@/pages/Login'
@@ -10,6 +11,7 @@ import Sessions from '@/pages/Sessions'
 import SessionDetail from '@/pages/SessionDetail'
 import SearchPage from '@/pages/Search'
 import BuildPage from '@/pages/Build'
+import Settings from '@/pages/Settings'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,10 +21,6 @@ const queryClient = new QueryClient({
     },
   },
 })
-
-function Settings() {
-  return <div className="text-muted-foreground">Settings — coming in Phase 6</div>
-}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -58,10 +56,12 @@ const router = createBrowserRouter([
 
 export default function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   )
 }

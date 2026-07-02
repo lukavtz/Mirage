@@ -8,7 +8,7 @@
 
 ```
 EIDS ECOSYSTEM
-├── Eidos Panel (C# WPF + ASP.NET Core) — центральное управление
+├── Eidos Panel (Go + React Web) — центральное управление
 │   ├── Сбор логов со всех модулей
 │   ├── Билдер для каждого модуля
 │   ├── Team / Multi-user система
@@ -61,7 +61,7 @@ Phase 8b: Integration Tests      ███████████████�
 
 Phase 12: Eidos Ecosystem        ████████████████████  16/16 ✅
 Phase 13: Mirage — Infrastructure ████████████████████  22/22 ✅
-Phase 14: Eidos Panel Premium    ░░░░░░░░░░░░░░░░░░░░   0/48
+Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
 ```
 

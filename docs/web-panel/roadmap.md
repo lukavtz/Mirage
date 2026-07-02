@@ -1,8 +1,8 @@
 # Eidos Web Panel — Roadmap
 
-**Статус:** Планирование / Sprint 0  
-**Репозиторий:** `eidos-panel/` (будет создан)  
-**Стек:** Go 1.24 + React 19 + shadcn/ui + SQLite | [см. STACK.md](./STACK.md)
+**Статус:** Phase 1 ✅  
+**Репозиторий:** `Mirage.Panel/`  
+**Стек:** Go 1.25 + React 19 + shadcn/ui + SQLite | [см. STACK.md](./STACK.md)
 
 ---
 
@@ -15,47 +15,43 @@
 
 ---
 
-## Phase 0: Foundation (Sprint 0, ~3 дня)
+## Phase 0: Foundation ✅
 
 **Цель:** Рабочий скелет — Go сервер, React скелет, авторизация, SQLite
 
 ### Backend (Go)
-- [ ] `go mod init` + chi router + middleware stack
-- [ ] SQLite init + миграции (users, sessions, etc.)
-- [ ] JWT auth (login/logout/refresh)
-- [ ] Rate limiting middleware
-- [ ] Ban middleware (IP check)
-- [ ] Settings table + API
-- [ ] `//go:embed` статики фронтенда
-- [ ] Makefile + live-reload (air)
+- [x] `go mod init` + chi router + middleware stack
+- [x] SQLite init + миграции (users, sessions, etc.)
+- [x] JWT auth (login/logout/refresh)
+- [x] Rate limiting middleware
+- [x] Ban middleware (IP check)
+- [x] Settings table + API
+- [x] `//go:embed` статики фронтенда
+- [x] Makefile + live-reload (air)
 
 ### Frontend (React)
-- [ ] Vite + shadcn/ui + Tailwind init
-- [ ] Dark theme + design system tokens
-- [ ] Login page
-- [ ] Auth context + protected routes
-- [ ] Layout shell (sidebar + topbar + content)
-- [ ] Sidebar navigation with collapse
-- [ ] API client (`lib/api.ts`)
-- [ ] WebSocket client (`lib/ws.ts`)
-
-**Done →** Go сервер отдаёт React SPA, работает логин, пустой Dashboard.
+- [x] Vite + shadcn/ui + Tailwind init
+- [x] Dark theme + design system tokens
+- [x] Login page
+- [x] Auth context + protected routes
+- [x] Layout shell (sidebar + topbar + content)
+- [x] Sidebar navigation with collapse
+- [x] API client (`lib/api.ts`)
+- [x] WebSocket client (`lib/ws.ts`)
 
 ---
 
-## Phase 1: Dashboard (Sprint 1, ~3 дня)
+## Phase 1: Dashboard ✅
 
-- [ ] `GET /api/stats` — все метрики
-- [ ] WebSocket hub — broadcast stats updates
-- [ ] Stat cards (4 шт: Sessions, Passwords, Cookies, Wallets)
-- [ ] Timeline chart (30 days, Recharts AreaChart)
-- [ ] Browser distribution pie/donut chart
-- [ ] Geo distribution bar chart (флаги + counts)
-- [ ] Top 10 domains table
-- [ ] Auto-refresh через WS + fallback polling 10s
-- [ ] Connection status indicator (🟢 / 🟡 / 🔴)
-
-**Done →** Оператор видит полную картину на дашборде с live-обновлением.
+- [x] `GET /api/stats` — все метрики
+- [x] WebSocket hub — broadcast stats updates
+- [x] Stat cards (4 шт: Sessions, Passwords, Cookies, Wallets)
+- [x] Timeline chart (30 days, Recharts AreaChart)
+- [x] Browser distribution pie/donut chart
+- [x] Geo distribution bar chart (флаги + counts)
+- [x] Top 10 domains table
+- [x] Auto-refresh через WS + fallback polling 10s
+- [x] Connection status indicator (🟢 / 🟡 / 🔴)
 
 ---
 
@@ -213,20 +209,20 @@
 
 ## Phases Summary
 
-| Phase | Что | Дней | Спринт |
+| Phase | Что | Дней | Статус |
 |-------|-----|------|--------|
-| 0 | Foundation (Go server + React shell + auth) | 3 | Sprint 0 |
-| 1 | Dashboard (stats, charts, live updates) | 3 | Sprint 1 |
-| 2 | Sessions & Data (table, detail, tabs) | 3 | Sprint 2 |
-| 3 | Search (full-text across all data) | 1 | Sprint 3 |
-| 4 | Log Ingestion (multipart, chunked, SSP) | 2 | Sprint 4 |
-| 5 | Build & Telegram | 2 | Sprint 5 |
-| 6 | SSP & Enterprise (export, notes) | 3 | Sprint 6 |
-| 7 | Hardening & Polish | 2 | Sprint 7 |
-| 8 | Multi-User & Licensing | 3 | Sprint 8 |
-| 9 | Cookie Restore | 2 | Sprint 9 |
-| 10 | Commercial & Ops | 2 | Sprint 10 |
-| **Total** | | **~26 дней** | **11 спринтов** |
+| 0 | Foundation (Go server + React shell + auth) | 3 | ✅ Done |
+| 1 | Dashboard (stats, charts, live updates) | 3 | ✅ Done |
+| 2 | Sessions & Data (table, detail, tabs) | 3 | ⬜ |
+| 3 | Search (full-text across all data) | 1 | ⬜ |
+| 4 | Log Ingestion (multipart, chunked, SSP) | 2 | ⬜ |
+| 5 | Build & Telegram | 2 | ⬜ |
+| 6 | SSP & Enterprise (export, notes) | 3 | ⬜ |
+| 7 | Hardening & Polish | 2 | ⬜ |
+| 8 | Multi-User & Licensing | 3 | ⬜ |
+| 9 | Cookie Restore | 2 | ⬜ |
+| 10 | Commercial & Ops | 2 | ⬜ |
+| **Total** | | **~26 дней** | **2/11 ✅** |
 
 ---
 

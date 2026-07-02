@@ -27,7 +27,7 @@ import (
 
 	"github.com/user/mirage-panel/internal/api"
 	"github.com/user/mirage-panel/internal/db"
-	"github.com/user/mirage-panel/internal/middleware"
+	mw "github.com/user/mirage-panel/internal/middleware"
 	"github.com/user/mirage-panel/internal/ws"
 )
 
@@ -149,14 +149,14 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Use(chimw.RequestID)
-	r.Use(chimw.RealIP)
+	r.Use(mw.RealIP)
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
 
-	r.Use(middleware.CORS(allowedOrigins))
-	r.Use(middleware.RateLimit(100, time.Minute))
-	r.Use(middleware.BanCheck(sqlDB))
+	r.Use(mw.CORS(allowedOrigins))
+	r.Use(mw.RateLimit(100, time.Minute))
+	r.Use(mw.BanCheck(sqlDB))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -68,11 +68,6 @@ func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, SettingsResponse{Settings: settings, Audit: audit})
 }
 
-type settingsUpdate struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
-}
-
 func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var updates map[string]string
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {

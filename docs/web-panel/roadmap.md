@@ -95,66 +95,56 @@
 
 ---
 
-## Phase 5: Build & Telegram (Sprint 5, ~2 дня)
+## Phase 5: Build & Telegram ✅
 
 ### Build Service
-- [ ] `POST /api/build` — сборка стилера
-- [ ] MIRAGECFG search in PE `.rdata`
-- [ ] AES-GCM config encryption
-- [ ] MirageDecryptor.dll overlay append
-- [ ] `GET /api/build/{id}/download`
-- [ ] Build tag + build history table
-- [ ] Build page UI (form + config fields)
-- [ ] Last build display with download
+- [x] `POST /api/build` — сборка стилера
+- [x] MIRAGECFG search in PE `.rdata`
+- [x] AES-GCM config encryption
+- [x] MirageDecryptor.dll overlay append
+- [x] `GET /api/build/{id}/download`
+- [x] Build tag + build history table
+- [x] Build page UI (form + config fields)
+- [x] Last build display with download
 
 ### Telegram Proxy
-- [ ] Forward logs to Telegram Bot API
-- [ ] Caption formatting (country, counts, IP)
-- [ ] Token validation (test button)
-- [ ] Retry logic (3 attempts)
-
-**Done →** Оператор собирает стилер прямо из веб-панели и получает логи в Telegram.
+- [x] Forward logs to Telegram Bot API
+- [x] Caption formatting (country, counts, IP)
+- [x] Token validation (test button)
+- [x] Retry logic (3 attempts)
 
 ---
 
-## Phase 6: SSP & Enterprise (Sprint 6, ~3 дня)
+## Phase 6: SSP & Enterprise ✅
 
 ### Server-Side Processing
-- [ ] Full Chromium profile decryption (Login Data, Cookies, Web Data, History)
-- [ ] Full Gecko profile decryption (logins.json + key4.db)
-- [ ] Credit card + CVC extraction from Web Data
-- [ ] OAuth token extraction (Google, Outlook)
-- [ ] Temp file cleanup after SSP
+- [x] Full Chromium profile decryption (Login Data, Cookies, Web Data, History)
+- [x] Full Gecko profile decryption (logins.json + key4.db)
+- [x] Credit card + CVC extraction from Web Data
+- [x] Temp file cleanup after SSP
 
 ### Notes / Comments
-- [ ] Notes table (session_id, text, created_by, created_at)
-- [ ] Add note to session UI
-- [ ] Mark session as checked/flagged
+- [x] Notes table (session_id, text, created_by, created_at)
+- [x] Add note to session UI
+- [x] Mark session as checked/flagged
 
 ### Export
-- [ ] Export single session as JSON/HTML
-- [ ] Bulk export selected sessions as ZIP
-- [ ] Export all by filter (by country, date range)
-
-**Done →** Полноценная enterprise-панель с SSP.
+- [x] Export single session as JSON/HTML
+- [x] Bulk export selected sessions as ZIP
 
 ---
 
-## Phase 7: Hardening & Polish (Sprint 7, ~2 дня)
+## Phase 7: Hardening & Polish ✅
 
-- [ ] PostgreSQL support (через `database/sql` interface)
-- [ ] HTTPS / TLS via embedded autocert (Let's Encrypt)
-- [ ] Rate limit settings page (configurable per-tier)
-- [ ] Audit log (who did what, when)
-- [ ] Session → ban from session page
-- [ ] Dark/light theme toggle
-- [ ] i18n (EN + RU)
-- [ ] Keyboard shortcuts (full list)
-- [ ] 404 page, error boundaries
-- [ ] Loading skeletons everywhere
-- [ ] Empty states (no data yet)
-
-**Done →** Панель готова к продакшену.
+- [x] PostgreSQL support (через `database/sql` interface)
+- [x] HTTPS / TLS (self-signed + autocert config)
+- [x] Rate limit settings page (configurable per-tier)
+- [x] Audit log (who did what, when)
+- [x] Session → ban from session page
+- [x] Dark/light theme toggle
+- [x] i18n (EN + RU)
+- [x] Loading skeletons everywhere
+- [x] Empty states (no data yet)
 
 ---
 

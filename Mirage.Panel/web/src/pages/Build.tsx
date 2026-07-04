@@ -48,7 +48,7 @@ export default function BuildPage() {
 
   const buildsQuery = useQuery({
     queryKey: ['builds'],
-    queryFn: () => api.get<{ builds: BuildRecord[] }>('/api/build'),
+    queryFn: () => api.get<BuildRecord[]>('/api/build'),
   })
 
   const buildMutation = useMutation({
@@ -152,7 +152,7 @@ export default function BuildPage() {
               {buildsQuery.isLoading && Array.from({length: 3}).map((_, i) => (
                 <TableRow key={i}><TableCell colSpan={6}><Skeleton className="h-8 w-full" /></TableCell></TableRow>
               ))}
-              {buildsQuery.data?.builds.map(b => (
+              {buildsQuery.data?.map(b => (
                 <TableRow key={b.id}>
                   <TableCell className="font-mono text-xs">{b.build_tag || '—'}</TableCell>
                   <TableCell className="tabular-nums">{(b.file_size / 1024).toFixed(0)} KB</TableCell>

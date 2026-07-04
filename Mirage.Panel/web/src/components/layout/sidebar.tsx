@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { t } from '@/lib/i18n'
 import {
   LayoutDashboard,
   Database,
   Hammer,
   Search,
   Users,
-  KeyRound,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -17,14 +17,13 @@ import {
 } from 'lucide-react'
 
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/sessions', label: 'Sessions', icon: Database, end: false },
-  { to: '/build', label: 'Build', icon: Hammer, end: false },
-  { to: '/restore', label: 'Restore', icon: RotateCcw, end: false },
-  { to: '/search', label: 'Search', icon: Search, end: false },
-  { to: '/users', label: 'Users', icon: Users, end: false },
-  { to: '/license', label: 'License', icon: KeyRound, end: false },
-  { to: '/settings', label: 'Settings', icon: Settings, end: false },
+  { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true, desc: 'Main statistics and live data' },
+  { to: '/sessions', labelKey: 'nav.sessions', icon: Database, end: false, desc: 'All collected logs' },
+  { to: '/build', labelKey: 'nav.build', icon: Hammer, end: false, desc: 'Build stealer executable' },
+  { to: '/restore', labelKey: 'nav.restore', icon: RotateCcw, end: false, desc: 'Cookie restore via proxy' },
+  { to: '/search', labelKey: 'nav.search', icon: Search, end: false, desc: 'Search stolen data' },
+  { to: '/users', labelKey: 'nav.users', icon: Users, end: false, desc: 'User management' },
+  { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false, desc: 'Panel configuration' },
 ]
 
 export function Sidebar() {
@@ -53,6 +52,7 @@ export function Sidebar() {
             key={item.to}
             to={item.to}
             end={item.end}
+            title={t(item.labelKey)}
             className={({ isActive }) => cn(
               'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
               collapsed && 'justify-center px-2',
@@ -62,7 +62,7 @@ export function Sidebar() {
             )}
           >
             <item.icon className="h-4 w-4 shrink-0" />
-            {!collapsed && <span>{item.label}</span>}
+            {!collapsed && <span>{t(item.labelKey)}</span>}
           </NavLink>
         ))}
       </nav>

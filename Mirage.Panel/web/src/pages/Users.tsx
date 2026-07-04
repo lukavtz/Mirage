@@ -25,7 +25,7 @@ export default function UsersPage() {
 
     const usersQuery = useQuery({
         queryKey: ['users'],
-        queryFn: () => api.get<{ users: UserRecord[] }>('/api/users'),
+        queryFn: () => api.get<UserRecord[]>('/api/users'),
     })
 
     const inviteMutation = useMutation({
@@ -50,7 +50,7 @@ export default function UsersPage() {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {usersQuery.data?.users.map(u => (
+                            {usersQuery.data?.map(u => (
                                 <TableRow key={u.id}>
                                     <TableCell className="font-mono text-xs">{u.username}</TableCell>
                                     <TableCell>{u.role}</TableCell>

@@ -118,8 +118,10 @@ export default function Settings() {
       <Card>
         <CardHeader><CardTitle>{t('settings.database')}</CardTitle></CardHeader>
         <CardContent>
-          <div className="text-sm text-muted-foreground">
-            <span>Connected: <strong className="text-emerald-500">{'✅'}</strong></span>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span>SQLite</span>
+            <span className="text-xs">— connected</span>
           </div>
         </CardContent>
       </Card>

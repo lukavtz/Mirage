@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { t } from '@/lib/i18n'
 import {
   useTable,
   tableFeatures,
@@ -204,12 +205,12 @@ export default function Sessions() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Sessions</h1>
+        <h1 className="text-2xl font-bold">{t('sessions.title')}</h1>
         <div className="flex items-center gap-2">
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search IP, HWID, OS..."
+              placeholder={t("sessions.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="max-w-xs pl-8"

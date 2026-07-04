@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -65,31 +66,31 @@ export default function BuildPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Build Stealer</h1>
+      <h1 className="text-2xl font-bold">{t('build.title')}</h1>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm font-medium">Configuration</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm font-medium">{t('build.config')}</CardTitle></CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="c2_host">C2 Host</Label>
+                <Label htmlFor="c2_host">{t('build.c2_host')}</Label>
                 <Input id="c2_host" value={config.c2_host} onChange={e => setConfig(c => ({ ...c, c2_host: e.target.value }))} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="c2_port">C2 Port</Label>
+                <Label htmlFor="c2_port">{t('build.c2_port')}</Label>
                 <Input id="c2_port" type="number" min={1} max={65535} value={config.c2_port} onChange={e => setConfig(c => ({ ...c, c2_port: parseInt(e.target.value) || 8443 }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tg_token">Telegram Bot Token</Label>
+                <Label htmlFor="tg_token">{t('build.tg_token')}</Label>
                 <Input id="tg_token" value={config.telegram_token} onChange={e => setConfig(c => ({ ...c, telegram_token: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="tg_chat">Telegram Chat ID</Label>
+                <Label htmlFor="tg_chat">{t('build.tg_chat')}</Label>
                 <Input id="tg_chat" value={config.telegram_chat_id} onChange={e => setConfig(c => ({ ...c, telegram_chat_id: e.target.value }))} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="build_tag">Build Tag</Label>
+                <Label htmlFor="build_tag">{t('build.tag')}</Label>
                 <Input id="build_tag" placeholder="my_first_build" value={config.build_tag} onChange={e => setConfig(c => ({ ...c, build_tag: e.target.value }))} />
               </div>
             </div>
@@ -135,7 +136,7 @@ export default function BuildPage() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm font-medium">Build History</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm font-medium">{t('build.history')}</CardTitle></CardHeader>
         <CardContent>
           <Table>
             <TableHeader>

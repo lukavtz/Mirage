@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare } from 'lucide-react'
 import { api } from '@/lib/api'
+import { t } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -146,23 +147,23 @@ export default function SessionDetail() {
         <TabsList className="w-full justify-start">
           <TabsTrigger value="passwords">
             <Key className="h-4 w-4 mr-1" />
-            Passwords ({session.passwords?.length ?? 0})
+            {t("session.passwords")} ({session.passwords?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="cookies">
             <Cookie className="h-4 w-4 mr-1" />
-            Cookies ({session.cookies?.length ?? 0})
+            {t("session.cookies")} ({session.cookies?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="cards">
             <CreditCard className="h-4 w-4 mr-1" />
-            Cards ({session.cards?.length ?? 0})
+            {t("session.cards")} ({session.cards?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="wallets">
             <Wallet className="h-4 w-4 mr-1" />
-            Wallets ({session.wallets?.length ?? 0})
+            {t("session.wallets")} ({session.wallets?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="files">
             <FileText className="h-4 w-4 mr-1" />
-            Files ({session.files?.length ?? 0})
+            {t("session.files")} ({session.files?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="system">
             <Monitor className="h-4 w-4 mr-1" />

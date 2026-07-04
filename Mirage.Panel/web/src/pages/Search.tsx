@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search as SearchIcon, Key, Cookie, CreditCard } from 'lucide-react'
+import { t } from '@/lib/i18n'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -59,14 +60,14 @@ export default function SearchPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">Search</h1>
+      <h1 className="text-2xl font-bold">{t('search.title')}</h1>
 
       <div className="flex gap-2">
         <div className="relative flex-1">
           <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-9"
-            placeholder="Search passwords, cookies, cards..."
+            placeholder={t('search.placeholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
@@ -76,10 +77,10 @@ export default function SearchPage() {
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           value={type} onChange={(e) => setType(e.target.value)}
         >
-          <option value="all">All</option>
-          <option value="passwords">Passwords</option>
-          <option value="cookies">Cookies</option>
-          <option value="cards">Cards</option>
+          <option value="all">{t('search.all')}</option>
+          <option value="passwords">{t('dashboard.passwords')}</option>
+          <option value="cookies">{t('dashboard.cookies')}</option>
+          <option value="cards">{t('session.cards')}</option>
         </select>
       </div>
 
@@ -88,9 +89,9 @@ export default function SearchPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-24">Type</TableHead>
+                <TableHead className="w-24">{t('search.title')}</TableHead>
                 <TableHead>URL / Domain</TableHead>
-                <TableHead>Username / Name</TableHead>
+                <TableHead>{t('auth.username')} / Name</TableHead>
                 <TableHead>Value</TableHead>
               </TableRow>
             </TableHeader>
@@ -120,7 +121,7 @@ export default function SearchPage() {
       )}
 
       {!isLoading && debounced.length >= 2 && data?.results.length === 0 && (
-        <div className="text-center py-12 text-muted-foreground">No results found</div>
+        <div className="text-center py-12 text-muted-foreground">{t('search.no_results')}</div>
       )}
 
       {data && data.pages > 1 && (

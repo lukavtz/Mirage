@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Copy, Check, Users as UsersIcon, Loader2 } from 'lucide-react'
+import { t } from '@/lib/i18n'
 
 interface UserRecord {
     id: string; username: string; role: string; tier: string; created_at: string
@@ -35,15 +36,15 @@ export default function UsersPage() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold flex items-center gap-2"><UsersIcon className="h-5 w-5" />Users</h1>
+            <h1 className="text-2xl font-bold flex items-center gap-2"><UsersIcon className="h-5 w-5" />{t("users.title")}</h1>
 
             <Card>
-                <CardHeader><CardTitle className="text-sm font-medium">Users</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-sm font-medium">{t("users.title")}</CardTitle></CardHeader>
                 <CardContent>
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Username</TableHead>
+                                <TableHead>{t("auth.username")}</TableHead>
                                 <TableHead>Role</TableHead>
                                 <TableHead>Tier</TableHead>
                                 <TableHead>Created</TableHead>
@@ -64,7 +65,7 @@ export default function UsersPage() {
             </Card>
 
             <Card>
-                <CardHeader><CardTitle className="text-sm font-medium">Generate Invite Code</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-sm font-medium">{t("users.invite")}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <div className="flex gap-4 items-end">
                         <div className="space-y-2">

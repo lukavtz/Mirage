@@ -14,6 +14,16 @@ type NewSessionPayload struct {
 	PasswordsCount int    `json:"passwords_count"`
 }
 
+type ChatMessage struct {
+	ID          string `json:"id"`
+	UserID      string `json:"user_id"`
+	Username    string `json:"username"`
+	Message     string `json:"message"`
+	ParentID    string `json:"parent_id,omitempty"`
+	MessageType string `json:"message_type"`
+	CreatedAt   string `json:"created_at"`
+}
+
 type Event struct {
 	Type string      `json:"type"`
 	Data interface{} `json:"data,omitempty"`
@@ -31,4 +41,8 @@ func NewStatsEvent(payload StatsPayload) []byte {
 
 func NewSessionEvent(payload NewSessionPayload) []byte {
 	return newEvent("new_session", payload)
+}
+
+func NewChatEvent(msg ChatMessage) []byte {
+	return newEvent("chat_message", msg)
 }

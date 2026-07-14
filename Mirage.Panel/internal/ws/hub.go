@@ -44,3 +44,7 @@ func (h *Hub) Run() {
 func (h *Hub) Broadcast(message []byte) {
 	h.broadcast <- message
 }
+
+func (h *Hub) BroadcastChat(msg ChatMessage) {
+	h.broadcast <- NewChatEvent(msg)
+}

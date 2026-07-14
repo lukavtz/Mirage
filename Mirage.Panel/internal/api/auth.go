@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/user/mirage-panel/internal/auth"
+	mw "github.com/user/mirage-panel/internal/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -41,12 +42,20 @@ func (rl *ipRateLimiter) Allow(ip string) bool {
 	return entry.count <= 5
 }
 
+type tempTokenEntry struct {
+	userID    string
+	role      string
+	expiresAt time.Time
+}
+
 type AuthHandler struct {
 	db             *sql.DB
 	jwtSecret      string
 	rateLimiter    *ipRateLimiter
 	failedAttempts map[string]int
 	failedMu       sync.Mutex
+	tempTokens     map[string]tempTokenEntry
+	tempMu         sync.Mutex
 }
 
 func NewAuthHandler(db *sql.DB, jwtSecret string) *AuthHandler {
@@ -55,6 +64,7 @@ func NewAuthHandler(db *sql.DB, jwtSecret string) *AuthHandler {
 		jwtSecret:      jwtSecret,
 		rateLimiter:    newIPRateLimiter(),
 		failedAttempts: make(map[string]int),
+		tempTokens:     make(map[string]tempTokenEntry),
 	}
 }
 
@@ -91,11 +101,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var id, username, passwordHash, role, createdAt string
+	var id, username, passwordHash, role string
 	err = h.db.QueryRow(
-		"SELECT id, username, password_hash, role, created_at FROM users WHERE username = ?",
+		"SELECT id, username, password_hash, role FROM users WHERE username = ?",
 		req.Username,
-	).Scan(&id, &username, &passwordHash, &role, &createdAt)
+	).Scan(&id, &username, &passwordHash, &role)
 	if err == sql.ErrNoRows {
 		h.recordFailedAttempt(ip)
 		writeError(w, http.StatusUnauthorized, "invalid username or password")
@@ -112,15 +122,97 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, expiresAt, err := auth.GenerateToken(id, role, h.jwtSecret)
+	var totpEnabled bool
+	var totpSecret string
+	h.db.QueryRow("SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret)
+	if totpEnabled {
+		tempToken := uuid.New().String()
+		h.tempMu.Lock()
+		h.tempTokens[tempToken] = tempTokenEntry{userID: id, role: role, expiresAt: time.Now().Add(5 * time.Minute)}
+		h.tempMu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]any{
+			"totp_required": true,
+			"totp_token":    tempToken,
+		})
+		return
+	}
+
+	sessionID := uuid.New().String()
+	token, expiresAt, err := auth.GenerateTokenWithSession(id, role, sessionID, h.jwtSecret)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
+	ua := r.Header.Get("User-Agent")
+	os, browser := parseUserAgent(ua)
+	h.db.Exec(`INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, id, hashToken(token), "", os, browser, ip)
+
+	score := mw.CheckIP(ip)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      token,
 		"expires_at": expiresAt.Format(time.RFC3339),
+		"ip_score":   score.Score,
+		"ip_threat":  score.Threat,
+	})
+}
+
+func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		TotpToken string `json:"totp_token"`
+		Passcode  string `json:"passcode"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+
+	h.tempMu.Lock()
+	entry, ok := h.tempTokens[req.TotpToken]
+	if ok {
+		delete(h.tempTokens, req.TotpToken)
+	}
+	h.tempMu.Unlock()
+
+	if !ok || time.Now().After(entry.expiresAt) {
+		writeError(w, http.StatusUnauthorized, "invalid or expired TOTP token")
+		return
+	}
+
+	var secret string
+	err := h.db.QueryRow("SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if !auth.NewTOTPManager().Validate(req.Passcode, secret) {
+		writeError(w, http.StatusUnauthorized, "invalid passcode")
+		return
+	}
+
+	ip := extractIP(r)
+	sessionID := uuid.New().String()
+	token, expiresAt, err := auth.GenerateTokenWithSession(entry.userID, entry.role, sessionID, h.jwtSecret)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	ua := r.Header.Get("User-Agent")
+	os, browser := parseUserAgent(ua)
+	h.db.Exec(`INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, entry.userID, hashToken(token), "", os, browser, ip)
+
+	score := mw.CheckIP(ip)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":      token,
+		"expires_at": expiresAt.Format(time.RFC3339),
+		"ip_score":   score.Score,
+		"ip_threat":  score.Threat,
 	})
 }
 

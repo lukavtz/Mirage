@@ -53,16 +53,46 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 	exportHandler := NewExportHandler(db)
 	settingsHandler := NewSettingsHandler(db, jwtSecret)
 	restoreHandler := NewRestoreHandler(db)
+	chatHandler := NewChatHandler(db, hub)
+	ticketHandler := NewTicketHandler(db)
+	marketplaceHandler := NewMarketplaceHandler(db)
+	totpHandler := NewTOTPHandler(db)
+	sessMgmtHandler := NewSessionMgmtHandler(db)
+	apiKeyHandler := NewAPIKeyHandler(db)
+	docsHandler := NewDocsHandler()
+	publicStatsHandler := NewPublicStatsHandler(db)
 
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
+		r.Post("/api/auth/2fa/verify-login", authHandler.VerifyLogin)
+		r.Get("/api/auth/2fa/required", totpHandler.Required)
+		r.Get("/api/public/stats", publicStatsHandler.GetPublicStats)
 	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(AuthMiddleware(jwtSecret))
 
+		// TOTP
+		r.Post("/api/auth/2fa/setup", totpHandler.Setup)
+		r.Post("/api/auth/2fa/verify", totpHandler.Verify)
+		r.Post("/api/auth/2fa/disable", totpHandler.Disable)
+
+		// Session management
+		r.Get("/api/auth/sessions", sessMgmtHandler.List)
+		r.Delete("/api/auth/sessions/{id}", sessMgmtHandler.Terminate)
+		r.Delete("/api/auth/sessions", sessMgmtHandler.TerminateAll)
+
+		// API keys
+		r.Post("/api/keys", apiKeyHandler.Create)
+		r.Get("/api/keys", apiKeyHandler.List)
+		r.Delete("/api/keys/{id}", apiKeyHandler.Delete)
+
 		r.Get("/api/stats", statsHandler.Dashboard)
+
+		// Docs (auth required)
+		r.Get("/api/docs", docsHandler.List)
+		r.Get("/api/docs/*", docsHandler.Get)
 
 		r.Get("/api/sessions", sessionsHandler.List)
 		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
@@ -99,5 +129,25 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 
 		r.With(middleware.RequireRole("admin")).Get("/api/users", usersHandler.List)
 		r.With(middleware.RequireRole("admin")).Post("/api/users/invite", usersHandler.CreateInvite)
+
+		// Chat
+		r.Get("/api/chat/messages", chatHandler.List)
+		r.Post("/api/chat/messages", chatHandler.Send)
+		r.With(middleware.RequireRole("admin")).Delete("/api/chat/messages/{id}", chatHandler.Delete)
+
+		// Support Tickets
+		r.Post("/api/support/tickets", ticketHandler.Create)
+		r.Get("/api/support/tickets", ticketHandler.List)
+		r.Get("/api/support/tickets/{id}", ticketHandler.Get)
+		r.Post("/api/support/tickets/{id}/reply", ticketHandler.Reply)
+		r.Post("/api/support/tickets/{id}/close", ticketHandler.Close)
+
+		// Marketplace
+		r.Get("/api/marketplace/products", marketplaceHandler.ListProducts)
+		r.Post("/api/marketplace/purchase", marketplaceHandler.Purchase)
+		r.Post("/api/marketplace/activate", marketplaceHandler.Activate)
+		r.Get("/api/marketplace/purchases", marketplaceHandler.MyPurchases)
+		r.With(middleware.RequireRole("admin")).Post("/api/marketplace/products", marketplaceHandler.CreateProduct)
+		r.With(middleware.RequireRole("admin")).Delete("/api/marketplace/products/{id}", marketplaceHandler.DeleteProduct)
 	})
 }

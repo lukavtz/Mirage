@@ -14,6 +14,8 @@ import BuildPage from '@/pages/Build'
 import Settings from '@/pages/Settings'
 import UsersPage from '@/pages/Users'
 import RestorePage from '@/pages/Restore'
+import DocsPage from '@/pages/DocsPage'
+import PublicStatsPage from '@/pages/PublicStatsPage'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,6 +44,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/public', element: <PublicStatsPage /> },
   {
     path: '/',
     element: <ProtectedRoute><Shell /></ProtectedRoute>,
@@ -54,6 +57,8 @@ const router = createBrowserRouter([
       { path: 'users', element: <UsersPage /> },
       { path: 'restore', element: <RestorePage /> },
       { path: 'settings', element: <Settings /> },
+      { path: 'docs', element: <DocsPage /> },
+      { path: 'docs/:path', element: <DocsPage /> },
     ],
   },
 ])

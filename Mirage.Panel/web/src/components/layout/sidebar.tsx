@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Terminal,
   RotateCcw,
+  Book,
 } from 'lucide-react'
 
 const navItems = [
@@ -22,6 +23,7 @@ const navItems = [
   { to: '/build', labelKey: 'nav.build', icon: Hammer, end: false, desc: 'Build stealer executable' },
   { to: '/restore', labelKey: 'nav.restore', icon: RotateCcw, end: false, desc: 'Cookie restore via proxy' },
   { to: '/search', labelKey: 'nav.search', icon: Search, end: false, desc: 'Search stolen data' },
+  { to: '/docs', labelKey: 'nav.docs', icon: Book, end: false, desc: 'Documentation' },
   { to: '/users', labelKey: 'nav.users', icon: Users, end: false, desc: 'User management' },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false, desc: 'Panel configuration' },
 ]

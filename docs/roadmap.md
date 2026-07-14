@@ -69,7 +69,7 @@ Phase 8b: Integration Tests      ███████████████�
 Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
 Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
-Phase 16: RAT & Stealer Int.     ████████████████░░░░   28/38 ⬜
+Phase 16: RAT & Stealer Int.     ██████████████████████  38/38 ✅
 ```
 
 **Total: 142/142 ✅ Done + 192 unit tests ✅ + 148 ⬜ New**
@@ -293,14 +293,14 @@ Phase 16: RAT & Stealer Int.     ███████████████�
 - [x] WASM Plugin Runtime (load collector modules dynamically)
 
 ### 16.4 Panel Improvements (8 задач, ~5 дней)
-- [ ] TOTP 2FA Authentication (pyotp-style QR + verify flow) — nexus-stealer
-- [ ] IP Security Scoring (multi-API IP check before login) — nexus-stealer
-- [ ] In-Panel Documentation (docs/ rendered in browser)
-- [ ] Community Chat + Support Tickets (WebSocket, emoji, GIF, @mentions)
-- [ ] Marketplace / Module Store (premium modules with license keys)
-- [ ] Session Management (device tracking + remote terminate)
-- [ ] Public Statistics Page (total logs, crypto %, geo map)
-- [ ] API Key Management (scoped keys with rate limiting)
+- [x] TOTP 2FA Authentication (pyotp-style QR + verify flow) — nexus-stealer
+- [x] IP Security Scoring (multi-API IP check before login) — nexus-stealer
+- [x] In-Panel Documentation (docs/ rendered in browser)
+- [x] Community Chat + Support Tickets (WebSocket, emoji, GIF, @mentions)
+- [x] Marketplace / Module Store (premium modules with license keys)
+- [x] Session Management (device tracking + remote terminate)
+- [x] Public Statistics Page (total logs, crypto %, geo map)
+- [x] API Key Management (scoped keys with rate limiting)
 
 ---
 

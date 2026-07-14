@@ -203,6 +203,17 @@ func main() {
 
 	r.Handle("/assets/*", http.FileServer(http.FS(distFS)))
 
+	r.Get("/public/*", func(w http.ResponseWriter, r *http.Request) {
+		index, err := fs.ReadFile(distFS, "index.html")
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		w.Write(index)
+	})
+
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			http.NotFound(w, r)

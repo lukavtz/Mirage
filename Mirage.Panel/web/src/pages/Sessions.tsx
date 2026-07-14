@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table'
 import type { SortingState, PaginationState } from '@tanstack/react-table'
 import { formatDistanceToNow } from 'date-fns'
-import { ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Settings2, Eye, EyeOff } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,14 @@ import {
 } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FlagIcon } from '@/components/charts/flag-icon'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import type { SessionListItem, SessionPage } from '@/types'
 
 const features = tableFeatures({
@@ -47,11 +55,57 @@ const COUNTRY_OPTIONS = [
   { value: 'CN', label: 'China' },
 ]
 
+const DATE_PRESETS = [
+  { value: '', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: 'yesterday', label: 'Yesterday' },
+  { value: '7d', label: 'Last 7 days' },
+  { value: '30d', label: 'Last 30 days' },
+]
+
+function getDateRange(preset: string): { from?: string; to?: string } {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  const today = `${y}-${m}-${d}`
+  if (preset === 'today') return { from: today }
+  if (preset === 'yesterday') {
+    const yest = new Date(now)
+    yest.setDate(yest.getDate() - 1)
+    return { from: `${yest.getFullYear()}-${String(yest.getMonth() + 1).padStart(2, '0')}-${String(yest.getDate()).padStart(2, '0')}` }
+  }
+  if (preset === '7d') {
+    const d7 = new Date(now)
+    d7.setDate(d7.getDate() - 7)
+    return { from: `${d7.getFullYear()}-${String(d7.getMonth() + 1).padStart(2, '0')}-${String(d7.getDate()).padStart(2, '0')}` }
+  }
+  if (preset === '30d') {
+    const d30 = new Date(now)
+    d30.setDate(d30.getDate() - 30)
+    return { from: `${d30.getFullYear()}-${String(d30.getMonth() + 1).padStart(2, '0')}-${String(d30.getDate()).padStart(2, '0')}` }
+  }
+  return {}
+}
+
 export default function Sessions() {
   const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
+  const [datePreset, setDatePreset] = useState('')
+  const [emptyOnly, setEmptyOnly] = useState(false)
+  const [blurred, setBlurred] = useState(false)
+  const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
+    const saved = localStorage.getItem('session_columns')
+    if (saved) {
+      try { return JSON.parse(saved) } catch {}
+    }
+    return {
+      ip: true, country: true, os: true, username: true, hwid: true,
+      passwords: true, cookies: true, cards: true, wallets: true, created_at: true,
+    }
+  })
   const [sorting, setSorting] = useState<SortingState>([{ id: 'created_at', desc: true }])
   const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 50 })
 
@@ -66,16 +120,21 @@ export default function Sessions() {
 
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }))
-  }, [sort, countryFilter, debouncedSearch])
+  }, [sort, countryFilter, debouncedSearch, datePreset, emptyOnly])
+
+  const dateRange = useMemo(() => getDateRange(datePreset), [datePreset])
 
   const query = useQuery<SessionPage>({
-    queryKey: ['sessions', pagination.pageIndex + 1, pagination.pageSize, sort, debouncedSearch, countryFilter],
+    queryKey: ['sessions', pagination.pageIndex + 1, pagination.pageSize, sort, debouncedSearch, countryFilter, datePreset, emptyOnly],
     queryFn: () => api.get<SessionPage>('/api/sessions', {
       page: pagination.pageIndex + 1,
       limit: pagination.pageSize,
       sort,
       q: debouncedSearch || undefined,
       country: countryFilter || undefined,
+      date_from: dateRange.from,
+      date_to: dateRange.to,
+      empty_only: emptyOnly || undefined,
     }),
     placeholderData: keepPreviousData,
   })
@@ -89,6 +148,7 @@ export default function Sessions() {
       cell: ({ row }) => row.index + 1 + pagination.pageIndex * pagination.pageSize,
     }),
     columnHelper.accessor('ip', {
+      id: 'ip',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -98,14 +158,19 @@ export default function Sessions() {
         </div>
       ),
       enableSorting: true,
+      cell: ({ getValue }) => {
+        const v = getValue()
+        return <span className={blurred ? 'blur-sm select-none' : ''}>{v}</span>
+      },
     }),
     columnHelper.accessor('country_code', {
+      id: 'country',
       header: 'Country',
       enableSorting: true,
       cell: ({ getValue }) => {
         const v = getValue()
         return (
-          <div className="flex items-center gap-1.5">
+          <div className={`flex items-center gap-1.5 ${blurred ? 'blur-sm select-none' : ''}`}>
             <FlagIcon country={v ?? ''} />
             <span className="font-mono text-xs">{v}</span>
           </div>
@@ -113,6 +178,7 @@ export default function Sessions() {
       },
     }),
     columnHelper.accessor('os', {
+      id: 'os',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -123,8 +189,9 @@ export default function Sessions() {
       ),
       enableSorting: true,
     }),
-    columnHelper.accessor('username', { header: 'Username' }),
+    columnHelper.accessor('username', { id: 'username', header: 'Username' }),
     columnHelper.accessor('hwid', {
+      id: 'hwid',
       header: 'HWID',
       cell: ({ getValue }) => {
         const v = getValue()
@@ -132,6 +199,7 @@ export default function Sessions() {
       },
     }),
     columnHelper.accessor('passwords_count', {
+      id: 'passwords',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -143,6 +211,7 @@ export default function Sessions() {
       enableSorting: true,
     }),
     columnHelper.accessor('cookies_count', {
+      id: 'cookies',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -154,6 +223,7 @@ export default function Sessions() {
       enableSorting: true,
     }),
     columnHelper.accessor('cards_count', {
+      id: 'cards',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -165,6 +235,7 @@ export default function Sessions() {
       enableSorting: true,
     }),
     columnHelper.accessor('wallets_count', {
+      id: 'wallets',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -176,6 +247,7 @@ export default function Sessions() {
       enableSorting: true,
     }),
     columnHelper.accessor('created_at', {
+      id: 'created_at',
       header: ({ header }) => (
         <div
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
@@ -187,12 +259,25 @@ export default function Sessions() {
       enableSorting: true,
       cell: ({ getValue }) => formatDistanceToNow(new Date(getValue()), { addSuffix: true }),
     }),
-  ]), [pagination.pageIndex, pagination.pageSize])
+  ]), [pagination.pageIndex, pagination.pageSize, blurred])
+
+  const visibleCols = useMemo(
+    () => columns.filter(c => visibleColumns[c.id ?? ''] ?? true),
+    [columns, visibleColumns]
+  )
+
+  const toggleColumn = (id: string) => {
+    setVisibleColumns(prev => {
+      const next = { ...prev, [id]: !prev[id] }
+      localStorage.setItem('session_columns', JSON.stringify(next))
+      return next
+    })
+  }
 
   const table = useTable({
     features,
     data: data?.items ?? [],
-    columns,
+    columns: visibleCols,
     state: { sorting, pagination },
     onSortingChange: setSorting,
     onPaginationChange: setPagination,
@@ -207,6 +292,15 @@ export default function Sessions() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">{t('sessions.title')}</h1>
         <div className="flex items-center gap-2">
+          <select
+            value={datePreset}
+            onChange={(e) => setDatePreset(e.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            {DATE_PRESETS.map(opt => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
           <div className="relative">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -225,6 +319,41 @@ export default function Sessions() {
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEmptyOnly(!emptyOnly)}
+            className={emptyOnly ? 'bg-primary/10' : ''}
+          >
+            Hide empty
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setBlurred(!blurred)}
+            className={blurred ? 'bg-primary/10' : ''}
+          >
+            {blurred ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Settings2 className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuLabel>Columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {Object.entries(visibleColumns).map(([key, visible]) => (
+                <DropdownMenuItem key={key} onClick={() => toggleColumn(key)}>
+                  <div className="flex items-center gap-2 w-full">
+                    <input type="checkbox" checked={visible} readOnly className="rounded" />
+                    <span>{key.charAt(0).toUpperCase() + key.slice(1)}</span>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -248,7 +377,7 @@ export default function Sessions() {
               <TableBody>
                 {table.getRowModel().rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={columns.length} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={visibleCols.length} className="h-24 text-center text-muted-foreground">
                       {query.isFetching ? 'Loading...' : 'No sessions found'}
                     </TableCell>
                   </TableRow>

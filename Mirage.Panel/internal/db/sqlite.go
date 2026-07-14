@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"sort"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -59,7 +60,12 @@ func RunMigrations(db *sql.DB, migrations fs.FS) error {
 	}
 	sort.Strings(entries)
 
+	// ponytail: skip pg_* files (postgres, incompatible with sqlite)
+
 	for _, name := range entries {
+		if strings.HasPrefix(name, "pg_") {
+			continue
+		}
 		content, err := fs.ReadFile(migrations, name)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
@@ -97,4 +103,140 @@ func RunMigrations(db *sql.DB, migrations fs.FS) error {
 	}
 
 	return nil
+}
+
+func RunMigrationsWithProvider(db *sql.DB, migrationsFS embed.FS, provider ProviderType) error {
+	if provider == ProviderPostgres {
+		return RunPGMigrations(db, migrationsFS)
+	}
+	return RunMigrations(db, MigrationsFS)
+}
+
+func RunPGMigrations(db *sql.DB, migrationsFS embed.FS) error {
+	if _, err := db.Exec(`
+		CREATE TABLE IF NOT EXISTS _migrations (
+			name        VARCHAR(255) PRIMARY KEY,
+			hash        VARCHAR(64) NOT NULL,
+			executed_at TIMESTAMP DEFAULT NOW()
+		)
+	`); err != nil {
+		return fmt.Errorf("create _migrations: %w", err)
+	}
+
+	entries, err := fs.Glob(migrationsFS, "migrations/pg_*.sql")
+	if err != nil {
+		entries = nil
+	}
+
+	entries2, err2 := fs.Glob(migrationsFS, "migrations/*.sql")
+	if err2 != nil {
+		return fmt.Errorf("list migrations: %w", err2)
+	}
+
+	seen := make(map[string]bool)
+	for _, e := range entries {
+		seen[e] = true
+	}
+	for _, e := range entries2 {
+		if !seen[e] {
+			entries = append(entries, e)
+		}
+		seen[e] = true
+	}
+	sort.Strings(entries)
+
+	for _, name := range entries {
+		content, err := fs.ReadFile(migrationsFS, name)
+		if err != nil {
+			content, err = fs.ReadFile(migrationsFS, "migrations/"+name)
+			if err != nil {
+				return fmt.Errorf("read %s: %w", name, err)
+			}
+		}
+
+		sql := string(content)
+		if !strings.HasPrefix(name, "pg_") {
+			sql = translateSQLiteToPG(sql)
+		}
+
+		hash := fmt.Sprintf("%x", sha256.Sum256([]byte(sql)))
+
+		var existingHash string
+		err = db.QueryRow("SELECT hash FROM _migrations WHERE name = $1", name).Scan(&existingHash)
+		if err == nil {
+			if existingHash == hash {
+				continue
+			}
+			return fmt.Errorf("migration %s hash mismatch (was %s, now %s)", name, existingHash, hash)
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin tx %s: %w", name, err)
+		}
+
+		if _, err := tx.Exec(sql); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("execute %s: %w", name, err)
+		}
+
+		if _, err := tx.Exec("INSERT INTO _migrations (name, hash) VALUES ($1, $2)", name, hash); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("record %s: %w", name, err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+func translateSQLiteToPG(sql string) string {
+	repl := map[string]string{
+		" INTEGER PRIMARY KEY AUTOINCREMENT": " SERIAL PRIMARY KEY",
+		" INTEGER PRIMARY KEY":               " SERIAL PRIMARY KEY",
+		" BLOB":                              " BYTEA",
+		" TEXT":                              " TEXT",
+		"datetime('now')":                    "NOW()",
+		"datetime('now',":                    "NOW() + INTERVAL '",
+		" CURRENT_TIMESTAMP":                 " NOW()",
+		"INSERT OR IGNORE":                   "INSERT",
+	}
+
+	result := sql
+	for old, new := range repl {
+		result = strings.ReplaceAll(result, old, new)
+	}
+
+	lines := strings.Split(result, "\n")
+	var out []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(strings.ToUpper(trimmed), "PRAGMA") {
+			continue
+		}
+		out = append(out, line)
+	}
+
+	result = strings.Join(out, "\n")
+
+	if !strings.Contains(strings.ToUpper(result), "ON CONFLICT") &&
+		strings.HasPrefix(strings.ToUpper(strings.TrimSpace(result)), "INSERT") {
+		upper := strings.ToUpper(result)
+		tableEnd := strings.Index(upper, "(")
+		if tableEnd != -1 {
+			valuesIdx := strings.Index(upper[tableEnd:], "VALUES")
+			if valuesIdx != -1 {
+				result = result + " ON CONFLICT DO NOTHING"
+			}
+		}
+	}
+
+	return result
+}
+
+func init() {
+	_ = embed.FS{}
 }

@@ -63,7 +63,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		Passwords:   queryPasswords(h.db, id),
 		Cookies:     queryCookies(h.db, id),
 		Cards:       queryCards(h.db, id),
-		Wallets:     queryWallets(h.db, id),
+		Wallets:     queryWalletsWithIcons(h.db, id),
 		Files:       queryFiles(h.db, id),
 		SystemInfo:  querySystemInfo(h.db, id),
 	}
@@ -130,7 +130,7 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 			Passwords:  queryPasswords(h.db, id),
 			Cookies:    queryCookies(h.db, id),
 			Cards:      queryCards(h.db, id),
-			Wallets:    queryWallets(h.db, id),
+			Wallets:    queryWalletsWithIcons(h.db, id),
 			Files:      queryFiles(h.db, id),
 			SystemInfo: querySystemInfo(h.db, id),
 		}

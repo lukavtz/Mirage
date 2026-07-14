@@ -23,7 +23,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
-	_ "modernc.org/sqlite"
 
 	"github.com/user/mirage-panel/internal/api"
 	"github.com/user/mirage-panel/internal/db"
@@ -111,6 +110,8 @@ func generateSelfSignedCert(certDir string) (string, string, error) {
 func main() {
 	port := getEnv("PORT", "8080")
 	dbPath := getEnv("DB_PATH", "data/mirage.db")
+	databaseURL := getEnv("DATABASE_URL", "")
+	dbProvider := getEnv("DB_PROVIDER", "sqlite")
 	jwtSecret := getEnv("JWT_SECRET", "")
 	allowedOrigins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173")
 
@@ -125,23 +126,38 @@ func main() {
 	slog.Info("starting Mirage Panel",
 		"port", port,
 		"db", dbPath,
+		"provider", dbProvider,
 		"tls", tlsEnabled,
 		"allowed_origins", allowedOrigins,
 	)
 
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
-		slog.Error("failed to create data directory", "err", err)
-		os.Exit(1)
+	providerType := db.ProviderSQLite
+	switch strings.ToLower(dbProvider) {
+	case "postgres", "postgresql":
+		providerType = db.ProviderPostgres
 	}
 
-	sqlDB, err := db.OpenDB(dbPath)
+	connString := dbPath
+	if providerType == db.ProviderPostgres {
+		if databaseURL != "" {
+			connString = databaseURL
+		}
+	} else {
+		if err := os.MkdirAll(filepath.Dir(connString), 0755); err != nil {
+			slog.Error("failed to create data directory", "err", err)
+			os.Exit(1)
+		}
+	}
+
+	p := db.NewProvider(providerType, connString)
+	sqlDB, err := p.Open()
 	if err != nil {
 		slog.Error("failed to open database", "err", err)
 		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
-	if err := db.RunMigrations(sqlDB, db.MigrationsFS); err != nil {
+	if err := db.RunMigrationsWithProvider(sqlDB, db.MigrationsFS, providerType); err != nil {
 		slog.Error("failed to run migrations", "err", err)
 		os.Exit(1)
 	}
@@ -239,7 +255,7 @@ func main() {
 		if tlsEnabled {
 			scheme := "https"
 			if useSelfSigned {
-				certDir := filepath.Join(filepath.Dir(dbPath), "certs")
+				certDir := filepath.Join(filepath.Dir(connString), "certs")
 				certFile, keyFile, err := generateSelfSignedCert(certDir)
 				if err != nil {
 					slog.Error("failed to generate self-signed cert", "err", err)

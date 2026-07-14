@@ -227,3 +227,115 @@ func TestBuild_ListEmpty(t *testing.T) {
 		t.Errorf("expected empty list, got %d items", len(builds))
 	}
 }
+
+func TestBuild_UpdateTag(t *testing.T) {
+	handler, d := setupBuildHandler(t)
+
+	body := `{"c2_host":"10.0.0.1","c2_port":8080,"build_tag":"original"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/build", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.Build(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	buildID := resp["id"].(string)
+
+	updateBody := `{"tag":"updated-campaign"}`
+	r := chi.NewRouter()
+	r.Put("/api/build/{id}/tag", handler.UpdateTag)
+	updateReq := httptest.NewRequest(http.MethodPut, "/api/build/"+buildID+"/tag", strings.NewReader(updateBody))
+	updateReq.Header.Set("Content-Type", "application/json")
+	updateW := httptest.NewRecorder()
+	r.ServeHTTP(updateW, updateReq)
+
+	if updateW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", updateW.Code, updateW.Body.String())
+	}
+
+	var tag string
+	d.QueryRow("SELECT build_tag FROM builds WHERE id = ?", buildID).Scan(&tag)
+	if tag != "updated-campaign" {
+		t.Errorf("build_tag = %q, want %q", tag, "updated-campaign")
+	}
+}
+
+func TestBuild_Stats(t *testing.T) {
+	handler, d := setupBuildHandler(t)
+
+	body := `{"c2_host":"10.0.0.1","c2_port":8080,"build_tag":"stats-test"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/build", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.Build(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	buildID := resp["id"].(string)
+
+	d.Exec("UPDATE builds SET download_count = 5 WHERE id = ?", buildID)
+
+	statsReq := httptest.NewRequest(http.MethodGet, "/api/build/stats", nil)
+	statsW := httptest.NewRecorder()
+	handler.Stats(statsW, statsReq)
+
+	if statsW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", statsW.Code, statsW.Body.String())
+	}
+
+	var statsResp map[string]any
+	json.Unmarshal(statsW.Body.Bytes(), &statsResp)
+
+	totalDownloads := int(statsResp["total_downloads"].(float64))
+	if totalDownloads != 5 {
+		t.Errorf("total_downloads = %d, want 5", totalDownloads)
+	}
+}
+
+func TestBuild_ListByTag(t *testing.T) {
+	handler, _ := setupBuildHandler(t)
+
+	body1 := `{"c2_host":"10.0.0.1","c2_port":8080,"build_tag":"campaign-a"}`
+	req1 := httptest.NewRequest(http.MethodPost, "/api/build", strings.NewReader(body1))
+	req1.Header.Set("Content-Type", "application/json")
+	w1 := httptest.NewRecorder()
+	handler.Build(w1, req1)
+	if w1.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w1.Code)
+	}
+
+	body2 := `{"c2_host":"10.0.0.2","c2_port":9090,"build_tag":"campaign-b"}`
+	req2 := httptest.NewRequest(http.MethodPost, "/api/build", strings.NewReader(body2))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	handler.Build(w2, req2)
+	if w2.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w2.Code)
+	}
+
+	listReq := httptest.NewRequest(http.MethodGet, "/api/build?tag=campaign-a", nil)
+	listW := httptest.NewRecorder()
+	handler.List(listW, listReq)
+
+	if listW.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", listW.Code)
+	}
+
+	var builds []map[string]any
+	json.Unmarshal(listW.Body.Bytes(), &builds)
+
+	if len(builds) != 1 {
+		t.Fatalf("expected 1 build, got %d", len(builds))
+	}
+	if builds[0]["build_tag"] != "campaign-a" {
+		t.Errorf("build_tag = %v, want campaign-a", builds[0]["build_tag"])
+	}
+}

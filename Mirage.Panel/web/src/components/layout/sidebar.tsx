@@ -25,11 +25,23 @@ const navItems = [
   { to: '/search', labelKey: 'nav.search', icon: Search, end: false, desc: 'Search stolen data' },
   { to: '/docs', labelKey: 'nav.docs', icon: Book, end: false, desc: 'Documentation' },
   { to: '/users', labelKey: 'nav.users', icon: Users, end: false, desc: 'User management' },
+  { to: '/team', labelKey: 'nav.team', icon: Users, end: false, desc: 'Team management' },
   { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false, desc: 'Panel configuration' },
 ]
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebar_collapsed')
+    return saved === 'true'
+  })
+
+  const toggleCollapsed = () => {
+    setCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('sidebar_collapsed', String(next))
+      return next
+    })
+  }
 
   return (
     <aside
@@ -74,7 +86,7 @@ export function Sidebar() {
           variant="ghost"
           size="sm"
           className={cn('w-full', collapsed && 'px-0')}
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={toggleCollapsed}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
           {!collapsed && <span className="text-xs">Collapse</span>}

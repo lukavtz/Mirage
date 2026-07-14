@@ -54,6 +54,29 @@ type Wallet struct {
 	Path      string `json:"path,omitempty"`
 }
 
+type WalletResponse struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Icon string `json:"icon,omitempty"`
+	Path string `json:"path,omitempty"`
+}
+
+type DomainDetect struct {
+	ID        string `json:"id"`
+	Domain    string `json:"domain"`
+	Tag       string `json:"tag"`
+	Color     string `json:"color"`
+	CreatedAt string `json:"created_at"`
+}
+
+type SessionTag struct {
+	ID        string `json:"id"`
+	SessionID string `json:"session_id"`
+	Tag       string `json:"tag"`
+	Color     string `json:"color"`
+	CreatedAt string `json:"created_at"`
+}
+
 type StolenFile struct {
 	ID        string `json:"id"`
 	SessionID string `json:"session_id"`
@@ -89,11 +112,11 @@ type Setting struct {
 }
 
 type Build struct {
-	ID             string `json:"id"`
-	ConfigHash     string `json:"config_hash,omitempty"`
-	FileSize       int64  `json:"file_size"`
-	Sha256         string `json:"sha256,omitempty"`
-	BuildTag       string `json:"build_tag,omitempty"`
-	DownloadCount  int    `json:"download_count"`
-	CreatedAt      string `json:"created_at"`
+	ID            string `json:"id"`
+	ConfigHash    string `json:"config_hash,omitempty"`
+	FileSize      int64  `json:"file_size"`
+	Sha256        string `json:"sha256,omitempty"`
+	BuildTag      string `json:"build_tag,omitempty"`
+	DownloadCount int    `json:"download_count"`
+	CreatedAt     string `json:"created_at"`
 }

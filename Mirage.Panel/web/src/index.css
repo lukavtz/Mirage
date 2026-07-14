@@ -2,6 +2,26 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+:root[data-theme="dark"] {
+  --bg-primary: #1a1b2e;
+  --bg-secondary: #232540;
+  --text-primary: #e4e6f0;
+  --text-secondary: #8b8fa3;
+  --border-color: #2d2f48;
+}
+
+:root[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f9;
+  --text-primary: #1a1b2e;
+  --text-secondary: #6b6f83;
+  --border-color: #e0e0e8;
+}
+
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: hsl(0 0% 100%);
   --foreground: hsl(0 0% 3.9%);

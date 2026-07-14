@@ -4,8 +4,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/user/mirage-panel/internal/db"
+	"github.com/user/mirage-panel/internal/middleware"
+	"github.com/user/mirage-panel/internal/services"
 )
 
 type RestoreHandler struct {
@@ -17,8 +22,9 @@ func NewRestoreHandler(db *sql.DB) *RestoreHandler {
 }
 
 type restoreRequest struct {
-	SessionID string `json:"session_id"`
-	Proxy     string `json:"proxy"`
+	SessionID   string                `json:"session_id"`
+	ProxyConfig *services.ProxyConfig `json:"proxy_config"`
+	Proxy       string                `json:"proxy"`
 }
 
 type restoreCookie struct {
@@ -29,10 +35,34 @@ type restoreCookie struct {
 }
 
 type restoreResponse struct {
-	SessionID string         `json:"session_id"`
-	Proxy     string         `json:"proxy"`
-	Count     int            `json:"count"`
+	SessionID string          `json:"session_id"`
+	Proxy     string          `json:"proxy"`
+	Count     int             `json:"count"`
 	Cookies   []restoreCookie `json:"cookies"`
+}
+
+type proxyConfigRequest struct {
+	Type     string `json:"type"`
+	Host     string `json:"host"`
+	Port     int    `json:"port"`
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
+type cookieUploadRequest struct {
+	SessionID   string                `json:"session_id"`
+	Cookies     []restoreCookie       `json:"cookies"`
+	ProxyConfig *services.ProxyConfig `json:"proxy_config"`
+}
+
+type restoreSessionResponse struct {
+	ID          string `json:"id"`
+	SessionID   string `json:"session_id"`
+	Status      string `json:"status"`
+	AccessToken string `json:"access_token,omitempty"`
+	Error       string `json:"error,omitempty"`
+	CreatedAt   string `json:"created_at"`
+	UpdatedAt   string `json:"updated_at"`
 }
 
 func (h *RestoreHandler) Restore(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +72,11 @@ func (h *RestoreHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Proxy == "" {
+	proxyStr := req.Proxy
+	if req.ProxyConfig != nil {
+		proxyStr = req.ProxyConfig.Addr()
+	}
+	if proxyStr == "" {
 		writeError(w, http.StatusBadRequest, "proxy is required")
 		return
 	}
@@ -79,8 +113,156 @@ func (h *RestoreHandler) Restore(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, restoreResponse{
 		SessionID: req.SessionID,
-		Proxy:     req.Proxy,
+		Proxy:     proxyStr,
 		Count:     len(cookies),
 		Cookies:   cookies,
 	})
+}
+
+func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	var req cookieUploadRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if req.SessionID == "" {
+		writeError(w, http.StatusBadRequest, "session_id is required")
+		return
+	}
+	if len(req.Cookies) == 0 {
+		writeError(w, http.StatusBadRequest, "cookies are required")
+		return
+	}
+
+	proxyJSON := ""
+	if req.ProxyConfig != nil {
+		data, _ := json.Marshal(req.ProxyConfig)
+		proxyJSON = string(data)
+	}
+
+	cookiesJSON, _ := json.Marshal(req.Cookies)
+	id := uuid.New().String()
+	now := time.Now().UTC().Format(time.RFC3339)
+
+	_, err := h.db.Exec(
+		`INSERT INTO restore_sessions (id, user_id, session_id, cookies_json, proxy_config, status, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, 'processing', ?, ?)`,
+		id, claims.UserID, req.SessionID, string(cookiesJSON), proxyJSON, now, now,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to create restore session")
+		return
+	}
+
+	go h.processRestore(id, req, proxyJSON)
+
+	writeJSON(w, http.StatusCreated, map[string]string{
+		"id":     id,
+		"status": "processing",
+	})
+}
+
+func (h *RestoreHandler) processRestore(id string, req cookieUploadRequest, proxyJSON string) {
+	var proxyConfig services.ProxyConfig
+	if proxyJSON != "" {
+		json.Unmarshal([]byte(proxyJSON), &proxyConfig)
+	}
+
+	accessToken := ""
+	errMsg := ""
+
+	if proxyConfig.Host != "" {
+		conn, err := services.ConnectViaSOCKS5("oauth2.googleapis.com", 443, proxyConfig)
+		if err != nil {
+			errMsg = "proxy connection failed: " + err.Error()
+		} else {
+			conn.Close()
+		}
+	}
+
+	status := "completed"
+	if errMsg != "" {
+		status = "failed"
+	}
+
+	now := time.Now().UTC().Format(time.RFC3339)
+	h.db.Exec(
+		`UPDATE restore_sessions SET status = ?, access_token = ?, error = ?, updated_at = ? WHERE id = ?`,
+		status, accessToken, errMsg, now, id,
+	)
+}
+
+func (h *RestoreHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	query := `SELECT id, session_id, status, access_token, error, created_at, updated_at
+		FROM restore_sessions WHERE user_id = ? ORDER BY created_at DESC`
+	args := []any{claims.UserID}
+
+	if claims.Role == "admin" {
+		query = `SELECT id, session_id, status, access_token, error, created_at, updated_at
+			FROM restore_sessions ORDER BY created_at DESC`
+		args = nil
+	}
+
+	rows, err := h.db.Query(query, args...)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query restore sessions")
+		return
+	}
+	defer rows.Close()
+
+	sessions := make([]restoreSessionResponse, 0)
+	for rows.Next() {
+		var s restoreSessionResponse
+		if err := rows.Scan(&s.ID, &s.SessionID, &s.Status, &s.AccessToken, &s.Error, &s.CreatedAt, &s.UpdatedAt); err != nil {
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+
+	writeJSON(w, http.StatusOK, sessions)
+}
+
+func (h *RestoreHandler) SessionStatus(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+
+	var s restoreSessionResponse
+	var userID string
+	err := h.db.QueryRow(
+		`SELECT id, session_id, status, COALESCE(access_token,''), COALESCE(error,''), created_at, updated_at
+		 FROM restore_sessions WHERE id = ?`, id,
+	).Scan(&s.ID, &s.SessionID, &s.Status, &s.AccessToken, &s.Error, &s.CreatedAt, &s.UpdatedAt)
+
+	if err != nil {
+		writeError(w, http.StatusNotFound, "restore session not found")
+		return
+	}
+
+	if userID != "" && userID != claims.UserID && claims.Role != "admin" {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
+	if claims.Role != "admin" {
+		s.AccessToken = ""
+	}
+
+	writeJSON(w, http.StatusOK, s)
 }

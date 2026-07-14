@@ -150,7 +150,7 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if expiresAt.Valid {
-		expTime, err := time.Parse("2006-01-02 15:04:05", expiresAt.String)
+		expTime, err := time.ParseInLocation("2006-01-02 15:04:05", expiresAt.String, time.Local)
 		if err == nil && time.Now().After(expTime) {
 			writeError(w, http.StatusGone, "invite code has expired")
 			return

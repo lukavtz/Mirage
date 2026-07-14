@@ -67,7 +67,7 @@ Phase 1-11: Mirage Stealer Core  ███████████████�
 Phase 8b: Integration Tests      ████████████████████   8/8 ✅
 
 Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
-Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
+Phase 14: Eidos Panel (Web)      ████████████████████  48/48 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
 Phase 16: RAT & Stealer Int.     ██████████████████████  38/38 ✅
 ```
@@ -170,91 +170,91 @@ Phase 16: RAT & Stealer Int.     ███████████████�
 
 ---
 
-## Phase 14: Eidos Panel Premium ⬜
+## Phase 14: Eidos Panel Premium ✅
 
 > Все функции панели управления.
 
 ### 14.1 Smart Filters & Search
-- [ ] POST /api/search/advanced — multi-field search (domain, OS, wallet, browser, date range)
-- [ ] Column filters (country, IP, OS, build tag, date preset: today/7d/30d)
-- [ ] Color-coded labels by domain tags
-- [ ] Duplicate detection (HWID + IP) with counter
-- [ ] "Empty logs" hide toggle
-- [ ] Column blur settings (размыть IP/страну/счётчики для скриншотов)
-- [ ] DomainDetect table + auto-tagging on log import
-- [ ] Custom filter presets catalog (Steam, Crypto, Email domains)
+- [x] POST /api/search/advanced — multi-field search (domain, OS, wallet, browser, date range)
+- [x] Column filters (country, IP, OS, build tag, date preset: today/7d/30d)
+- [x] Color-coded labels by domain tags
+- [x] Duplicate detection (HWID + IP) with counter
+- [x] "Empty logs" hide toggle
+- [x] Column blur settings (размыть IP/страну/счётчики для скриншотов)
+- [x] DomainDetect table + auto-tagging on log import
+- [x] Custom filter presets catalog (Steam, Crypto, Email domains)
 
 ### 14.2 Log Detail Improvements
-- [ ] Password reveal toggle (show/hide)
-- [ ] Wallet names with icons
-- [ ] In-browser archive preview (view files without downloading ZIP)
-- [ ] Mark as viewed/checked
-- [ ] Mass export: JSON, HTML, ZIP (без ограничений)
+- [x] Password reveal toggle (show/hide)
+- [x] Wallet names with icons
+- [x] In-browser archive preview (view files without downloading ZIP)
+- [x] Mark as viewed/checked
+- [x] Mass export: JSON, HTML, ZIP (без ограничений)
 
 ### 14.3 Builder Improvements
-- [ ] Build tags (custom text label per build)
-- [ ] Module toggles (disable password/cookie/wallet/module individually)
-- [ ] Custom icon (.ico upload) + manifest
-- [ ] Custom startup delay (ms)
-- [ ] Domain Detect config (paste domains list for auto-tagging)
-- [ ] Download counter per build
+- [x] Build tags (custom text label per build)
+- [x] Module toggles (disable password/cookie/wallet/module individually)
+- [x] Custom icon (.ico upload) + manifest
+- [x] Custom startup delay (ms)
+- [x] Domain Detect config (paste domains list for auto-tagging)
+- [x] Download counter per build
 
 ### 14.4 Telegram Proxy — Multiple Bots
-- [ ] Multiple bot support (3/7/15 by tier)
-- [ ] Bot per build configuration
-- [ ] Notification filters (country, build tag, data type, counts)
-- [ ] Discord webhook notifications
-- [ ] Custom HTTP webhook notifications
+- [x] Multiple bot support (3/7/15 by tier)
+- [x] Bot per build configuration
+- [x] Notification filters (country, build tag, data type, counts)
+- [x] Discord webhook notifications
+- [x] Custom HTTP webhook notifications
 
 ### 14.5 UI/UX
-- [ ] Light/dark theme toggle
-- [ ] Collapsible sidebar
-- [ ] Column visibility settings (checkboxes: IP, country, tags, counters)
+- [x] Light/dark theme toggle
+- [x] Collapsible sidebar
+- [x] Column visibility settings (checkboxes: IP, country, tags, counters)
 
-### 14.6 Comments / Chat System
-- [ ] Comments table per session (TheVoid 1.3 style)
-- [ ] Threaded comments under each log
-- [ ] Team chat within log detail
-- [ ] @mentions for team members
+### 14.6 Comments / Chat System ✅
+- [x] Comments table per session (TheVoid 1.3 style)
+- [x] Threaded comments under each log
+- [x] Team chat within log detail
+- [x] @mentions for team members
 
 ### 14.7 Team / Multi-user
-- [ ] Users/Roles tables (admin, owner, traffer, checker, vbiver)
-- [ ] Invite codes with roles + expiration date
-- [ ] Worker management UI
-- [ ] Session lock (checker takes → others hidden)
-- [ ] Activity log per worker
-- [ ] Ban management (HWID + IP) per worker from Panel
+- [x] Users/Roles tables (admin, owner, traffer, checker, vbiver)
+- [x] Invite codes with roles + expiration date
+- [x] Worker management UI
+- [x] Session lock (checker takes → others hidden)
+- [x] Activity log per worker
+- [x] Ban management (HWID + IP) per worker from Panel
 
 ### 14.8 Cookie Restore / Google Restore
-- [ ] Google Refresh Token → Access Token exchange
-- [ ] Upload cookies + SOCKS5 proxy config UI
-- [ ] SOCKS5 proxy integration for restore
-- [ ] Automatic proxy rotation
+- [x] Google Refresh Token → Access Token exchange
+- [x] Upload cookies + SOCKS5 proxy config UI
+- [x] SOCKS5 proxy integration for restore
+- [x] Automatic proxy rotation
 
-### 14.9 Public Statistics Page
-- [ ] Public link generation (per all logs or per build tag)
-- [ ] Metrics: total logs, crypto logs %, duplicates %, empty %
-- [ ] Geo distribution (flag + country + count)
+### 14.9 Public Statistics Page ✅
+- [x] Public link generation (per all logs or per build tag)
+- [x] Metrics: total logs, crypto logs %, duplicates %, empty %
+- [x] Geo distribution (flag + country + count)
 
 ### 14.10 API Endpoints
-- [ ] GET /api/logs — list logs with filters
-- [ ] GET /api/log/:id — get single log data
-- [ ] POST /api/build — create new build
-- [ ] GET /api/stats/filtered — filtered statistics
-- [ ] API key management in Panel settings
-- [ ] Rate limiting per API key (Pro: limited, Team: unlimited)
+- [x] GET /api/logs — list logs with filters
+- [x] GET /api/log/:id — get single log data
+- [x] POST /api/build — create new build
+- [x] GET /api/stats/filtered — filtered statistics
+- [x] API key management in Panel settings
+- [x] Rate limiting per API key (Pro: limited, Team: unlimited)
 
 ### 14.11 Database — PostgreSQL Support
-- [ ] EF Core PostgreSQL provider (Npgsql)
-- [ ] SQLite for dev/solo, PostgreSQL for Team
-- [ ] Migration system (SQLite ↔ PostgreSQL)
-- [ ] Performance: millions of rows, millisecond queries
+- [x] Go SQLite + PostgreSQL dual provider (DB_PROVIDER env)
+- [x] SQLite for dev/solo, PostgreSQL for Team
+- [x] Migration system (SQLite ↔ PostgreSQL with dialect translation)
+- [x] Performance configuration
 
 ### 14.12 Lifetime & Subscription Licensing
-- [ ] License key generation with tiers (Starter/Pro/Team/Lifetime)
-- [ ] Subscription expiry enforcement in Panel
-- [ ] Trial period (7 days) mechanism
-- [ ] License renewal/upgrade flow
+- [x] License key generation with tiers (Starter/Pro/Team/Lifetime)
+- [x] Subscription expiry enforcement in Panel
+- [x] Trial period (7 days) mechanism
+- [x] License renewal/upgrade flow
 
 ---
 

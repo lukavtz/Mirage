@@ -13,6 +13,7 @@ import SearchPage from '@/pages/Search'
 import BuildPage from '@/pages/Build'
 import Settings from '@/pages/Settings'
 import UsersPage from '@/pages/Users'
+import TeamPage from '@/pages/TeamPage'
 import RestorePage from '@/pages/Restore'
 import DocsPage from '@/pages/DocsPage'
 import PublicStatsPage from '@/pages/PublicStatsPage'
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
       { path: 'build', element: <BuildPage /> },
       { path: 'search', element: <SearchPage /> },
       { path: 'users', element: <UsersPage /> },
+      { path: 'team', element: <TeamPage /> },
       { path: 'restore', element: <RestorePage /> },
       { path: 'settings', element: <Settings /> },
       { path: 'docs', element: <DocsPage /> },

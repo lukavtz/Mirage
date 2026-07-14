@@ -201,12 +201,15 @@ func TestUsers_RegisterWithValidCode(t *testing.T) {
 func TestUsers_RegisterExpiredCode(t *testing.T) {
 	d := openTestDB(t)
 
+	// Create admin user for FK constraint
+	adminID := createTestUser(t, d, "inviteadmin", "pass")
+
 	// Insert an expired invite code directly
 	code := "EXPIRED-CODE-12345"
 	_, err := d.Exec(
-		`INSERT INTO invite_codes (id, code, role, tier, max_uses, used_count, expires_at, created_at)
-		 VALUES (?, ?, 'worker', 'starter', 1, 0, ?, datetime('now'))`,
-		uuid.New().String(), code, time.Now().Add(-1*time.Hour).Format("2006-01-02 15:04:05"),
+		`INSERT INTO invite_codes (id, code, role, tier, max_uses, used_count, expires_at, created_by, created_at)
+		 VALUES (?, ?, 'worker', 'starter', 1, 0, ?, ?, datetime('now'))`,
+		uuid.New().String(), code, time.Now().Add(-1*time.Hour).Format("2006-01-02 15:04:05"), adminID,
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -236,11 +239,14 @@ func TestUsers_RegisterExpiredCode(t *testing.T) {
 func TestUsers_RegisterUsedUpCode(t *testing.T) {
 	d := openTestDB(t)
 
+	// Create admin user for FK constraint
+	adminID := createTestUser(t, d, "inviteadmin2", "pass")
+
 	code := "USED-UP-CODE-67890"
 	_, err := d.Exec(
-		`INSERT INTO invite_codes (id, code, role, tier, max_uses, used_count, created_at)
-		 VALUES (?, ?, 'worker', 'starter', 1, 1, datetime('now'))`,
-		uuid.New().String(), code,
+		`INSERT INTO invite_codes (id, code, role, tier, max_uses, used_count, created_by, created_at)
+		 VALUES (?, ?, 'worker', 'starter', 1, 1, ?, datetime('now'))`,
+		uuid.New().String(), code, adminID,
 	)
 	if err != nil {
 		t.Fatal(err)

@@ -29,14 +29,18 @@ export interface Session {
   created_at: string
 }
 
-export interface SessionListItem extends Session {}
+export interface SessionListItem extends Session {
+  duplicate_count?: number
+  viewed?: number
+}
 
 export interface SessionDetail extends SessionListItem {
+  viewed?: number
   system_info?: SystemInfo
   passwords?: Array<{ id: string; url?: string; username?: string; password_value?: string; browser?: string }>
   cookies?: Array<{ id: string; domain?: string; name?: string; value?: string; path?: string }>
   cards?: Array<{ id: string; number?: string; exp_month?: string; exp_year?: string; holder?: string; cvc?: string }>
-  wallets?: Array<{ id: string; name?: string; path?: string }>
+  wallets?: Array<{ id: string; name?: string; icon?: string; path?: string }>
   files?: Array<{ id: string; filename?: string; size?: number }>
 }
 

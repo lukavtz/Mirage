@@ -69,7 +69,7 @@ Phase 8b: Integration Tests      ███████████████�
 Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
 Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
-Phase 16: RAT & Stealer Int.     ███░░░░░░░░░░░░░░░░░   12/38 ⬜
+Phase 16: RAT & Stealer Int.     █████████░░░░░░░░░░░   23/38 ⬜
 ```
 
 **Total: 142/142 ✅ Done + 192 unit tests ✅ + 148 ⬜ New**
@@ -273,17 +273,17 @@ Phase 16: RAT & Stealer Int.     ███░░░░░░░░░░░░�
 - [x] Keylogger (WH_KEYBOARD_LL hook + message loop)
 
 ### 16.2 Coverage Expansion — из Intelix (11 задач, ~7 дней)
-- [ ] VPN clients (18: NordVPN, OpenVPN, WireGuard, SurfShark, ExpressVPN, CyberGhost, PIA, Mullvad, Windscribe, TunnelBear, Hotspot Shield, VyprVPN, Hamachi, HideMyName, IpVanish, RadminVPN, SoftEther, ProtonVPN)
-- [ ] 2FA Authenticators (7: Google, Microsoft, Authy, Duo Mobile, OTP Auth, FreeOTP, Aegis)
-- [ ] Password Managers (8: Bitwarden, Dashlane, Keeper, KeePassXC, LastPass, NordPass, RoboForm, 1Password)
-- [ ] Seed Phrase Grabber (BIP39 regex scan across Desktop/Documents/Downloads + cloud storages)
-- [ ] Yandex Passman (Яндекс.Браузер password manager decrypt)
-- [ ] App-Bound v20 Flags 1-3 (CNG NCryptDecrypt fallback) — Intelix
-- [ ] Discord billing/payment scraping + gift codes — LegionStealerStub
-- [ ] Webcam Capture (AVICAP32 / DirectShow COM)
+- [x] VPN clients (18: NordVPN, OpenVPN, WireGuard, SurfShark, ExpressVPN, CyberGhost, PIA, Mullvad, Windscribe, TunnelBear, Hotspot Shield, VyprVPN, Hamachi, HideMyName, IpVanish, RadminVPN, SoftEther, ProtonVPN)
+- [x] 2FA Authenticators (7: Google, Microsoft, Authy, Duo Mobile, OTP Auth, FreeOTP, Aegis)
+- [x] Password Managers (8: Bitwarden, Dashlane, Keeper, KeePassXC, LastPass, NordPass, RoboForm, 1Password)
+- [x] Seed Phrase Grabber (BIP39 regex scan across Desktop/Documents/Downloads + cloud storages)
+- [x] Yandex Passman (Яндекс.Браузер password manager decrypt)
+- [x] App-Bound v20 Flags 1-3 (CNG NCryptDecrypt fallback) — Intelix
+- [x] Discord billing/payment scraping + gift codes — LegionStealerStub
+- [x] Webcam Capture (AVICAP32 / DirectShow COM)
 - [x] Desktop wallets expansion (+23 → 38 total) — Intelix
 - [x] Extension wallets expansion (+14 → 96 total) — Intelix
-- [ ] Messengers expansion (+8: Element, ICQ, MicroSIP, Jabber, Outlook, Skype, Tox, Viber)
+- [x] Messengers expansion (+8: Element, ICQ, MicroSIP, Jabber, Outlook, Skype, Tox, Viber)
 
 ### 16.3 RAT Capabilities — из Overlord (5 задач, ~10 дней)
 - [ ] Reverse Proxy (SOCKS5 server inside stealer) — Overlord, NyashRat

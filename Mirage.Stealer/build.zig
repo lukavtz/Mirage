@@ -25,7 +25,12 @@ pub fn build(b: *std.Build) void {
         }
         e.root_module.addAnonymousImport("config", .{ .root_source_file = b.path("src/config/config.zig") });
         e.root_module.addAnonymousImport("clipper_config", .{ .root_source_file = b.path("src/clipper/config.zig") });
-        b.installArtifact(e);
+        const install_art = b.addInstallArtifact(e, .{});
+        b.default_step.dependOn(&install_art.step);
+        const morph_step = b.step("morph", "Run Eidos Morpher on compiled EXE");
+        const run_morph = b.addSystemCommand(&.{ "python", "../scripts/morpher.py", "zig-out/bin/Mirage.exe" });
+        morph_step.dependOn(&install_art.step);
+        morph_step.dependOn(&run_morph.step);
     }
 
     // ── Cross-compilation targets ──

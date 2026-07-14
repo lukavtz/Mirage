@@ -62,6 +62,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 	apiKeyHandler := NewAPIKeyHandler(db)
 	docsHandler := NewDocsHandler()
 	publicStatsHandler := NewPublicStatsHandler(db)
+	pricingHandler := NewPricingHandler(db)
+	referralHandler := NewReferralHandler(db)
 
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
@@ -69,6 +71,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Post("/api/auth/2fa/verify-login", authHandler.VerifyLogin)
 		r.Get("/api/auth/2fa/required", totpHandler.Required)
 		r.Get("/api/public/stats", publicStatsHandler.GetPublicStats)
+		r.Get("/api/pricing", pricingHandler.ListTiers)
 	})
 
 	r.Group(func(r chi.Router) {
@@ -172,6 +175,14 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Post("/api/auth/start-trial", marketplaceHandler.StartTrial)
 		r.With(middleware.RequireRole("admin")).Post("/api/marketplace/products", marketplaceHandler.CreateProduct)
 		r.With(middleware.RequireRole("admin")).Delete("/api/marketplace/products/{id}", marketplaceHandler.DeleteProduct)
+
+		// Pricing & License features
+		r.Get("/api/license/features", pricingHandler.MyFeatures)
+
+		// Referrals
+		r.Get("/api/referrals/code", referralHandler.GetCode)
+		r.Post("/api/referrals/apply", referralHandler.Apply)
+		r.Get("/api/referrals/stats", referralHandler.Stats)
 
 		// Proxies
 		rotator := services.NewProxyRotator(nil)

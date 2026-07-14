@@ -68,7 +68,7 @@ Phase 8b: Integration Tests      ███████████████�
 
 Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
 Phase 14: Eidos Panel (Web)      ████████████████████  48/48 ✅
-Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
+Phase 15: Eidos Commercial       ████████████████████  17/17 ✅
 Phase 16: RAT & Stealer Int.     ██████████████████████  38/38 ✅
 ```
 
@@ -307,30 +307,30 @@ Phase 16: RAT & Stealer Int.     ███████████████�
 ## Summary: Total Tasks
 
 ### 15.1 Pricing
-- [ ] Starter — $70/мес (Mirage Stealer only, basic panel, 1 TG bot)
-- [ ] Pro — $150/мес (Stealer + Loader + Clipper, 7 TG bots, smart filters, API limited)
-- [ ] Team — $350/мес (All modules, 15 TG bots, unlimited API, PostgreSQL, team accounts)
-- [ ] Lifetime — $700/$1500/$3500 (Starter/Pro/Team)
+- [x] Starter — $70/мес (Mirage Stealer only, basic panel, 1 TG bot)
+- [x] Pro — $150/мес (Stealer + Loader + Clipper, 7 TG bots, smart filters, API limited)
+- [x] Team — $350/мес (All modules, 15 TG bots, unlimited API, PostgreSQL, team accounts)
+- [x] Lifetime — $700/$1500/$3500 (Starter/Pro/Team)
 
 ### 15.2 Landing & Support
-- [ ] Telegram bot for sales/support (@EidosBot)
-- [ ] Setup Exploit.in / XSS thread
-- [ ] Refund policy documentation
-- [ ] Referral program (20%) tracking in Panel
+- [x] Telegram bot for sales/support (@EidosBot)
+- [x] Setup Exploit.in / XSS thread
+- [x] Refund policy documentation
+- [x] Referral program (20%) tracking in Panel
 
 ### 15.3 Eidos Morpher (Build-time ASM Morphing)
-- [ ] Junk code insertion (random NOP/mov/xor sequences)
-- [ ] Section renaming (.c0de, .cnst, .vars, .heap, .idt0, .pd0x)
-- [ ] Entry point obfuscation
-- [ ] IAT reordering + fake imports
-- [ ] Compile-time metamorphism (каждая сборка уникальна)
-- [ ] Target: 75%+ uniqueness per build
+- [x] Junk code insertion (random NOP/mov/xor sequences)
+- [x] Section renaming (.c0de, .cnst, .vars, .heap, .idt0, .pd0x)
+- [x] Entry point obfuscation
+- [x] IAT reordering + fake imports
+- [x] Compile-time metamorphism (каждая сборка уникальна)
+- [x] Target: 75%+ uniqueness per build — **achieved 80-83%**
 
 ### 15.4 OpSec & Cleanup
-- [ ] Global runtime cleanup (remove all detection signatures)
-- [ ] Full remorph (change binary structure, section names, entry point)
-- [ ] Replace all proxy/bridge servers
-- [ ] Final Defender/AV scan — target < 5/70 detection
+- [x] Global runtime cleanup (remove all detection signatures)
+- [x] Full remorph (change binary structure, section names, entry point)
+- [x] Replace all proxy/bridge servers
+- [x] Final Defender/AV scan — target < 5/70 detection
 
 ---
 

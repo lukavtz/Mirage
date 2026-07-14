@@ -69,7 +69,7 @@ Phase 8b: Integration Tests      ███████████████�
 Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
 Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
-Phase 16: RAT & Stealer Int.     █████████░░░░░░░░░░░   23/38 ⬜
+Phase 16: RAT & Stealer Int.     ████████████████░░░░   28/38 ⬜
 ```
 
 **Total: 142/142 ✅ Done + 192 unit tests ✅ + 148 ⬜ New**
@@ -286,11 +286,11 @@ Phase 16: RAT & Stealer Int.     █████████░░░░░░�
 - [x] Messengers expansion (+8: Element, ICQ, MicroSIP, Jabber, Outlook, Skype, Tox, Viber)
 
 ### 16.3 RAT Capabilities — из Overlord (5 задач, ~10 дней)
-- [ ] Reverse Proxy (SOCKS5 server inside stealer) — Overlord, NyashRat
-- [ ] Chrome Backstage Injection (DLL inject + DXGI capture) — Overlord
-- [ ] Multi-Platform Build (Linux/macOS via Zig targets) — Overlord conditional tags
-- [ ] Self-Supersede / Agent Update (download + replace + re-persist) — Overlord
-- [ ] WASM Plugin Runtime (load collector modules dynamically)
+- [x] Reverse Proxy (SOCKS5 server inside stealer) — Overlord, NyashRat
+- [x] Chrome Backstage Injection (DLL inject + DXGI capture) — Overlord
+- [x] Multi-Platform Build (Linux/macOS via Zig targets) — Overlord conditional tags
+- [x] Self-Supersede / Agent Update (download + replace + re-persist) — Overlord
+- [x] WASM Plugin Runtime (load collector modules dynamically)
 
 ### 16.4 Panel Improvements (8 задач, ~5 дней)
 - [ ] TOTP 2FA Authentication (pyotp-style QR + verify flow) — nexus-stealer

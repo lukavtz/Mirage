@@ -13,6 +13,10 @@ pub const NetworkError = error{
     AddressResolveFailed,
     SendFailed,
     RecvFailed,
+    BindFailed,
+    ListenFailed,
+    AcceptFailed,
+    SetSockOptFailed,
 };
 
 const WSADATA = extern struct {
@@ -41,6 +45,9 @@ const AF_INET: i32 = 2;
 const SOCK_STREAM: i32 = 1;
 const IPPROTO_TCP: i32 = 6;
 const WSA_FLAG_OVERLAPPED: u32 = 0x01;
+const SOL_SOCKET: i32 = 0xFFFF;
+const SO_REUSEADDR: i32 = 0x0004;
+const INVALID_SOCKET: isize = -1;
 
 const ADDRINFO = extern struct {
     ai_flags: i32,
@@ -58,6 +65,12 @@ const Ws2Functions = struct {
     WSASocketW: *const fn (af: i32, typ: i32, protocol: i32, lpProtocolInfo: ?*anyopaque, g: u32, dwFlags: u32) callconv(.winapi) types.HANDLE,
     WSAStringToAddressA: *const fn (addressString: [*:0]u8, addressFamily: i32, lpProtocolInfo: ?*anyopaque, lpAddress: *SOCKADDR, lpAddressLength: *i32) callconv(.winapi) i32,
     htons: *const fn (hostshort: u16) callconv(.winapi) u16,
+    ntohs: ?*const fn (netshort: u16) callconv(.winapi) u16,
+    bind: *const fn (s: types.HANDLE, name: *const SOCKADDR, namelen: i32) callconv(.winapi) i32,
+    listen: *const fn (s: types.HANDLE, backlog: i32) callconv(.winapi) i32,
+    accept: *const fn (s: types.HANDLE, addr: ?*SOCKADDR, addrlen: ?*i32) callconv(.winapi) types.HANDLE,
+    setsockopt: *const fn (s: types.HANDLE, level: i32, optname: i32, optval: [*]const u8, optlen: i32) callconv(.winapi) i32,
+    getsockname: ?*const fn (s: types.HANDLE, name: *SOCKADDR, namelen: *i32) callconv(.winapi) i32,
     connect: *const fn (s: types.HANDLE, name: *const SOCKADDR, namelen: i32) callconv(.winapi) i32,
     send: *const fn (s: types.HANDLE, buf: [*]const u8, len: i32, flags: i32) callconv(.winapi) i32,
     recv: *const fn (s: types.HANDLE, buf: [*]u8, len: i32, flags: i32) callconv(.winapi) i32,
@@ -217,6 +230,48 @@ pub const Socket = struct {
     pub fn close(sock: types.HANDLE) void {
         const fns = getFunctions() catch return;
         _ = fns.closesocket(sock);
+    }
+
+    pub fn create() !types.HANDLE {
+        const fns = try getFunctions();
+        const sock = fns.WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
+        if (@intFromPtr(sock) == ~@as(usize, 0)) return error.SocketCreateFailed;
+        return sock;
+    }
+
+    pub fn bind(sock: types.HANDLE, addr: *const SOCKADDR_IN) !void {
+        const fns = try getFunctions();
+        const rc = fns.bind(sock, @as(*const SOCKADDR, @ptrCast(addr)), @sizeOf(SOCKADDR_IN));
+        if (rc != 0) return error.BindFailed;
+    }
+
+    pub fn listen(sock: types.HANDLE, backlog: i32) !void {
+        const fns = try getFunctions();
+        if (fns.listen(sock, backlog) != 0) return error.ListenFailed;
+    }
+
+    pub fn acceptClient(sock: types.HANDLE) !types.HANDLE {
+        const fns = try getFunctions();
+        const client = fns.accept(sock, null, null);
+        if (@intFromPtr(client) == ~@as(usize, 0)) return error.AcceptFailed;
+        return client;
+    }
+
+    pub fn setReuseAddr(sock: types.HANDLE) !void {
+        const fns = try getFunctions();
+        const optval: u32 = 1;
+        const rc = fns.setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, @as([*]const u8, @ptrCast(&optval)), @sizeOf(u32));
+        if (rc != 0) return error.SetSockOptFailed;
+    }
+
+    pub fn getPort(sock: types.HANDLE) !u16 {
+        const fns = try getFunctions();
+        var name: SOCKADDR = undefined;
+        var namelen: i32 = @sizeOf(SOCKADDR);
+        const getsockname = fns.getsockname orelse return 0;
+        if (getsockname(sock, &name, &namelen) != 0) return 0;
+        const sin = @as(*const SOCKADDR_IN, @ptrCast(&name));
+        return fns.ntohs orelse return std.mem.readInt(u16, @as(*const [2]u8, @ptrCast(&sin.sin_port)), .big);
     }
 };
 

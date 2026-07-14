@@ -97,7 +97,7 @@ fn loadModule(comptime name: []const u8) ?types.PVOID {
     var unicode_str = types.UNICODE_STRING{
         .Length = @as(u16, @intCast(name.len * 2)),
         .MaximumLength = @as(u16, @intCast(name.len * 2 + 2)),
-        .Buffer = @as([*]u16, @ptrCast(&wide_buf)),
+        .Buffer = @as([*]u16, @ptrCast(@alignCast(&wide_buf))),
     };
 
     var base: types.PVOID = undefined;
@@ -111,10 +111,10 @@ fn getFunctions() !*const Ws2Functions {
 
     const base = loadModule("ws2_32.dll") orelse return error.ModuleNotFound;
 
-    inline for (@typeInfo(Ws2Functions).Struct.fields) |field| {
+    inline for (std.meta.fields(Ws2Functions)) |field| {
         const func_hash = hash.encryptedHashFunc(field.name);
-        if (@typeInfo(field.type) == .Optional) {
-            @field(g_fns, field.name) = @as(?*const fn () void, @ptrCast(export_resolve.getFunctionByHash(base, func_hash)));
+        if (@typeInfo(field.type) == .optional) {
+            @field(g_fns, field.name) = @ptrCast(@alignCast(export_resolve.getFunctionByHash(base, func_hash)));
         } else {
             const ptr = export_resolve.getFunctionByHash(base, func_hash) orelse return error.FunctionNotFound;
             @field(g_fns, field.name) = @ptrCast(@alignCast(ptr));
@@ -165,29 +165,28 @@ pub const Socket = struct {
         );
         if (rc != 0) {
             addr.sin_family = @as(u16, @intCast(AF_INET));
-            addr.sin_addr = parseIpv4(host) orelse {
-                // Try DNS resolution via getaddrinfo
-                if (fns.getaddrinfo) |getaddr| {
-                    var hints: ADDRINFO = undefined;
-                    @memset(@as(*[1]u8, @ptrCast(&hints))[0..@sizeOf(ADDRINFO)], 0);
-                    hints.ai_family = AF_INET;
-                    hints.ai_socktype = SOCK_STREAM;
-                    hints.ai_protocol = IPPROTO_TCP;
-
-                    var res: ?*ADDRINFO = null;
-                    if (getaddr(@as([*:0]const u8, @ptrCast(&host_buf)), null, &hints, &res) == 0 and res != null) {
-                        const sin = @as(*const SOCKADDR_IN, @ptrCast(@alignCast(res.?.ai_addr)));
-                        addr.sin_addr = sin.sin_addr;
-                        fns.freeaddrinfo(res.?);
-                    } else {
-                        _ = fns.closesocket(sock);
-                        return error.AddressResolveFailed;
-                    }
+            const parsed = parseIpv4(host);
+            if (parsed) |ip| {
+                addr.sin_addr = ip;
+            } else if (fns.getaddrinfo) |getaddr| {
+                var hints: ADDRINFO = std.mem.zeroes(ADDRINFO);
+                hints.ai_family = AF_INET;
+                hints.ai_socktype = SOCK_STREAM;
+                hints.ai_protocol = IPPROTO_TCP;
+                var res: ?*ADDRINFO = null;
+                var empty_str: [1]u8 = .{0};
+                if (getaddr(@as([*:0]const u8, @ptrCast(&host_buf)), @as([*:0]const u8, @ptrCast(&empty_str)), &hints, &res) == 0 and res != null) {
+                    const sin = @as(*const SOCKADDR_IN, @ptrCast(@alignCast(res.?.ai_addr)));
+                    addr.sin_addr = sin.sin_addr;
+                    if (fns.freeaddrinfo) |free_fn| free_fn(res.?);
                 } else {
                     _ = fns.closesocket(sock);
                     return error.AddressResolveFailed;
                 }
-            };
+            } else {
+                _ = fns.closesocket(sock);
+                return error.AddressResolveFailed;
+            }
         }
         addr.sin_family = @as(u16, @intCast(AF_INET));
         addr.sin_port = fns.htons(port);

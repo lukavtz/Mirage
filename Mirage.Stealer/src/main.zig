@@ -428,6 +428,8 @@ fn runProductionPipeline() void {
     const ntdll = initSyscallInfrastructure() orelse return;
     logMsg("[+] Syscall infrastructure initialized\n");
 
+    _ = config.MIRAGECFG_MARKER;
+
     const env_ok = initAntiEvasion(ntdll);
     if (!env_ok) return;
     logMsg("[+] Anti-evasion checks passed\n");

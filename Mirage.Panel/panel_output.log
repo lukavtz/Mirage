@@ -1,0 +1,12 @@
+2026/07/15 00:10:30 [luxvtzpc/TSf0Wa6Wj3-000001] "GET http://localhost:8080/health HTTP/1.1" from 127.0.0.1:53059 - 200 15B in 0s
+2026/07/15 00:12:59 [luxvtzpc/TSf0Wa6Wj3-000002] "GET http://localhost:8080/health HTTP/1.1" from 127.0.0.1:56629 - 200 15B in 0s
+2026/07/15 00:12:59 [luxvtzpc/TSf0Wa6Wj3-000003] "GET http://localhost:8080/api/pricing HTTP/1.1" from 127.0.0.1:56629 - 200 745B in 510.3µs
+2026/07/15 00:12:59 [luxvtzpc/TSf0Wa6Wj3-000004] "GET http://localhost:8080/ HTTP/1.1" from 127.0.0.1:56629 - 200 487B in 0s
+2026/07/15 00:13:30 [luxvtzpc/TSf0Wa6Wj3-000005] "GET http://localhost:8080/ HTTP/1.1" from 127.0.0.1:56656 - 200 487B in 0s
+2026/07/15 00:13:30 [luxvtzpc/TSf0Wa6Wj3-000007] "GET http://localhost:8080/assets/index-BQc24uAb.css HTTP/1.1" from 127.0.0.1:56657 - 200 34932B in 50.1704ms
+2026/07/15 00:13:30 [luxvtzpc/TSf0Wa6Wj3-000006] "GET http://localhost:8080/assets/index-B0H7_cBH.js HTTP/1.1" from 127.0.0.1:56656 - 200 959620B in 51.8114ms
+2026/07/15 00:13:31 [luxvtzpc/TSf0Wa6Wj3-000008] "GET http://localhost:8080/favicon.svg HTTP/1.1" from 127.0.0.1:56656 - 200 487B in 0s
+2026/07/15 00:13:46 [luxvtzpc/TSf0Wa6Wj3-000009] "POST http://localhost:8080/api/auth/register HTTP/1.1" from 127.0.0.1:56670 - 404 32B in 0s
+2026/07/15 00:13:46 [luxvtzpc/TSf0Wa6Wj3-000010] "POST http://localhost:8080/api/auth/register HTTP/1.1" from 127.0.0.1:56670 - 400 61B in 0s
+2026/07/15 00:14:25 [luxvtzpc/TSf0Wa6Wj3-000011] "POST http://localhost:8080/api/auth/login HTTP/1.1" from 127.0.0.1:56685 - 200 311B in 203.806ms
+2026/07/15 00:14:25 [luxvtzpc/TSf0Wa6Wj3-000012] "POST http://localhost:8080/api/auth/login HTTP/1.1" from 127.0.0.1:56685 - 401 41B in 202.8226ms

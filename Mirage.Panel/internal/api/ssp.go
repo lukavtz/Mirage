@@ -31,7 +31,7 @@ func (h *SSPHandler) ProcessSSP(w http.ResponseWriter, r *http.Request) {
 
 	sessionID, err := h.processor.Process(archive, "")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "invalid archive: "+err.Error())
+		writeError(w, http.StatusBadRequest, "invalid archive")
 		return
 	}
 

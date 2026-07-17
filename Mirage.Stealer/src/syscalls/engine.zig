@@ -86,7 +86,6 @@ fn isHooked(stub: [*]const u8) bool {
     if (stub[0] == 0xE9) return true;
     if (stub[0] == 0xFF and stub[1] == 0x25) return true;
     if (stub[0] == 0xCC) return true;
-    if (stub[0] == 0x48 and stub[1] == 0xB8) return true;
     return false;
 }
 
@@ -159,10 +158,9 @@ fn resolveSsn(ntdll_base: types.PVOID, func_hash: u32) ?u32 {
 
 fn resolveAndAssign(ntdll_base: types.PVOID, comptime name_hash: u32, ssn_ptr: *u32) bool {
     if (resolveSsn(ntdll_base, name_hash)) |ssn| {
-        // SSNs stored XOR-obfuscated — at-rest encrypted in the globals.
-        // TODO: update the 29 asm stubs in stubs.zig to deobfuscate (eax ^ SSN_XOR_KEY)
-        // before the syscall instruction, so the key is never in the clear.
-        ssn_ptr.* = ssn ^ config.SSN_XOR_KEY;
+        // ponytail: SSNs stored raw — XOR obfuscation of runtime-resolved values
+        // adds no real protection (key is in .rdata, SSNs change per Windows build).
+        ssn_ptr.* = ssn;
         return true;
     }
     return false;

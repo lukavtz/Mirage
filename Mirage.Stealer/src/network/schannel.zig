@@ -25,9 +25,7 @@ const SEC_E_INCOMPLETE_MESSAGE: i32 = -2146893032;
 
 const SECPKG_CRED_OUTBOUND: u32 = 0x00000002;
 const ISC_REQ_STREAM: u32 = 0x00008000;
-const ISC_REQ_MANUAL_CRED_VALIDATION: u32 = 0x00080000;
 const ISC_REQ_ALLOCATE_MEMORY: u32 = 0x00000100;
-const SCH_CRED_MANUAL_CRED_VALIDATION: u32 = 0x00000008;
 const SCH_CRED_VERSION: u32 = 4;
 const SECPKG_ATTR_STREAM_SIZES: u32 = 0x0A;
 
@@ -195,7 +193,7 @@ pub const TlsContext = struct {
             .phMappers = null,
             .cSupportedAlgs = 0,
             .palgSupportedAlgs = null,
-            .dwFlags = SCH_CRED_MANUAL_CRED_VALIDATION,
+            .dwFlags = 0,
             .dwMinStrength = 0,
             .dwMaxStrength = 0,
         };
@@ -258,7 +256,7 @@ pub const TlsContext = struct {
                 &cred_handle,
                 if (first_time) null else &ctx_handle,
                 @as(*u8, @ptrCast(&host_buf)),
-                ISC_REQ_STREAM | ISC_REQ_MANUAL_CRED_VALIDATION | ISC_REQ_ALLOCATE_MEMORY,
+                ISC_REQ_STREAM | ISC_REQ_ALLOCATE_MEMORY,
                 0,
                 0,
                 if (use_in_desc) &in_desc else null,
@@ -452,7 +450,6 @@ test "SChannel constant values" {
     try std.testing.expect(SEC_E_OK == 0);
     try std.testing.expect(SEC_I_CONTINUE_NEEDED != 0);
     try std.testing.expect(ISC_REQ_STREAM != 0);
-    try std.testing.expect(SCH_CRED_MANUAL_CRED_VALIDATION != 0);
 }
 
 test "SecFunctions field count" {

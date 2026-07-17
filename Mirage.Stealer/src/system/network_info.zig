@@ -151,15 +151,6 @@ fn getMacAddress(allocator: std.mem.Allocator) ![]const u8 {
         } else |_| continue;
     }
 
-    {
-        var sb_buf: [256]u8 = undefined;
-        hash.xorDecrypt(E.tcpip_interfaces, &sb_buf);
-        const software_base = sb_buf[0..E.tcpip_interfaces.len];
-        var path_buf: [512]u8 = undefined;
-        const if_path = try std.fmt.bufPrint(&path_buf, "{s}\\{s}\\{s}", .{ software_base, "{00000000-0000-0000-0000-000000000000}", "DhcpIPAddress" });
-        _ = if_path;
-    }
-
     return allocator.dupe(u8, "Unavailable");
 }
 

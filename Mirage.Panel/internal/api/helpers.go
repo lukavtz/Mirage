@@ -2,8 +2,10 @@ package api
 
 import (
 	"encoding/json"
+	"net"
 	"net/http"
-	"strings"
+
+	"github.com/user/mirage-panel/internal/auth"
 )
 
 func writeJSON(w http.ResponseWriter, status int, data any) {
@@ -17,21 +19,19 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func extractIP(r *http.Request) string {
-	if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-		if idx := strings.Index(fwd, ","); idx != -1 {
-			return strings.TrimSpace(fwd[:idx])
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		if ip := net.ParseIP(realIP); ip != nil {
+			return ip.String()
 		}
-		return strings.TrimSpace(fwd)
 	}
-	addr := r.RemoteAddr
-	if strings.HasPrefix(addr, "[") {
-		if idx := strings.LastIndex(addr, "]:"); idx != -1 {
-			return addr[1:idx]
-		}
-		return addr
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
 	}
-	if idx := strings.LastIndex(addr, ":"); idx != -1 {
-		return addr[:idx]
-	}
-	return addr
+	return host
+}
+
+func getClaims(r *http.Request) (*auth.Claims, bool) {
+	claims, ok := r.Context().Value(claimsKey).(*auth.Claims)
+	return claims, ok && claims != nil
 }

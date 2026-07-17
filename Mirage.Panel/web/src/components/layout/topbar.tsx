@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useAuth } from '@/hooks/use-auth'
 import { useTheme } from '@/lib/theme-provider'
 import { t, getLang, setLang } from '@/lib/i18n'
+import { api } from '@/lib/api'
 import { LogOut, Wifi, WifiOff, Sun, Moon, Languages } from 'lucide-react'
 
 export function Topbar() {
@@ -14,11 +15,7 @@ export function Topbar() {
 
   const { data: health } = useQuery({
     queryKey: ['health'],
-    queryFn: async () => {
-      const res = await fetch('/health')
-      if (!res.ok) throw new Error('unhealthy')
-      return res.json() as Promise<{ status: string }>
-    },
+    queryFn: () => api.get<{ status: string }>('/health'),
     refetchInterval: 30000,
     retry: 1,
     staleTime: 25000,

@@ -262,7 +262,3 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 }
 
 var _ ProxyStore = (*settingsStore)(nil)
-
-func init() {
-	_ = errors.New
-}

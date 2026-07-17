@@ -15,9 +15,16 @@ pub const ChunkResult = enum(u32) {
 };
 
 fn generateSessionId(allocator: std.mem.Allocator) ![]u8 {
-    const timestamp = std.time.milliTimestamp();
-    var buf: [32]u8 = undefined;
-    const hex = try std.fmt.bufPrint(&buf, "{x}", .{timestamp});
+    var rng = std.Random.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        std.posix.getrandom(@as([*]u8, @ptrCast(&seed))[0..@sizeOf(u64)]) catch {
+            seed = @bitCast(@as(i64, @truncate(std.time.nanoTimestamp())));
+        };
+        break :blk seed;
+    });
+    var buf: [16]u8 = undefined;
+    rng.fill(&buf);
+    const hex = try std.fmt.bufPrint(&std.mem.zeroes([32]u8), "{s}", .{std.fmt.fmtSliceHexLower(&buf)});
     return allocator.dupe(u8, hex);
 }
 

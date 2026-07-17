@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/auth"
@@ -119,45 +120,36 @@ func parseUserAgent(ua string) (os, browser string) {
 	}
 
 	switch {
-	case contains(ua, "Windows"):
+	case strings.Contains(ua, "Windows"):
 		os = "Windows"
-	case contains(ua, "Mac OS X") || contains(ua, "macOS"):
+	case strings.Contains(ua, "Mac OS X") || strings.Contains(ua, "macOS"):
 		os = "macOS"
-	case contains(ua, "Linux"):
+	case strings.Contains(ua, "Linux"):
 		os = "Linux"
-	case contains(ua, "Android"):
+	case strings.Contains(ua, "Android"):
 		os = "Android"
-	case contains(ua, "iOS") || contains(ua, "iPhone") || contains(ua, "iPad"):
+	case strings.Contains(ua, "iOS") || strings.Contains(ua, "iPhone") || strings.Contains(ua, "iPad"):
 		os = "iOS"
 	default:
 		os = "Unknown"
 	}
 
 	switch {
-	case contains(ua, "Chrome") && !contains(ua, "Edg") && !contains(ua, "OPR"):
+	case strings.Contains(ua, "Chrome") && !strings.Contains(ua, "Edg") && !strings.Contains(ua, "OPR"):
 		browser = "Chrome"
-	case contains(ua, "Firefox"):
+	case strings.Contains(ua, "Firefox"):
 		browser = "Firefox"
-	case contains(ua, "Safari") && !contains(ua, "Chrome"):
+	case strings.Contains(ua, "Safari") && !strings.Contains(ua, "Chrome"):
 		browser = "Safari"
-	case contains(ua, "Edg"):
+	case strings.Contains(ua, "Edg"):
 		browser = "Edge"
-	case contains(ua, "OPR") || contains(ua, "Opera"):
+	case strings.Contains(ua, "OPR") || strings.Contains(ua, "Opera"):
 		browser = "Opera"
 	default:
 		browser = "Unknown"
 	}
 
 	return os, browser
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func claimsFromCtx(r *http.Request) *auth.Claims {

@@ -5,7 +5,7 @@ dev:
 
 build:
 	cd web && npm run build
-	rsync -a --delete frontend/dist/ cmd/panel/frontend/dist/
+	cp -r web/dist/ cmd/panel/frontend/dist/
 	go build -o bin/mirage-panel ./cmd/panel
 
 test:

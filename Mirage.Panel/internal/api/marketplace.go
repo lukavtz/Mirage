@@ -565,10 +565,12 @@ func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 
 			var hasLicense bool
 			var expiresAt *string
+			var licenseCount int
 			err := db.QueryRow(
 				"SELECT COUNT(*), MAX(expires_at) FROM purchases WHERE user_id = ?",
 				claims.UserID,
-			).Scan(&hasLicense, &expiresAt)
+			).Scan(&licenseCount, &expiresAt)
+			hasLicense = licenseCount > 0
 			if err != nil {
 				hasLicense = false
 			}

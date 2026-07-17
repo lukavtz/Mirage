@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { Book, Search, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -17,6 +18,15 @@ interface DocContent {
   title: string
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function renderMarkdown(md: string): string {
   let html = ''
   const lines = md.split('\n')
@@ -26,11 +36,11 @@ function renderMarkdown(md: string): string {
     const line = lines[i]
 
     if (line.startsWith('# ')) {
-      html += `<h1 class="text-2xl font-bold mb-4 mt-6 first:mt-0">${line.slice(2)}</h1>`
+      html += `<h1 class="text-2xl font-bold mb-4 mt-6 first:mt-0">${escapeHtml(line.slice(2))}</h1>`
     } else if (line.startsWith('## ')) {
-      html += `<h2 class="text-xl font-semibold mb-3 mt-5">${line.slice(3)}</h2>`
+      html += `<h2 class="text-xl font-semibold mb-3 mt-5">${escapeHtml(line.slice(3))}</h2>`
     } else if (line.startsWith('### ')) {
-      html += `<h3 class="text-lg font-medium mb-2 mt-4">${line.slice(4)}</h3>`
+      html += `<h3 class="text-lg font-medium mb-2 mt-4">${escapeHtml(line.slice(4))}</h3>`
     } else if (line.startsWith('| ')) {
       if (!inTable) {
         inTable = true
@@ -41,7 +51,7 @@ function renderMarkdown(md: string): string {
       const tag = isHeader ? 'th' : 'td'
       html += '<tr>'
       for (const cell of cells) {
-        html += `<${tag} class="border border-border px-3 py-1.5">${cell.trim()}</${tag}>`
+        html += `<${tag} class="border border-border px-3 py-1.5">${escapeHtml(cell.trim())}</${tag}>`
       }
       html += '</tr>'
     } else if (line.startsWith('---') && inTable) {
@@ -54,12 +64,13 @@ function renderMarkdown(md: string): string {
       if (line.trim() === '') {
         html += '<div class="h-2"></div>'
       } else if (line.startsWith('- ')) {
-        html += `<li class="ml-4 text-sm text-muted-foreground">${line.slice(2)}</li>`
+        html += `<li class="ml-4 text-sm text-muted-foreground">${escapeHtml(line.slice(2))}</li>`
       } else if (line.includes('**')) {
-        const rendered = line.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        const escaped = escapeHtml(line)
+        const rendered = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         html += `<p class="text-sm text-muted-foreground mb-1">${rendered}</p>`
       } else {
-        html += `<p class="text-sm text-muted-foreground mb-1">${line}</p>`
+        html += `<p class="text-sm text-muted-foreground mb-1">${escapeHtml(line)}</p>`
       }
     }
   }
@@ -71,31 +82,27 @@ function renderMarkdown(md: string): string {
 export default function DocsPage() {
   const { path: docPath } = useParams()
   const navigate = useNavigate()
-  const [docList, setDocList] = useState<DocFile[]>([])
-  const [docContent, setDocContent] = useState<DocContent | null>(null)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
-  useEffect(() => {
-    api.get<{ docs: DocFile[] }>('/api/docs').then(res => {
-      setDocList(res.docs)
-      if (!docPath && res.docs.length > 0) {
-        navigate(`/docs/${res.docs[0].path}`, { replace: true })
-      }
-    }).catch(() => setDocList([]))
-  }, [])
+  const docListQuery = useQuery({
+    queryKey: ['docs'],
+    queryFn: () => api.get<{ docs: DocFile[] }>('/api/docs'),
+  })
+  const docList = docListQuery.data?.docs ?? []
+
+  const docContentQuery = useQuery({
+    queryKey: ['docs', docPath],
+    queryFn: () => api.get<DocContent>(`/api/docs/${docPath}`),
+    enabled: !!docPath,
+  })
+  const docContent = docContentQuery.data ?? null
+  const loading = docContentQuery.isLoading
 
   useEffect(() => {
-    if (!docPath) return
-    setLoading(true)
-    api.get<DocContent>(`/api/docs/${docPath}`).then(res => {
-      setDocContent(res)
-      setLoading(false)
-    }).catch(() => {
-      setDocContent(null)
-      setLoading(false)
-    })
-  }, [docPath])
+    if (!docPath && docList.length > 0 && !docListQuery.isLoading) {
+      navigate(`/docs/${docList[0].path}`, { replace: true })
+    }
+  }, [docPath, docList, docListQuery.isLoading, navigate])
 
   const filtered = docList.filter(d =>
     d.title.toLowerCase().includes(search.toLowerCase())

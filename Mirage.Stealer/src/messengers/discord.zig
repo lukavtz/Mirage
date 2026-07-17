@@ -125,8 +125,8 @@ fn extractTokens(data: []const u8, seen: *std.StringHashMap(void)) !void {
 }
 
 fn findJsonValue(buf: []const u8, key: []const u8) ?[]const u8 {
-    const search = std.fmt.allocPrint(std.heap.page_allocator, "\"{s}\":\"", .{key}) catch return null;
-    defer std.heap.page_allocator.free(search);
+    var search_buf: [128]u8 = undefined;
+    const search = std.fmt.bufPrint(&search_buf, "\"{s}\":\"", .{key}) catch return null;
     const pos = std.mem.indexOf(u8, buf, search) orelse return null;
     const start = pos + search.len;
     var end = start;

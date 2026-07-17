@@ -109,9 +109,18 @@ type auditStats struct {
 }
 
 func (h *AuditHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFromCtx(r)
+	if claims == nil {
+		writeError(w, http.StatusUnauthorized, "authentication required")
+		return
+	}
+
 	workerID := r.URL.Query().Get("worker_id")
 	if workerID == "" {
-		writeError(w, http.StatusBadRequest, "worker_id required")
+		workerID = claims.UserID
+	}
+	if claims.Role != "admin" && workerID != claims.UserID {
+		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 

@@ -19,7 +19,6 @@ type rateLimiter struct {
 	window      time.Duration
 	entries     map[string]*rateEntry
 	mu          sync.Mutex
-	stopCh      chan struct{}
 }
 
 func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Handler {
@@ -27,7 +26,6 @@ func RateLimit(maxRequests int, window time.Duration) func(http.Handler) http.Ha
 		maxRequests: maxRequests,
 		window:      window,
 		entries:     make(map[string]*rateEntry),
-		stopCh:      make(chan struct{}),
 	}
 
 	go rl.cleanup()
@@ -73,22 +71,17 @@ func (rl *rateLimiter) cleanup() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			rl.mu.Lock()
-			now := time.Now()
-			for ip, entry := range rl.entries {
-				entry.mu.Lock()
-				if now.After(entry.resetAt) {
-					delete(rl.entries, ip)
-				}
-				entry.mu.Unlock()
+	for range ticker.C {
+		rl.mu.Lock()
+		now := time.Now()
+		for ip, entry := range rl.entries {
+			entry.mu.Lock()
+			if now.After(entry.resetAt) {
+				delete(rl.entries, ip)
 			}
-			rl.mu.Unlock()
-		case <-rl.stopCh:
-			return
+			entry.mu.Unlock()
 		}
+		rl.mu.Unlock()
 	}
 }
 

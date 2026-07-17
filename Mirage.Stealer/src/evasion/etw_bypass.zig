@@ -36,12 +36,18 @@ fn patchFunction(func: *const anyopaque) bool {
     const patch_slice = @as(*volatile [1]u8, @ptrCast(@alignCast(func)));
     patch_slice[0] = 0xC3;
 
-    prot_base = @ptrCast(@alignCast(func));
-    prot_size = 1;
+    _ = engine.NtFlushInstructionCache(
+        @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
+        @as(types.PVOID, @ptrCast(@alignCast(func))),
+        1,
+    );
+
+    var restore_base: ?types.PVOID = @ptrCast(@alignCast(func));
+    var restore_size: types.SIZE_T = 1;
     _ = engine.NtProtectVirtualMemory(
         @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
-        @as(*types.PVOID, @ptrCast(&prot_base)),
-        &prot_size,
+        @as(*types.PVOID, @ptrCast(&restore_base)),
+        &restore_size,
         old_prot,
         &old_prot,
     );

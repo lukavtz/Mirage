@@ -160,7 +160,18 @@ func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go h.processRestore(id, req, proxyJSON)
+	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				now := time.Now().UTC().Format(time.RFC3339)
+				h.db.Exec(
+					`UPDATE restore_sessions SET status = 'failed', error = 'internal panic', updated_at = ? WHERE id = ?`,
+					now, id,
+				)
+			}
+		}()
+		h.processRestore(id, req, proxyJSON)
+	}()
 
 	writeJSON(w, http.StatusCreated, map[string]string{
 		"id":     id,
@@ -246,9 +257,9 @@ func (h *RestoreHandler) SessionStatus(w http.ResponseWriter, r *http.Request) {
 	var s restoreSessionResponse
 	var userID string
 	err := h.db.QueryRow(
-		`SELECT id, session_id, status, COALESCE(access_token,''), COALESCE(error,''), created_at, updated_at
+		`SELECT id, session_id, user_id, status, COALESCE(access_token,''), COALESCE(error,''), created_at, updated_at
 		 FROM restore_sessions WHERE id = ?`, id,
-	).Scan(&s.ID, &s.SessionID, &s.Status, &s.AccessToken, &s.Error, &s.CreatedAt, &s.UpdatedAt)
+	).Scan(&s.ID, &s.SessionID, &userID, &s.Status, &s.AccessToken, &s.Error, &s.CreatedAt, &s.UpdatedAt)
 
 	if err != nil {
 		writeError(w, http.StatusNotFound, "restore session not found")

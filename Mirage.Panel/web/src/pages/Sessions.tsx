@@ -325,7 +325,7 @@ export default function Sessions() {
             onClick={() => setEmptyOnly(!emptyOnly)}
             className={emptyOnly ? 'bg-primary/10' : ''}
           >
-            Hide empty
+            {emptyOnly ? 'Show all' : 'Hide empty'}
           </Button>
           <Button
             variant="outline"
@@ -347,7 +347,7 @@ export default function Sessions() {
               {Object.entries(visibleColumns).map(([key, visible]) => (
                 <DropdownMenuItem key={key} onClick={() => toggleColumn(key)}>
                   <div className="flex items-center gap-2 w-full">
-                    <input type="checkbox" checked={visible} readOnly className="rounded" />
+                    <input type="checkbox" checked={visible} readOnly className="rounded" aria-label={key} />
                     <span>{key.charAt(0).toUpperCase() + key.slice(1)}</span>
                   </div>
                 </DropdownMenuItem>

@@ -97,7 +97,11 @@ func (h *UsersHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	claims := r.Context().Value(claimsKey).(*auth.Claims)
+	claims, ok := getClaims(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	_, err := h.db.Exec(
 		`INSERT INTO invite_codes (code, role, tier, max_uses, created_by, expires_at)

@@ -224,6 +224,7 @@ pub const FILE_GENERIC_READ: ULONG = 0x80000000;
 pub const FILE_GENERIC_WRITE: ULONG = 0x40000000;
 pub const FILE_SHARE_READ: ULONG = 0x00000001;
 pub const FILE_SHARE_WRITE: ULONG = 0x00000002;
+pub const FILE_SHARE_DELETE: ULONG = 0x00000004;
 pub const FILE_OPEN: ULONG = 0x00000001;
 pub const FILE_CREATE: ULONG = 0x00000003;
 pub const FILE_NON_DIRECTORY_FILE: ULONG = 0x00000040;
@@ -402,6 +403,34 @@ pub const CONTEXT = extern struct {
     R14: u64,
     R15: u64,
     Rip: u64,
+};
+
+pub const STARTUPINFOW = extern struct {
+    cb: u32,
+    lpReserved: ?PWSTR,
+    lpDesktop: ?PWSTR,
+    lpTitle: ?PWSTR,
+    dwX: u32,
+    dwY: u32,
+    dwXSize: u32,
+    dwYSize: u32,
+    dwXCountChars: u32,
+    dwYCountChars: u32,
+    dwFillAttribute: u32,
+    dwFlags: u32,
+    wShowWindow: u16,
+    cbReserved2: u16,
+    lpReserved2: ?*u8,
+    hStdInput: ?HANDLE,
+    hStdOutput: ?HANDLE,
+    hStdError: ?HANDLE,
+};
+
+pub const PROCESS_INFORMATION = extern struct {
+    hProcess: ?HANDLE,
+    hThread: ?HANDLE,
+    dwProcessId: u32,
+    dwThreadId: u32,
 };
 
 test "structure sizes" {

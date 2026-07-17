@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 
@@ -34,7 +35,11 @@ func parseMetadata(jsonStr string) map[string]string {
 	if jsonStr == "" {
 		return result
 	}
-	json.Unmarshal([]byte(jsonStr), &result)
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		// ponytail: silently ignore malformed metadata — the stealer
+		// sends machine-generated JSON, so errors indicate a broken
+		// payload, not something worth surfacing to the caller.
+	}
 	return result
 }
 
@@ -110,12 +115,26 @@ func parseSystemInfo(content string) map[string]string {
 	return info
 }
 
+const (
+	maxArchiveSize = 50 * 1024 * 1024
+	maxFileSize    = 10 * 1024 * 1024
+	maxFileCount   = 500
+)
+
 func (p *LogProcessor) Process(archive []byte, metadataJSON string) (string, error) {
+	if len(archive) > maxArchiveSize {
+		return "", errors.New("archive too large")
+	}
+
 	meta := parseMetadata(metadataJSON)
 
 	zr, err := zip.NewReader(bytes.NewReader(archive), int64(len(archive)))
 	if err != nil {
 		return "", err
+	}
+
+	if len(zr.File) > maxFileCount {
+		return "", errors.New("too many files in archive")
 	}
 
 	type passwordEntry struct {
@@ -162,6 +181,11 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string) (string, err
 
 		rc, err := f.Open()
 		if err != nil {
+			continue
+		}
+
+		if f.UncompressedSize64 > maxFileSize {
+			rc.Close()
 			continue
 		}
 

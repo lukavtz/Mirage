@@ -52,10 +52,9 @@ pub fn supersede(new_exe_path: []const u8) bool {
     if (MoveFileExW(cur_wide[0..cur_len :0], backup_wide[0..copy_len :0], 1) == 0) return false;
     if (CopyFileW(new_wide[0 .. i + 1 :0], cur_wide[0..cur_len :0], 0) == 0) return false;
 
-    var si: [68]u8 = undefined;
-    @memset(&si, 0);
-    var pi: [16]u8 = undefined;
-    @memset(&pi, 0);
+    var si = std.mem.zeroes(types.STARTUPINFOW);
+    si.cb = @sizeOf(types.STARTUPINFOW);
+    var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
     _ = CreateProcessW(null, cur_wide[0..cur_len :0], null, null, 0, 0x08000000, null, null, @ptrCast(&si), @ptrCast(&pi));
 
     return true;

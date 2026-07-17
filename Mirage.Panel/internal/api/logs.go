@@ -49,7 +49,7 @@ func (h *LogsHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	metadata := r.FormValue("metadata")
 	sessionID, err := h.processor.Process(archive, metadata)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "processing failed: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "processing failed")
 		return
 	}
 
@@ -62,10 +62,14 @@ var (
 	chunkTTL = 1 * time.Hour
 )
 
+const maxChunkSessionsPerIP = 10
+const maxChunksPerSession = 1024
+
 type chunkSession struct {
 	ID        string
 	Chunks    map[int][]byte
 	CreatedAt time.Time
+	IP        string
 }
 
 func init() {
@@ -81,6 +85,16 @@ func init() {
 			chunkMu.Unlock()
 		}
 	}()
+}
+
+func countIPSessions(ip string) int {
+	count := 0
+	for _, cs := range chunks {
+		if cs.IP == ip {
+			count++
+		}
+	}
+	return count
 }
 
 func (h *LogsHandler) Chunk(w http.ResponseWriter, r *http.Request) {
@@ -105,10 +119,23 @@ func (h *LogsHandler) Chunk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chunkMu.Lock()
+	if _, ok := chunks[sessionID]; !ok {
+		ip := r.RemoteAddr
+		if countIPSessions(ip) >= maxChunkSessionsPerIP {
+			chunkMu.Unlock()
+			writeError(w, http.StatusTooManyRequests, "too many chunk sessions")
+			return
+		}
+	}
 	cs, ok := chunks[sessionID]
 	if !ok {
-		cs = &chunkSession{ID: sessionID, Chunks: make(map[int][]byte), CreatedAt: time.Now()}
+		cs = &chunkSession{ID: sessionID, Chunks: make(map[int][]byte), CreatedAt: time.Now(), IP: r.RemoteAddr}
 		chunks[sessionID] = cs
+	}
+	if chunkIdx >= maxChunksPerSession {
+		chunkMu.Unlock()
+		writeError(w, http.StatusBadRequest, "too many chunks")
+		return
 	}
 	cs.Chunks[chunkIdx] = data
 	chunkMu.Unlock()
@@ -163,7 +190,7 @@ func (h *LogsHandler) CompleteChunked(w http.ResponseWriter, r *http.Request) {
 	metadata := r.FormValue("metadata")
 	newSessionID, err := h.processor.Process(archive.Bytes(), metadata)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "processing failed: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "processing failed")
 		return
 	}
 

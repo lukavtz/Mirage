@@ -16,10 +16,12 @@ RUN cd cmd/panel && CGO_ENABLED=0 go build -o /eidos-panel .
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata
+RUN adduser -D -h /data panel
 COPY --from=backend /eidos-panel /usr/bin/
-RUN mkdir /data
+RUN mkdir -p /data && chown panel:panel /data
 VOLUME ["/data"]
 EXPOSE 8080
 ENV DB_PATH=/data/mirage.db
 ENV PORT=8080
+USER panel
 CMD ["eidos-panel"]

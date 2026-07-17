@@ -39,7 +39,7 @@ pub const CLIPPER_HISTORY_DEPTH: usize = 32;
 // These are NEVER used in production — the Panel builder injects real addresses
 // via the AES-GCM encrypted config blob (CLIPLZCFG).
 // MUST be false for production builds.
-pub const CLIPPER_TEST_MODE: bool = true;
+pub const CLIPPER_TEST_MODE: bool = false;
 
 // === Chain Selection ===
 pub const BTC_ENABLED: bool = true;

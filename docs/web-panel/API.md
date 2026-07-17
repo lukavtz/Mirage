@@ -304,7 +304,7 @@ Request:
 {
     "c2_host": "127.0.0.1",
     "c2_port": 8443,
-    "telegram_token": "680547773:AAE42WzOxmeRtV5rffDx1I-dsK5Irn5G3VE",
+    "telegram_token": "YOUR_BOT_TOKEN",
     "telegram_chat_id": "-1003951628380",
     "enable_persistence": false,
     "enable_screenshot": true,

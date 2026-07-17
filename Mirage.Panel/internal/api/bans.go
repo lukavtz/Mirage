@@ -7,7 +7,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/user/mirage-panel/internal/auth"
 )
 
 type BanHandler struct {
@@ -66,7 +65,11 @@ func (h *BanHandler) Create(w http.ResponseWriter, r *http.Request) {
 		req.Reason = "banned by admin"
 	}
 
-	claims := r.Context().Value(claimsKey).(*auth.Claims)
+	claims, ok := getClaims(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	id := uuid.New().String()
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
@@ -104,7 +107,11 @@ func (h *BanHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := r.Context().Value(claimsKey).(*auth.Claims)
+	claims, ok := getClaims(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	LogAudit(h.db, claims.UserID, "ban.delete", "Removed ban "+id, extractIP(r))
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "ban removed"})

@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { Users, Key, Wallet, Cookie, CreditCard, TrendingUp } from 'lucide-react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts'
+import { useQuery } from '@tanstack/react-query'
+import { Users, Key, Wallet, Cookie, TrendingUp } from 'lucide-react'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FlagIcon } from '@/components/charts/flag-icon'
+import { api } from '@/lib/api'
 
 interface PublicStats {
   total_sessions: number
@@ -24,26 +25,18 @@ const PIE_COLORS = [
   'hsl(var(--chart-2))',
   'hsl(var(--chart-3))',
   'hsl(var(--chart-4))',
-  'hsl(var(--muted-foreground))',
+  'hsl(var(--chart-5))',
 ]
 
 export default function PublicStatsPage() {
-  const [data, setData] = useState<PublicStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const { data, isLoading, error } = useQuery({
+    queryKey: ['public-stats'],
+    queryFn: () => api.get<PublicStats>('/api/public/stats'),
+    retry: 1,
+    staleTime: 60000,
+  })
 
-  useEffect(() => {
-    fetch('/api/public/stats')
-      .then(res => {
-        if (!res.ok) throw new Error('Not available')
-        return res.json()
-      })
-      .then(setData)
-      .catch(() => setError('Public stats are not enabled'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Skeleton className="h-8 w-48" />
@@ -55,7 +48,7 @@ export default function PublicStatsPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <TrendingUp className="h-12 w-12 text-muted-foreground/40" />
-        <p className="text-muted-foreground text-sm">{error || 'No data available'}</p>
+        <p className="text-muted-foreground text-sm">Public stats are not enabled</p>
       </div>
     )
   }
@@ -178,7 +171,7 @@ export default function PublicStatsPage() {
                 <div className="flex flex-col items-center">
                   <ResponsiveContainer width="100%" height={200}>
                     <PieChart>
-                      <Pie data={data.browser_distribution} dataKey="count" nameKey="browser" cx="50%" cy="50%" innerRadius={50} outerRadius={70} strokeWidth={0} label={({ browser, percent }) => `${browser} ${(percent * 100).toFixed(0)}%`} labelLine>
+                      <Pie data={data.browser_distribution} dataKey="count" nameKey="browser" cx="50%" cy="50%" innerRadius={50} outerRadius={70} strokeWidth={0} label={({ name, percent }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine>
                         {data.browser_distribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[Math.min(i, PIE_COLORS.length - 1)]} />)}
                       </Pie>
                       <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', fontSize: 12 }} />

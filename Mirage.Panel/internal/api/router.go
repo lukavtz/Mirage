@@ -65,10 +65,16 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 	pricingHandler := NewPricingHandler(db)
 	referralHandler := NewReferralHandler(db)
 
+	// Handlers that were implemented but not registered
+	telegramBotHandler := NewTelegramBotHandler(db)
+	teamHandler := NewTeamHandler(db)
+	auditHandler := NewAuditHandler(db)
+	banAPIHandler := NewBanHandler(db)
+
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
-		r.Post("/api/auth/2fa/verify-login", authHandler.VerifyLogin)
+		r.With(middleware.RateLimit(10, time.Minute)).Post("/api/auth/2fa/verify-login", authHandler.VerifyLogin)
 		r.Get("/api/auth/2fa/required", totpHandler.Required)
 		r.Get("/api/public/stats", publicStatsHandler.GetPublicStats)
 		r.Get("/api/pricing", pricingHandler.ListTiers)
@@ -130,6 +136,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Route("/api/build", func(r chi.Router) {
 			r.Post("/", buildHandler.Build)
 			r.Get("/", buildHandler.List)
+			r.Get("/stats", buildHandler.Stats)
 			r.Get("/{id}/download", buildHandler.Download)
 		})
 
@@ -208,5 +215,33 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.With(middleware.RequireRole("admin")).Get("/api/proxies", proxyHandler.ListProxies)
 		r.With(middleware.RequireRole("admin")).Post("/api/proxies", proxyHandler.AddProxy)
 		r.With(middleware.RequireRole("admin")).Delete("/api/proxies/{id}", proxyHandler.DeleteProxy)
+
+		// Telegram bots
+		r.Get("/api/telegram/bots", telegramBotHandler.List)
+		r.Post("/api/telegram/bots", telegramBotHandler.Create)
+		r.Put("/api/telegram/bots/{id}", telegramBotHandler.Update)
+		r.Delete("/api/telegram/bots/{id}", telegramBotHandler.Delete)
+		r.Post("/api/telegram/bots/{id}/test", telegramBotHandler.Test)
+		r.Get("/api/telegram/filters", telegramBotHandler.ListFilters)
+		r.Post("/api/telegram/filters", telegramBotHandler.CreateFilter)
+		r.Delete("/api/telegram/filters/{id}", telegramBotHandler.DeleteFilter)
+
+		// Team management
+		r.Get("/api/team", teamHandler.List)
+		r.Put("/api/team/{id}/role", teamHandler.ChangeRole)
+		r.Delete("/api/team/{id}", teamHandler.Remove)
+
+		// Audit log (admin only)
+		r.With(middleware.RequireRole("admin")).Get("/api/audit", auditHandler.List)
+		r.Get("/api/audit/stats", auditHandler.Stats)
+
+		// Ban management (admin only)
+		r.With(middleware.RequireRole("admin")).Get("/api/bans", banAPIHandler.List)
+		r.With(middleware.RequireRole("admin")).Post("/api/bans", banAPIHandler.Create)
+		r.With(middleware.RequireRole("admin")).Delete("/api/bans/{id}", banAPIHandler.Delete)
+
+		// Build tag/icon
+		r.Put("/api/build/{id}/tag", buildHandler.UpdateTag)
+		r.Post("/api/build/{id}/icon", buildHandler.UploadIcon)
 	})
 }

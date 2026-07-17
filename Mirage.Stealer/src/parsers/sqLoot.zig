@@ -171,7 +171,8 @@ pub const SqliteDb = struct {
 
     pub fn getPage(self: *SqliteDb, page_num: u32) ![]const u8 {
         const page_size = self.header.page_size;
-        const offset = @as(usize, (page_num - 1)) * page_size;
+        if (page_num < 1) return error.PageOutOfBounds;
+        const offset = @as(usize, @intCast(page_num - 1)) * page_size;
         if (offset + page_size > self.file_data.len) return error.PageOutOfBounds;
         return self.file_data[offset .. offset + page_size];
     }
@@ -250,7 +251,10 @@ pub const SqliteDb = struct {
 
         var off: usize = max_local;
         var next_page = overflow_page;
-        while (next_page != 0 and off < payload_len) {
+        var page_iter: usize = 0;
+        const max_overflow_pages: usize = (payload_len / (self.header.page_size - 4)) + 2;
+        while (next_page != 0 and off < payload_len) : (page_iter += 1) {
+            if (page_iter > max_overflow_pages) return error.CyclicOverflowChain;
             const op = try self.getPage(next_page);
             const remaining = payload_len - off;
             const chunk_size = @as(usize, @intCast(@min(@as(u64, remaining), self.header.page_size - 4)));
@@ -437,6 +441,7 @@ fn extractColumnNames(section: []const u8, allocator: std.mem.Allocator) ![][]co
             i += 1;
         }
         if (i > col_start) {
+            if (name_count >= names_buf.len) return error.TooManyColumns;
             const col_name = try allocator.dupe(u8, section[col_start..i]);
             names_buf[name_count] = col_name;
             name_count += 1;

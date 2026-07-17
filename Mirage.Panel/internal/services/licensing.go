@@ -7,11 +7,29 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
+	"log/slog"
+	"os"
 	"strings"
 	"time"
 )
 
-const licenseSecret = "change-me-to-random-32-bytes-in-production"
+const licenseSecretEnvKey = "LICENSE_SECRET"
+
+var licenseSecret string
+
+func init() {
+	licenseSecret = os.Getenv(licenseSecretEnvKey)
+	if licenseSecret == "" {
+		slog.Warn("LICENSE_SECRET not set — generating ephemeral key. All existing licenses will become invalid on restart. Set LICENSE_SECRET to a persistent random string to prevent data loss.")
+		b := make([]byte, 32)
+		rand.Read(b)
+		licenseSecret = fmt.Sprintf("%x", b)
+	}
+}
+
+func getLicenseSecret() string {
+	return licenseSecret
+}
 
 func GenerateLicenseKey(tier string, duration time.Duration) (string, time.Time) {
 	expiresAt := time.Now().Add(duration)
@@ -22,7 +40,7 @@ func GenerateLicenseKey(tier string, duration time.Duration) (string, time.Time)
 	binary.BigEndian.PutUint64(payload[len(tierBytes):], uint64(expiresAt.Unix()))
 	rand.Read(payload[len(tierBytes)+8:])
 
-	mac := hmac.New(sha256.New, []byte(licenseSecret))
+	mac := hmac.New(sha256.New, []byte(getLicenseSecret()))
 	mac.Write(payload)
 	sig := mac.Sum(nil)[:4]
 
@@ -77,7 +95,7 @@ func VerifyLicenseKey(key string) (string, time.Time, bool) {
 		return "", time.Time{}, false
 	}
 
-	mac := hmac.New(sha256.New, []byte(licenseSecret))
+	mac := hmac.New(sha256.New, []byte(getLicenseSecret()))
 	mac.Write(payload)
 	expectedSig := mac.Sum(nil)[:4]
 

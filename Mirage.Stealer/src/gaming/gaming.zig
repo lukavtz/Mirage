@@ -115,8 +115,14 @@ pub fn collect(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
 }
 
 fn freeCollectResult(result: CollectResult, allocator: std.mem.Allocator) void {
-    for (result.games) |g| allocator.free(g.name);
     allocator.free(result.games);
+    steam.freeSteamResult(result.steam_result, allocator);
+    uplay.freeGameResult(result.uplay_result, allocator);
+    minecraft.freeGameResult(result.minecraft_result, allocator);
+    battlenet.freeGameResult(result.battlenet_result, allocator);
+    roblox.freeGameResult(result.roblox_result, allocator);
+    epic.freeEpicResult(result.epic_result, allocator);
+    riot.freeRiotResult(result.riot_result, allocator);
 }
 
 const testing = std.testing;

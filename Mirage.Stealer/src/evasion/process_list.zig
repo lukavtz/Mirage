@@ -4,6 +4,8 @@ const engine = @import("../syscalls/engine.zig");
 const hash = @import("../types/hash.zig");
 const config = @import("config");
 
+// ponytail: count must match names array below. Add comptime assert
+// or compute from names.len if the list grows beyond manual tracking.
 const PROC_COUNT: usize = 35;
 
 fn hashName(name: []const u8) u32 {

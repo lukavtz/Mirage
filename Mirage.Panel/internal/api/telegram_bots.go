@@ -19,6 +19,9 @@ func NewTelegramBotHandler(db *sql.DB) *TelegramBotHandler {
 }
 
 func (h *TelegramBotHandler) List(w http.ResponseWriter, r *http.Request) {
+	claims := claimsFromCtx(r)
+	isAdmin := claims != nil && claims.Role == "admin"
+
 	rows, err := h.db.Query(`SELECT id, name, token, chat_id, COALESCE(tier,'basic'), is_active, created_at FROM telegram_bots ORDER BY created_at DESC`)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query bots")
@@ -41,6 +44,9 @@ func (h *TelegramBotHandler) List(w http.ResponseWriter, r *http.Request) {
 		var b botEntry
 		if err := rows.Scan(&b.ID, &b.Name, &b.Token, &b.ChatID, &b.Tier, &b.IsActive, &b.CreatedAt); err != nil {
 			continue
+		}
+		if !isAdmin && len(b.Token) > 8 {
+			b.Token = b.Token[:4] + "****" + b.Token[len(b.Token)-4:]
 		}
 		bots = append(bots, b)
 	}
@@ -69,7 +75,7 @@ func (h *TelegramBotHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	proxy := services.NewTelegramProxy()
 	if err := proxy.TestToken(body.Token); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid telegram token: "+err.Error())
+		writeError(w, http.StatusBadRequest, "invalid telegram token")
 		return
 	}
 
@@ -180,7 +186,7 @@ func (h *TelegramBotHandler) Test(w http.ResponseWriter, r *http.Request) {
 	proxy := services.NewTelegramProxy()
 	err = proxy.SendLog(token, chatID, []byte("Mirage Panel test message"), "test.txt", "Test notification from Mirage Panel")
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to send test: "+err.Error())
+		writeError(w, http.StatusInternalServerError, "failed to send test message")
 		return
 	}
 

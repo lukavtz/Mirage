@@ -82,6 +82,10 @@ export default function Settings() {
             <Label htmlFor="tg-chat-id">{t('build.tg_chat')}</Label>
             <Input id="tg-chat-id" value={tgChatId} onChange={(e) => setTgChatId(e.target.value)} className="font-mono" />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="rate-limit">{t('settings.rate_limit')}</Label>
+            <Input id="rate-limit" type="number" min={10} max={1000} value={rateLimit} onChange={(e) => setRateLimit(parseInt(e.target.value) || 100)} />
+          </div>
           <Button onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {t('common.save')}

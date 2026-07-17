@@ -185,6 +185,8 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if item.Hwid != "" {
+			// ponytail: N+1 query per row — batch this into a single hash map
+			// query when HWID-based grouping becomes a measurable bottleneck.
 			var dupCount int
 			h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE hwid = ? AND id != ?", item.Hwid, item.ID).Scan(&dupCount)
 			item.DuplicateCount = dupCount

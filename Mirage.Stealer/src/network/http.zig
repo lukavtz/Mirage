@@ -108,6 +108,7 @@ pub const HttpClient = struct {
     }
 
     fn readResponse(self: *HttpClient) !Response {
+        const max_body_size = 64 * 1024 * 1024;
         var response = std.ArrayList(u8).initCapacity(std.heap.page_allocator, 4096) catch return error.RecvFailed;
         errdefer response.deinit(std.heap.page_allocator);
         var recv_buf: [0x8000]u8 = undefined;
@@ -115,6 +116,7 @@ pub const HttpClient = struct {
         while (true) {
             const n = self.socket.recv(recv_buf[0..]) catch return error.RecvFailed;
             if (n == 0) break;
+            if (response.items.len + n > max_body_size) return error.RecvFailed;
             response.appendSlice(std.heap.page_allocator, recv_buf[0..n]) catch return error.RecvFailed;
         }
 

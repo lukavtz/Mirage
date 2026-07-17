@@ -77,40 +77,40 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&resp.Cards.Total)
 	h.db.QueryRow("SELECT COUNT(*) FROM wallets").Scan(&resp.Wallets.Total)
 
-	rows, err := h.db.Query("SELECT country_code, COUNT(*) as c FROM sessions WHERE country_code != '' GROUP BY country_code ORDER BY c DESC LIMIT 20")
+	geoRows, err := h.db.Query("SELECT country_code, COUNT(*) as c FROM sessions WHERE country_code != '' GROUP BY country_code ORDER BY c DESC LIMIT 20")
 	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
+		defer geoRows.Close()
+		for geoRows.Next() {
 			var e GeoEntry
-			if rows.Scan(&e.CountryCode, &e.Count) == nil {
+			if geoRows.Scan(&e.CountryCode, &e.Count) == nil {
 				resp.Geo = append(resp.Geo, e)
 			}
 		}
 	}
 
-	rows, err = h.db.Query("SELECT browser, COUNT(*) as c FROM passwords WHERE browser != '' GROUP BY browser ORDER BY c DESC")
+	browserRows, err := h.db.Query("SELECT browser, COUNT(*) as c FROM passwords WHERE browser != '' GROUP BY browser ORDER BY c DESC")
 	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
+		defer browserRows.Close()
+		for browserRows.Next() {
 			var e BrowserEntry
-			if rows.Scan(&e.Browser, &e.Count) == nil {
+			if browserRows.Scan(&e.Browser, &e.Count) == nil {
 				resp.Browsers = append(resp.Browsers, e)
 			}
 		}
 	}
 
-	rows, err = h.db.Query("SELECT date(created_at) as d, COUNT(*) FROM sessions WHERE created_at >= datetime('now', '-30 days') GROUP BY d ORDER BY d")
+	timelineRows, err := h.db.Query("SELECT date(created_at) as d, COUNT(*) FROM sessions WHERE created_at >= datetime('now', '-30 days') GROUP BY d ORDER BY d")
 	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
+		defer timelineRows.Close()
+		for timelineRows.Next() {
 			var e TimelineEntry
-			if rows.Scan(&e.Date, &e.Count) == nil {
+			if timelineRows.Scan(&e.Date, &e.Count) == nil {
 				resp.Timeline = append(resp.Timeline, e)
 			}
 		}
 	}
 
-	rows, err = h.db.Query(`
+	domainRows, err := h.db.Query(`
 		SELECT
 			COALESCE(
 				CASE
@@ -128,10 +128,10 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		LIMIT 20
 	`)
 	if err == nil {
-		defer rows.Close()
-		for rows.Next() {
+		defer domainRows.Close()
+		for domainRows.Next() {
 			var e DomainEntry
-			if rows.Scan(&e.Domain, &e.Count) == nil {
+			if domainRows.Scan(&e.Domain, &e.Count) == nil {
 				resp.TopDomains = append(resp.TopDomains, e)
 			}
 		}

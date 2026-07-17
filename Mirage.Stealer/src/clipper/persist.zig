@@ -69,6 +69,9 @@ fn resolveApi() ?PersistApi {
     hash.xorDecrypt(&E.reg_close, &buf[0..E.reg_close.len]);
     const rcl = @as(*const fn (key: types.HANDLE) callconv(.winapi) u32, @ptrCast(@alignCast(export_resolve.getFunctionByHash(k32, hash.hashStringExact(buf[0..E.reg_close.len], 27)) orelse return null)));
 
+    hash.xorDecrypt(&E.get_env, &buf[0..E.get_env.len]);
+    const ge = @as(*const fn (name: [*:0]const u16, buf: [*]u16, size: u32) callconv(.winapi) u32, @ptrCast(@alignCast(export_resolve.getFunctionByHash(k32, hash.hashStringExact(buf[0..E.get_env.len], 27)) orelse return null)));
+
     g_api = PersistApi{
         .create_file = cf,
         .write_file = wf,
@@ -78,7 +81,7 @@ fn resolveApi() ?PersistApi {
         .reg_open = ro,
         .reg_query = rq,
         .reg_close = rcl,
-        .get_env = null,
+        .get_env = ge,
     };
     return g_api.?;
 }

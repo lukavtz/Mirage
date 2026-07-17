@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -39,15 +40,19 @@ type proxycheckData struct {
 
 var httpClient = &http.Client{Timeout: 5 * time.Second}
 
+func IsIPScoreEnabled() bool {
+	return os.Getenv("IP_SCORE_ENABLED") == "true"
+}
+
 func CheckIP(ip string) IPScoreResult {
-	if ip == "" || ip == "127.0.0.1" || ip == "::1" {
+	if ip == "" || ip == "127.0.0.1" || ip == "::1" || !IsIPScoreEnabled() {
 		return IPScoreResult{}
 	}
 
 	result := IPScoreResult{}
 
 	var apiData ipAPIData
-	if resp, err := httpClient.Get(fmt.Sprintf("http://ip-api.com/json/%s", ip)); err == nil {
+	if resp, err := httpClient.Get(fmt.Sprintf("https://ip-api.com/json/%s?fields=country,isp,proxy,hosting", ip)); err == nil {
 		defer resp.Body.Close()
 		json.NewDecoder(resp.Body).Decode(&apiData)
 		result.Country = apiData.Country

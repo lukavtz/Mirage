@@ -144,7 +144,15 @@ fn wndProc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) callconv(.winap
             }
             if (injector.onClipboardChange(std.heap.page_allocator)) |record| {
                 if (g_log) |log| {
-                    log.addSwap(record);
+                    const now_ms = @as(i64, @bitCast(std.time.milliTimestamp()));
+                    const entry = log_mod.SwapEntry{
+                        .timestamp = now_ms,
+                        .chain = record.chain,
+                        .original_prefix = record.original_prefix,
+                        .original_suffix = record.original_suffix,
+                        .format = record.format,
+                    };
+                    log.addSwap(entry);
                 }
             }
             return 0;

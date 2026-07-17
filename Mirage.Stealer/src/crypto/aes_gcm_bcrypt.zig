@@ -129,12 +129,15 @@ pub fn decrypt(
     if (!ensureInit()) return error.BCryptNotAvailable;
     if (out.len < ciphertext.len) return error.OutputTooSmall;
 
+    const null_str: ?*const u16 = null;
+    const null_str_opt: *const u16 = @ptrCast(@alignCast(null_str));
     var hAlgo: types.PVOID = undefined;
-    var status = g_bcrypt_open.?( &hAlgo, &BCRYPT_AES_ALGORITHM, &@as(*const u16, @ptrFromInt(0)).*, 0);
+    var status = g_bcrypt_open.?( &hAlgo, &BCRYPT_AES_ALGORITHM, null_str_opt, 0);
     if (status < 0) return error.BCryptOpenFailed;
     errdefer _ = g_bcrypt_close.?(hAlgo, 0);
 
-    status = g_bcrypt_set_prop.?(hAlgo, &BCRYPT_CHAINING_MODE, &@as(*const u8, @ptrCast(&BCRYPT_CHAINING_MODE_GCM)).*, @sizeOf(@TypeOf(BCRYPT_CHAINING_MODE_GCM)), 0);
+    const chaining_mode_ptr: *const u8 = @ptrCast(&BCRYPT_CHAINING_MODE_GCM);
+    status = g_bcrypt_set_prop.?(hAlgo, &BCRYPT_CHAINING_MODE, chaining_mode_ptr, @sizeOf(@TypeOf(BCRYPT_CHAINING_MODE_GCM)), 0);
     if (status < 0) return error.BCryptSetChainingFailed;
 
     var hKey: types.PVOID = undefined;

@@ -66,7 +66,9 @@ pub fn sendDocument(
     const resp = client.postMultipart(path.items, &headers, boundary, body.items) catch return error.RequestFailed;
     defer resp.deinit();
 
-    if (resp.status != 200) return error.ApiError;
+    // ponytail: accept 2xx range; retry with backoff if delivery
+    // becomes reliability-critical.
+    if (resp.status < 200 or resp.status >= 300) return error.ApiError;
 }
 
 test "sendDocument caption length limit" {

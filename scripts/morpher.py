@@ -284,7 +284,12 @@ class PEMorpher:
         self._dd_set(IMAGE_DIRECTORY_ENTRY_IMPORT, sv, iid_sz)
         return ni
 
-    def append_overlay(self):
+    def append_overlay(self, overlay_path=None):
+        if overlay_path:
+            with open(overlay_path, "rb") as f:
+                overlay_data = f.read()
+            self.data += overlay_data
+            return len(overlay_data)
         sz = self.rng.randint(3670016, 4194304)  # 3.5-4MB overlay
         self.data += bytes(self.rng.getrandbits(8) for _ in range(sz))
         return sz
@@ -296,7 +301,7 @@ class PEMorpher:
         diffs = sum(1 for i in range(min(len(a), len(b))) if a[i] != b[i])
         return (diffs + abs(len(b) - len(a))) / mx * 100.0
 
-    def morph(self):
+    def morph(self, overlay_path=None):
         self._read()
         sha_b = hashlib.sha256(self.data).hexdigest()
         ob = bytes(self.data)
@@ -305,7 +310,7 @@ class PEMorpher:
         rn = self.rename_sections()
         self.obfuscate_entry()
         fi = self.add_fake_imports()
-        ov = self.append_overlay()
+        ov = self.append_overlay(overlay_path)
         sha_a = hashlib.sha256(self.data).hexdigest()
         pct = self.uniqueness(ob, bytes(self.data))
         with open(self.output_path, "wb") as f:
@@ -331,7 +336,7 @@ def main():
     ap.add_argument("--seed", type=int, help="Random seed")
     a = ap.parse_args()
     m = PEMorpher(a.input, a.output or a.input, seed=a.seed)
-    s = m.morph()
+    s = m.morph(a.overlay)
     print("Morphing complete:")
     print(f"  Original size: {s['original_size']} bytes")
     print(f"  Final size: {s['final_size']} bytes")

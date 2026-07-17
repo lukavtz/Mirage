@@ -39,10 +39,18 @@ pub fn initialize() bool {
     ntdll_text_end = bounds.end;
     const range = bounds.end - bounds.start;
     if (range < 0x100) return false;
+
+    var rng_seed: u64 = undefined;
+    _ = std.posix.getrandom(@as([*]u8, @ptrCast(&rng_seed))[0..@sizeOf(u64)]) catch {
+        rng_seed = @bitCast(std.time.nanoTimestamp());
+    };
+    var rng = std.Random.DefaultPrng.init(rng_seed);
+
     for (0..FAKE_FRAME_DEPTH) |i| {
         const stride = range / (FAKE_FRAME_DEPTH + 1);
         const offset = (stride * @as(usize, @intCast(i + 1))) & ~@as(usize, 0xF);
-        fake_frame_buffer[i] = bounds.start + @min(offset, range - 0x10);
+        const jitter = rng.intRangeAtMost(usize, 0, @min(0x1000, stride / 2)) & ~@as(usize, 0xF);
+        fake_frame_buffer[i] = bounds.start + @min(offset +% jitter, range - 0x10);
     }
     return true;
 }

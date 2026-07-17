@@ -59,12 +59,40 @@ type AuthHandler struct {
 }
 
 func NewAuthHandler(db *sql.DB, jwtSecret string) *AuthHandler {
-	return &AuthHandler{
+	h := &AuthHandler{
 		db:             db,
 		jwtSecret:      jwtSecret,
 		rateLimiter:    newIPRateLimiter(),
 		failedAttempts: make(map[string]int),
 		tempTokens:     make(map[string]tempTokenEntry),
+	}
+	go h.cleanupFailedAttempts()
+	go h.cleanupTempTokens()
+	return h
+}
+
+func (h *AuthHandler) cleanupTempTokens() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.tempMu.Lock()
+		now := time.Now()
+		for token, entry := range h.tempTokens {
+			if now.After(entry.expiresAt) {
+				delete(h.tempTokens, token)
+			}
+		}
+		h.tempMu.Unlock()
+	}
+}
+
+func (h *AuthHandler) cleanupFailedAttempts() {
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.failedMu.Lock()
+		h.failedAttempts = make(map[string]int)
+		h.failedMu.Unlock()
 	}
 }
 
@@ -108,6 +136,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	).Scan(&id, &username, &passwordHash, &role)
 	if err == sql.ErrNoRows {
 		h.recordFailedAttempt(ip)
+		// ponytail: consistent error message regardless of whether user
+		// exists — prevents trivial username enumeration via response text.
 		writeError(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}

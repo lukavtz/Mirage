@@ -65,26 +65,7 @@ fn isBase58(s: []const u8) bool {
     return true;
 }
 
-fn isBase58Strict(s: []const u8) bool {
-    if (s.len == 0) return false;
-    for (s) |c| {
-        switch (c) {
-            '1'...'9', 'A'...'H', 'J'...'N', 'P'...'Z', 'a'...'k', 'm'...'z' => {},
-            else => return false,
-        }
-    }
-    return true;
-}
-
 fn isHex(s: []const u8) bool {
-    if (s.len == 0) return false;
-    for (s) |c| {
-        if (!std.ascii.isHex(c)) return false;
-    }
-    return true;
-}
-
-fn isLowerHex(s: []const u8) bool {
     if (s.len == 0) return false;
     for (s) |c| {
         if (!std.ascii.isHex(c)) return false;
@@ -99,15 +80,29 @@ fn startsWith(s: []const u8, prefix: []const u8) bool {
 
 // ── BTC: 4 formats ──
 
+fn isBech32m(s: []const u8) bool {
+    if (s.len == 0) return false;
+    for (s) |c| {
+        switch (c) {
+            'q', 'p', 'z', 'r', 'y', '9', 'x', '8',
+            'g', 'f', '2', 't', 'v', 'd', 'w', '0',
+            's', '3', 'j', 'n', '5', '4', 'k', 'h',
+            'c', 'e', '6', 'm', 'u', 'a', '7', 'l' => {},
+            else => return false,
+        }
+    }
+    return true;
+}
+
 fn isBtcTaproot(s: []const u8) bool {
-    return s.len == 62 and startsWith(s, "bc1p") and isBase58(s[4..]);
+    return s.len == 62 and startsWith(s, "bc1p") and isBech32m(s[4..]);
 }
 
 fn isBtcSegWit(s: []const u8) bool {
-    if (s.len < 43 or s.len > 63) return false;
+    if (s.len < 42 or s.len > 63) return false;
     if (!startsWith(s, "bc1")) return false;
     if (s.len > 3 and s[3] == 'p') return false;
-    return isBase58(s[3..]);
+    return isBech32m(s[3..]);
 }
 
 fn isBtcLegacy(s: []const u8) bool {
@@ -138,8 +133,8 @@ fn isSolana(s: []const u8) bool {
 // ── LTC: 2 formats ──
 
 fn isLtcSegWit(s: []const u8) bool {
-    if (s.len < 43 or s.len > 63) return false;
-    return startsWith(s, "ltc1") and isBase58(s[4..]);
+    if (s.len < 42 or s.len > 63) return false;
+    return startsWith(s, "ltc1") and isBech32m(s[4..]);
 }
 
 fn isLtcLegacy(s: []const u8) bool {
@@ -171,13 +166,13 @@ fn isBchFull(s: []const u8) bool {
     const body = s[12..];
     if (body.len < 42 or body.len > 60) return false;
     if (body[0] != 'q' and body[0] != 'p') return false;
-    return isBase58(body[1..]);
+    return isBech32m(body[1..]);
 }
 
 fn isBchCashAddr(s: []const u8) bool {
     if (s.len < 42 or s.len > 44) return false;
     if (s[0] != 'q' and s[0] != 'p') return false;
-    return isBase58(s[1..]);
+    return isBech32m(s[1..]);
 }
 
 // ── XRP ──

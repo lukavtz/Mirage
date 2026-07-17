@@ -18,15 +18,15 @@ import {
 } from 'lucide-react'
 
 const navItems = [
-  { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true, desc: 'Main statistics and live data' },
-  { to: '/sessions', labelKey: 'nav.sessions', icon: Database, end: false, desc: 'All collected logs' },
-  { to: '/build', labelKey: 'nav.build', icon: Hammer, end: false, desc: 'Build stealer executable' },
-  { to: '/restore', labelKey: 'nav.restore', icon: RotateCcw, end: false, desc: 'Cookie restore via proxy' },
-  { to: '/search', labelKey: 'nav.search', icon: Search, end: false, desc: 'Search stolen data' },
-  { to: '/docs', labelKey: 'nav.docs', icon: Book, end: false, desc: 'Documentation' },
-  { to: '/users', labelKey: 'nav.users', icon: Users, end: false, desc: 'User management' },
-  { to: '/team', labelKey: 'nav.team', icon: Users, end: false, desc: 'Team management' },
-  { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false, desc: 'Panel configuration' },
+  { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/sessions', labelKey: 'nav.sessions', icon: Database, end: false },
+  { to: '/build', labelKey: 'nav.build', icon: Hammer, end: false },
+  { to: '/restore', labelKey: 'nav.restore', icon: RotateCcw, end: false },
+  { to: '/search', labelKey: 'nav.search', icon: Search, end: false },
+  { to: '/docs', labelKey: 'nav.docs', icon: Book, end: false },
+  { to: '/users', labelKey: 'nav.users', icon: Users, end: false },
+  { to: '/team', labelKey: 'nav.team', icon: Users, end: false },
+  { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false },
 ]
 
 export function Sidebar() {

@@ -84,7 +84,7 @@ Phase 16: RAT & Stealer Int.     ███████████████�
 - **Crypto**: 12/12 ✅ (DPAPI, AES-GCM, ChaCha20-Poly1305, BCrypt, PBKDF2)
 - **Data Theft Core**: 48/48 ✅ (sqLoot, 46 browsers, 72 wallets, 5 messengers, 5 gaming, system info)
 - **Network**: 8/8 ✅ (SChannel TLS, HTTP/1.1, Telegram API, ZIP, ws2_32)
-- **Panel + Builder**: 31/31 ✅ (WPF + ASP.NET Core + EF Core SQLite + LiveCharts2)
+- **Panel + Builder**: 31/31 ✅ (Go + React SPA + SQLite + PostgreSQL)
 - **Integration**: 10/10 ✅ (build scripts, XOR strings, docs)
 - **Unit Tests**: 192/192 ✅ (все модульные тесты)
 - **Engine Hardening**: 27/27 ✅ (NTDLL unhook, stack spoofing, FreshyCalls, SSN obfuscation, AMSI/ETW, Registry check, DBSC bypass, process list, disk/uptime/mouse/geo, HWID, self-delete, temp wipe, UAC bypass)
@@ -105,7 +105,7 @@ Phase 16: RAT & Stealer Int.     ███████████████�
 
 ---
 
-## Phase 12: Eidos Ecosystem — Standalone Modules ⬜
+## Phase 12: Eidos Ecosystem — Standalone Modules ✅
 
 > Эти модули — отдельные проекты, которые могут работать независимо.
 > Mirage Stealer может их загрузить и запустить после отработки.
@@ -134,7 +134,7 @@ Phase 16: RAT & Stealer Int.     ███████████████�
 
 ---
 
-## Phase 13: Mirage Stealer — Infrastructure ⬜
+## Phase 13: Mirage Stealer — Infrastructure ✅
 
 > Улучшения самого стилера Mirage.
 

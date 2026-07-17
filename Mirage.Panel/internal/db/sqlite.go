@@ -228,15 +228,14 @@ func translateSQLiteToPG(sql string) string {
 		tableEnd := strings.Index(upper, "(")
 		if tableEnd != -1 {
 			valuesIdx := strings.Index(upper[tableEnd:], "VALUES")
-			if valuesIdx != -1 {
+			// ponytail: skip INSERT...SELECT — ON CONFLICT requires a
+			// conflict target on SELECT queries. Add explicit handling
+			// when PostgreSQL INSERT...SELECT migrations are needed.
+			if valuesIdx != -1 && !strings.Contains(upper, "SELECT") {
 				result = result + " ON CONFLICT DO NOTHING"
 			}
 		}
 	}
 
 	return result
-}
-
-func init() {
-	_ = embed.FS{}
 }

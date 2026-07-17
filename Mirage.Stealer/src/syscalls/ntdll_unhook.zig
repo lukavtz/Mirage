@@ -117,10 +117,11 @@ pub fn unhookNtdll() UnhookResult {
     defer _ = engine.NtClose(file_handle);
 
     var section_handle: types.HANDLE = undefined;
+    var null_name = types.UNICODE_STRING{ .Length = 0, .MaximumLength = 0, .Buffer = @as(types.PWSTR, @ptrFromInt(0)) };
     var null_attr = types.OBJECT_ATTRIBUTES{
         .Length = 0,
         .RootDirectory = null,
-        .ObjectName = undefined,
+        .ObjectName = &null_name,
         .Attributes = 0,
         .SecurityDescriptor = null,
         .SecurityQualityOfService = null,
@@ -257,10 +258,11 @@ pub fn verifyUnhook() bool {
     defer _ = engine.NtClose(file_handle);
 
     var section_handle: types.HANDLE = undefined;
+    var null_name = types.UNICODE_STRING{ .Length = 0, .MaximumLength = 0, .Buffer = @as(types.PWSTR, @ptrFromInt(0)) };
     var null_attr = types.OBJECT_ATTRIBUTES{
         .Length = 0,
         .RootDirectory = null,
-        .ObjectName = undefined,
+        .ObjectName = &null_name,
         .Attributes = 0,
         .SecurityDescriptor = null,
         .SecurityQualityOfService = null,

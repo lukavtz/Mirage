@@ -135,6 +135,9 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 	dateFrom := r.URL.Query().Get("date_from")
 	dateTo := r.URL.Query().Get("date_to")
 
+	claims, hasClaims := getClaims(r)
+	canRevealPasswords := hasClaims && (claims.Role == "admin" || claims.Role == "checker")
+
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if page < 1 {
 		page = 1
@@ -206,6 +209,9 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var r advancedResult
 		if rows.Scan(&r.SessionID, &r.URL, &r.Username, &r.Password, &r.Browser, &r.OS, &r.IP, &r.CountryCode, &r.CreatedAt) == nil {
+			if !canRevealPasswords {
+				r.Password = "[MASKED]"
+			}
 			results = append(results, r)
 		}
 	}

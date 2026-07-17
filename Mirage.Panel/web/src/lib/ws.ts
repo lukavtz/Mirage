@@ -23,20 +23,30 @@ class WSClient {
   connect(token: string) {
     this.shouldReconnect = true
     this.reconnectAttempts = 0
+    this.clearReconnectTimeout()
     this.doConnect(token)
   }
 
+  private clearReconnectTimeout() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout)
+      this.reconnectTimeout = null
+    }
+  }
+
   private doConnect(token: string) {
+    this.clearReconnectTimeout()
     if (this.ws) {
       this.ws.onclose = null
       this.ws.onerror = null
       this.ws.close()
     }
 
-    this.ws = new WebSocket(`${this.url}?token=${encodeURIComponent(token)}`)
+    this.ws = new WebSocket(this.url)
 
     this.ws.onopen = () => {
       this.reconnectAttempts = 0
+      this.ws?.send(JSON.stringify({ type: 'auth', token }))
     }
 
     this.ws.onmessage = (event: MessageEvent) => {
@@ -47,7 +57,7 @@ class WSClient {
           typeHandlers.forEach(handler => handler(msg.data))
         }
       } catch {
-        console.error('WS: failed to parse message')
+        if (import.meta.env.DEV) console.error('WS: failed to parse message')
       }
     }
 
@@ -101,5 +111,4 @@ class WSClient {
   }
 }
 
-export const ws = new WSClient()
-export const wsClient = ws
+export const wsClient = new WSClient()

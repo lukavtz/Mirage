@@ -3,38 +3,59 @@ package ws
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+	"time"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/user/mirage-panel/internal/auth"
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
-}
+func ServeWs(hub *Hub, jwtSecret string, allowedOrigins string) http.HandlerFunc {
+	allowed := map[string]bool{}
+	for _, o := range strings.Split(allowedOrigins, ",") {
+		o = strings.TrimSpace(o)
+		if o != "" {
+			allowed[o] = true
+		}
+	}
 
-func ServeWs(hub *Hub, jwtSecret string) http.HandlerFunc {
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return false
+			}
+			if allowedOrigins == "*" {
+				return true
+			}
+			return allowed[origin]
+		},
+	}
+
 	return func(w http.ResponseWriter, r *http.Request) {
-		token := r.URL.Query().Get("token")
-		if token == "" {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "missing token"})
-			return
-		}
-
-		claims, err := auth.ValidateToken(token, jwtSecret)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusUnauthorized)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid token"})
-			return
-		}
-
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
+			return
+		}
+
+		var authMsg struct {
+			Type  string `json:"type"`
+			Token string `json:"token"`
+		}
+		conn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_, msg, err := conn.ReadMessage()
+		if err != nil || json.Unmarshal(msg, &authMsg) != nil || authMsg.Type != "auth" || authMsg.Token == "" {
+			conn.Close()
+			return
+		}
+		conn.SetReadDeadline(time.Time{})
+
+		claims, err := auth.ValidateToken(authMsg.Token, jwtSecret)
+		if err != nil {
+			conn.Close()
 			return
 		}
 

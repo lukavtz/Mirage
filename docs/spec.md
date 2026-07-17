@@ -2,7 +2,7 @@
 
 ## 1. Overview
 
-**Mirage** is an experimental Windows x64 information stealer written in Zig 0.16 + inline ASM with a C# WPF panel. The stealer operates as a standalone EXE (80-150 KB) with a companion DLL for Chrome v20+ App-Bound decryption. All data is exfiltrated to a C# panel (primary) and Telegram Bot API (backup).
+**Mirage** is an experimental Windows x64 information stealer written in Zig 0.16 + inline ASM with a Go + React web panel. The stealer operates as a standalone EXE (80-150 KB) with a companion DLL for Chrome v20+ App-Bound decryption. All data is exfiltrated to a Go/React panel (primary) and Telegram Bot API (backup).
 
 ### 1.1 Design Goals
 
@@ -20,8 +20,8 @@
 |-----------|----------|--------------|-----------|
 | Stealer core | Zig 0.16 + inline ASM | x86_64-windows, ReleaseSmall | Zero-CRT, comptime obfuscation, minimal size |
 | Decryptor DLL | C++ (MSVC) | x64 Release | COM IElevator + BCrypt, compiled separately |
-| Builder | C# .NET 10 WinForms | Any CPU | PE-patching .rdata, no Zig needed |
-| Panel | C# .NET 10 WPF | Any CPU | MaterialDesignInXAML, HTTPS server, dashboard |
+| Builder | Go (panel service) | Linux/macOS/Windows | PE-patching .rdata via panel API |
+| Panel | Go + React (TypeScript) | Linux/macOS/Windows | shadcn/ui, HTTPS server, dashboard |
 
 ---
 

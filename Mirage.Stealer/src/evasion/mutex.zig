@@ -56,7 +56,7 @@ pub fn ensureMutex() bool {
     );
 
     if (status == 0xC000004E) return false;
-    if (status < 0) return true;
+    if (status < 0) return false;
     _ = engine.NtClose(event_handle);
     return true;
 }

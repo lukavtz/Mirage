@@ -9,7 +9,7 @@
 | 3. Crypto | ✅ 12/12 | AES-GCM, ChaCha20-Poly1305, BCrypt, DPAPI, PBKDF2 |
 | 4. Data Theft | ✅ 35/35 | 46 browsers, 72 wallets, 5 messengers, 5 gaming, system info |
 | 5. Network | ✅ 8/8 | SChannel TLS, HTTP/1.1, Telegram API, ZIP, ws2_32 |
-| 6. Panel + Builder | ✅ 30/30 | WPF + ASP.NET Core + EF Core SQLite + LiveCharts2 |
+| 6. Panel + Builder | ✅ 30/30 | Go + React SPA + SQLite + PostgreSQL |
 | 7. Integration | ✅ 10/10 | build scripts, XOR strings, docs (ARCH/OPSEC/TESTING) |
 | **Total** | **127/127 ✅** | **~25 days work** |
 

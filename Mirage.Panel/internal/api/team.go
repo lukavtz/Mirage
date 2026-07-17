@@ -93,7 +93,11 @@ func (h *TeamHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims := r.Context().Value(claimsKey).(*auth.Claims)
+	claims, ok := getClaims(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 	LogAudit(h.db, claims.UserID, "team.change_role", "Changed user "+userID+" to "+req.Role, extractIP(r))
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "role updated"})
@@ -101,7 +105,11 @@ func (h *TeamHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 
 func (h *TeamHandler) Remove(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "id")
-	claims := r.Context().Value(claimsKey).(*auth.Claims)
+	claims, ok := getClaims(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
 
 	if userID == claims.UserID {
 		writeError(w, http.StatusBadRequest, "cannot remove yourself")

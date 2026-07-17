@@ -10,10 +10,21 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/user/mirage-panel/internal/services"
 )
+
+var safeIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
+
+func safeIDParam(r *http.Request) string {
+	id := chi.URLParam(r, "id")
+	if !safeIDPattern.MatchString(id) {
+		return ""
+	}
+	return id
+}
 
 type BuildHandler struct {
 	service      *services.BuildService
@@ -40,6 +51,16 @@ func (h *BuildHandler) Build(w http.ResponseWriter, r *http.Request) {
 
 	if config.C2Host == "" || config.C2Port == 0 {
 		writeError(w, http.StatusBadRequest, "c2_host and c2_port are required")
+		return
+	}
+
+	if len(config.C2Host) > 256 {
+		writeError(w, http.StatusBadRequest, "c2_host must be 256 characters or fewer")
+		return
+	}
+
+	if config.C2Port < 1 || config.C2Port > 65535 {
+		writeError(w, http.StatusBadRequest, "c2_port must be between 1 and 65535")
 		return
 	}
 
@@ -135,9 +156,9 @@ func (h *BuildHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BuildHandler) Download(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := safeIDParam(r)
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "missing build id")
+		writeError(w, http.StatusBadRequest, "missing or invalid build id")
 		return
 	}
 
@@ -162,9 +183,9 @@ func (h *BuildHandler) Download(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BuildHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := safeIDParam(r)
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "missing build id")
+		writeError(w, http.StatusBadRequest, "missing or invalid build id")
 		return
 	}
 
@@ -191,9 +212,9 @@ func (h *BuildHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BuildHandler) UploadIcon(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
+	id := safeIDParam(r)
 	if id == "" {
-		writeError(w, http.StatusBadRequest, "missing build id")
+		writeError(w, http.StatusBadRequest, "missing or invalid build id")
 		return
 	}
 
@@ -222,7 +243,7 @@ func (h *BuildHandler) UploadIcon(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iconPath := filepath.Join(iconDir, id+".ico")
+	iconPath := filepath.Join(iconDir, filepath.Base(id+".ico"))
 	if err := os.WriteFile(iconPath, data, 0644); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save icon")
 		return

@@ -18,8 +18,11 @@ pub fn base64Decode(input: []const u8, out: []u8) ?[]u8 {
     if (out.len < max_out) return null;
 
     var padding: usize = 0;
-    if (input.len >= 2 and input[input.len - 2] == '=') padding = 2;
-    if (input.len >= 1 and input[input.len - 1] == '=') padding = 1;
+    if (input.len >= 2 and input[input.len - 2] == '=') {
+        padding = 2;
+    } else if (input.len >= 1 and input[input.len - 1] == '=') {
+        padding = 1;
+    }
 
     const out_len = max_out - padding;
     var out_pos: usize = 0;
@@ -93,6 +96,13 @@ test "base64Decode with padding" {
     var buf: [64]u8 = undefined;
     const result = base64Decode("Zm9v", &buf) orelse return error.DecodeFailed;
     try testing.expectEqualSlices(u8, "foo", result);
+}
+
+test "base64Decode double padding" {
+    var buf: [64]u8 = undefined;
+    const result = base64Decode("QQ==", &buf) orelse return error.DecodeFailed;
+    try testing.expectEqual(@as(usize, 1), result.len);
+    try testing.expectEqual(@as(u8, 'A'), result[0]);
 }
 
 test "base64Decode binary output" {

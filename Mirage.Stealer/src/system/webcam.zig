@@ -137,20 +137,22 @@ fn captureViaAvicap(allocator: std.mem.Allocator) ?[]u8 {
         },
     };
 
-    const header = @as(*align(1) const dib_info, @ptrCast(ptr));
-    const hdr_size = header.bmiHeader.biSize;
+    const header = @as(*align(1) const u32, @ptrCast(ptr));
+    const hdr_size = header.*;
     if (hdr_size < 40) return null;
 
+    const full_header = @as(*align(1) const dib_info, @ptrCast(ptr));
+
     // ponytail: whole DIB size from biSizeImage or compute
-    var dib_size = header.bmiHeader.biSizeImage;
+    var dib_size = full_header.bmiHeader.biSizeImage;
     if (dib_size == 0) {
         // ponytail: assume no compression and compute
-        const width_bytes = @as(u32, @intCast((@as(u32, @intCast(@abs(header.bmiHeader.biWidth))) * header.bmiHeader.biBitCount + 31) / 32 * 4));
-        const abs_height = @as(u32, @intCast(@abs(header.bmiHeader.biHeight)));
+        const width_bytes = @as(u32, @intCast((@as(u32, @intCast(@abs(full_header.bmiHeader.biWidth))) * full_header.bmiHeader.biBitCount + 31) / 32 * 4));
+        const abs_height = @as(u32, @intCast(@abs(full_header.bmiHeader.biHeight)));
         dib_size = width_bytes * abs_height;
     }
 
-    const pal_size = if (header.bmiHeader.biBitCount <= 8) @as(u32, @intCast((1 << @as(u6, @intCast(header.bmiHeader.biBitCount))) * 4)) else 0;
+    const pal_size = if (full_header.bmiHeader.biBitCount <= 8) @as(u32, @intCast((1 << @as(u6, @intCast(full_header.bmiHeader.biBitCount))) * 4)) else 0;
     const offset_to_pixels = hdr_size + pal_size;
     if (offset_to_pixels + dib_size > 4 * 1024 * 1024) return null;
 

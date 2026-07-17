@@ -9,33 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Hammer, Download, Loader2 } from 'lucide-react'
-
-interface BuildConfig {
-  c2_host: string
-  c2_port: number
-  telegram_token: string
-  telegram_chat_id: string
-  enable_persistence: boolean
-  enable_screenshot: boolean
-  enable_grabber: boolean
-  include_decryptor: boolean
-  build_tag: string
-}
-
-interface BuildRecord {
-  id: string
-  file_size: number
-  sha256: string
-  build_tag: string
-  download_count: number
-  created_at: string
-}
-
-interface BuildResponse {
-  build_id: string
-  file_size: number
-  sha256: string
-}
+import type { BuildConfig, BuildRecord, BuildResponse } from '@/types'
 
 export default function BuildPage() {
   const queryClient = useQueryClient()
@@ -62,6 +36,25 @@ export default function BuildPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     buildMutation.mutate()
+  }
+
+  const handleDownload = async (buildId: string) => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/build/${buildId}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+      if (!res.ok) throw new Error('download failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `mirage_${buildId.slice(0, 8)}.exe`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Build download failed:', err)
+    }
   }
 
   return (
@@ -98,37 +91,37 @@ export default function BuildPage() {
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={config.enable_screenshot} onChange={e => setConfig(c => ({ ...c, enable_screenshot: e.target.checked }))} />
-                Enable Screenshot
+                {t('build.screenshot')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={config.enable_persistence} onChange={e => setConfig(c => ({ ...c, enable_persistence: e.target.checked }))} />
-                Enable Persistence
+                {t('build.persistence')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={config.enable_grabber} onChange={e => setConfig(c => ({ ...c, enable_grabber: e.target.checked }))} />
-                Enable Grabber
+                {t('build.grabber')}
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={config.include_decryptor} onChange={e => setConfig(c => ({ ...c, include_decryptor: e.target.checked }))} />
-                Include MirageDecryptor DLL
+                {t('build.decryptor')}
               </label>
             </div>
 
             <Button type="submit" disabled={buildMutation.isPending || !config.c2_host.trim()}>
               {buildMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Hammer className="h-4 w-4 mr-2" />}
-              {buildMutation.isPending ? 'Building...' : 'Build'}
+              {buildMutation.isPending ? t('build.building') : t('build.build')}
             </Button>
 
             {buildMutation.data && (
               <div className="rounded-md bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400 space-y-1">
-                <p>✅ Build complete</p>
+                <p>✅ {t('build.success')}</p>
                 <p className="text-xs font-mono">Size: {(buildMutation.data.file_size / 1024).toFixed(1)} KB</p>
                 <p className="text-xs font-mono">SHA256: {buildMutation.data.sha256}</p>
               </div>
             )}
             {buildMutation.error && (
               <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                Build failed: {(buildMutation.error as Error).message}
+                Build failed: {(buildMutation.error as { message?: string })?.message || 'unknown error'}
               </div>
             )}
           </form>
@@ -161,9 +154,7 @@ export default function BuildPage() {
                   <TableCell className="text-xs text-muted-foreground">{b.created_at}</TableCell>
                   <TableCell className="tabular-nums">{b.download_count}</TableCell>
                   <TableCell>
-                    <a href={`/api/build/${b.id}/download`} download>
-                      <Button variant="ghost" size="sm"><Download className="h-4 w-4" /></Button>
-                    </a>
+                    <Button variant="ghost" size="sm" onClick={() => handleDownload(b.id)}><Download className="h-4 w-4" /></Button>
                   </TableCell>
                 </TableRow>
               ))}

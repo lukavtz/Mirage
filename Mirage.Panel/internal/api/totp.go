@@ -30,12 +30,6 @@ func (h *TOTPHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.db.Exec("UPDATE users SET totp_secret = ? WHERE id = ?", secret, claims.UserID)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to save TOTP secret")
-		return
-	}
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"secret":    secret,
 		"qr_base64": qrBase64,
@@ -51,17 +45,22 @@ func (h *TOTPHandler) Verify(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Passcode string `json:"passcode"`
+		Secret   string `json:"secret"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 
-	var secret string
-	err := h.db.QueryRow("SELECT totp_secret FROM users WHERE id = ?", claims.UserID).Scan(&secret)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to fetch TOTP secret")
-		return
+	secret := req.Secret
+	if secret == "" {
+		var dbSecret string
+		err := h.db.QueryRow("SELECT totp_secret FROM users WHERE id = ?", claims.UserID).Scan(&dbSecret)
+		if err != nil || dbSecret == "" {
+			writeError(w, http.StatusBadRequest, "secret is required for verification")
+			return
+		}
+		secret = dbSecret
 	}
 
 	if !h.totpManager.Validate(req.Passcode, secret) {
@@ -69,7 +68,7 @@ func (h *TOTPHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.db.Exec("UPDATE users SET totp_enabled = 1 WHERE id = ?", claims.UserID)
+	_, err := h.db.Exec("UPDATE users SET totp_secret = ?, totp_enabled = 1 WHERE id = ?", secret, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to enable TOTP")
 		return
@@ -121,16 +120,11 @@ func (h *TOTPHandler) Required(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Rate-limited but public — the response is the same shape regardless
+	// of whether the user exists, preventing username enumeration. The
+	// frontend should prefer the login response's totp_required field.
 	var enabled bool
-	err := h.db.QueryRow("SELECT totp_enabled FROM users WHERE username = ?", username).Scan(&enabled)
-	if err == sql.ErrNoRows {
-		writeJSON(w, http.StatusOK, map[string]bool{"required": false})
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to check TOTP status")
-		return
-	}
+	_ = h.db.QueryRow("SELECT totp_enabled FROM users WHERE username = ?", username).Scan(&enabled)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"required": enabled})
 }

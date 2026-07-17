@@ -71,6 +71,22 @@ func (h *ReferralHandler) Apply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var refCount int
+	h.db.QueryRow("SELECT COUNT(*) FROM referrals WHERE referred_user_id = ?", claims.UserID).Scan(&refCount)
+	if refCount > 0 {
+		writeError(w, http.StatusBadRequest, "already applied a referral code")
+		return
+	}
+
+	_, err = h.db.Exec(
+		"INSERT INTO referrals (referrer_id, referred_user_id, code, applied_at) VALUES (?, ?, ?, datetime('now'))",
+		referrerID, claims.UserID, req.Code,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to apply referral code")
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "referral code applied",
 		"code":    req.Code,

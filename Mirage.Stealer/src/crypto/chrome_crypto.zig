@@ -14,7 +14,7 @@ pub fn deriveKey() ![32]u8 {
     var key: [32]u8 = undefined;
     try crypto.pwhash.pbkdf2(
         &key,
-        &salt_buf,
+        "",
         &salt_buf,
         CHROME_ITERATIONS,
         crypto.auth.hmac.HmacSha1,

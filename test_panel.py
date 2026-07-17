@@ -1,12 +1,20 @@
-# Eidos Test Panel — улучшенная веб-панель
-# Запуск: python test_panel.py
+# Eidos Test Panel — локальная тестовая панель
+# Запуск: python test_panel.py [--token YOUR_AUTH_TOKEN]
 # Принимает логи: http://localhost:5000
+# Режим: только localhost, с опциональной аутентификацией
 
 import http.server
-import json, os, time, urllib.parse, io, zipfile
+import json, os, time, urllib.parse, io, zipfile, sys
 from datetime import datetime
 
 DATA_DIR = "test_logs"
+MAX_POST_SIZE = 50 * 1024 * 1024  # 50 MB
+
+AUTH_TOKEN = None
+for i, arg in enumerate(sys.argv):
+    if arg == "--token" and i + 1 < len(sys.argv):
+        AUTH_TOKEN = sys.argv[i + 1]
+
 os.makedirs(f"{DATA_DIR}/archives", exist_ok=True)
 os.makedirs(f"{DATA_DIR}/keylogs", exist_ok=True)
 
@@ -69,7 +77,7 @@ load();setInterval(load,5000)
 </script></body></html>"""
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
+    def log_message(self, format, *args): pass
     def _json(self, d, s=200):
         self.send_response(s); self.send_header("Content-Type","application/json"); self.send_header("Access-Control-Allow-Origin","*")
         self.end_headers(); self.wfile.write(json.dumps(d).encode())
@@ -105,7 +113,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         p = urllib.parse.urlparse(self.path)
-        cl = int(self.headers.get("Content-Length",0))
+
+        if AUTH_TOKEN and self.headers.get("Authorization") != f"Bearer {AUTH_TOKEN}":
+            self._json({"error":"unauthorized"}, 401)
+            return
+
+        cl = int(self.headers.get("Content-Length", 0))
+        if cl > MAX_POST_SIZE:
+            self._json({"error":"payload too large"}, 413)
+            return
+
         body = self.rfile.read(cl)
         if p.path == "/api/log":
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -153,6 +170,6 @@ if __name__ == "__main__":
 |  Logs: {DATA_DIR}/archives/        |
 +------------------------------------+
     """)
-    s = http.server.HTTPServer(("0.0.0.0", port), Handler)
+    s = http.server.HTTPServer(("127.0.0.1", port), Handler)
     try: s.serve_forever()
     except KeyboardInterrupt: print("\n[STOPPED]"); s.server_close()

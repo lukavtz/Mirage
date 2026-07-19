@@ -207,7 +207,7 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, expiresAtTime, err := auth.GenerateToken(userID, role.String, h.jwtSecret)
+	token, expiresAtTime, err := auth.GenerateToken(userID, role.String, h.jwtSecret, "")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate token")
 		return

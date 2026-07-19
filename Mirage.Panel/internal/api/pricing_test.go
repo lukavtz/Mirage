@@ -140,7 +140,7 @@ func setupPricingTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	uid := createTestUser(t, d, "pricinguser", "pass")
-	token, _, err := auth.GenerateToken(uid, "admin", jwtSecret)
+	token, _, err := auth.GenerateToken(uid, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,7 @@ import (
 
 func TestGenerateAndValidate(t *testing.T) {
 	secret := "test-secret-key"
-	tokenStr, expiresAt, err := auth.GenerateToken("user-42", "admin", secret)
+	tokenStr, expiresAt, err := auth.GenerateToken("user-42", "admin", secret, "")
 	if err != nil {
 		t.Fatalf("GenerateToken failed: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestExpiredToken(t *testing.T) {
 }
 
 func TestWrongSecret(t *testing.T) {
-	tokenStr, _, err := auth.GenerateToken("user-1", "admin", "secret-a")
+	tokenStr, _, err := auth.GenerateToken("user-1", "admin", "secret-a", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,7 +75,7 @@ func TestMalformedToken(t *testing.T) {
 
 func TestAlgorithmConfusion(t *testing.T) {
 	secret := "test-secret"
-	tokenStr, _, err := auth.GenerateToken("user-1", "admin", secret)
+	tokenStr, _, err := auth.GenerateToken("user-1", "admin", secret, "")
 	if err != nil {
 		t.Fatal(err)
 	}

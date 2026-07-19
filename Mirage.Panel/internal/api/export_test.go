@@ -65,8 +65,8 @@ func TestExport_SessionJSON(t *testing.T) {
 		t.Fatalf("expected 1 password, got %d", len(passwords))
 	}
 	p := passwords[0].(map[string]any)
-	if p["password_value"] != "secret123" {
-		t.Errorf("expected password_value secret123, got %v", p["password_value"])
+	if p["password_value"] != "[MASKED]" {
+		t.Errorf("expected password_value [MASKED], got %v", p["password_value"])
 	}
 	if p["url"] != "https://example.com" {
 		t.Errorf("expected url https://example.com, got %v", p["url"])

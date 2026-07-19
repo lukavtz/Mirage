@@ -20,7 +20,7 @@ func setupSessionsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	r := chi.NewRouter()
 
 	userID := createTestUser(t, d, "sessionsuser", "testpass")
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret)
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestSessionsList_FilterByCountry(t *testing.T) {
 	r, token := setupSessionsTestRouter(t, d)
 
 	sessions := []struct {
-		id    string
+		id      string
 		country string
 	}{
 		{uuid.New().String(), "US"},

@@ -48,7 +48,7 @@ const clipper_log_mod = @import("clipper/log.zig");
 
 // ponytail: is_debug controls debug/test vs production pipeline
 // Set to false for production builds, true for debugging
-const is_debug = !@import("builtin").mode.isOptimized();
+const is_debug = @import("builtin").mode == .Debug;
 
 fn assert(ok: bool, comptime label: []const u8) void {
     if (ok) {

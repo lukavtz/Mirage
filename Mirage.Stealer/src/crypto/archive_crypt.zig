@@ -6,22 +6,19 @@ const chacha_poly = @import("chacha_poly.zig");
 
 pub const ArchiveKey = [chacha_poly.key_length]u8;
 pub const ArchiveNonce = [chacha_poly.nonce_length]u8;
-pub const ArchiveSalt = [16]u8;
+pub const ArchiveSaltLen = 16;
 
 fn fillRandom(buf: []u8) void {
-    var rng = std.Random.DefaultPrng.init(blk: {
-        var seed: u64 = undefined;
-        std.posix.getrandom(@as([*]u8, @ptrCast(&seed))[0..@sizeOf(u64)]) catch {
-            seed = @bitCast(@as(i64, @truncate(std.time.nanoTimestamp())));
-        };
-        break :blk seed;
-    });
-    rng.fill(buf);
+    // Simple LCG seed from program address layout (varies per run)
+    var seed: u64 = undefined;
+    seed = @as(u64, @intFromPtr(&seed)) ^ config.SEED;
+    var prng = std.Random.DefaultPrng.init(seed);
+    prng.random().bytes(buf);
 }
 
-pub fn deriveKey(password: []const u8, salt: *const ArchiveSalt) ![chacha_poly.key_length]u8 {
+pub fn deriveKey(password: []const u8, salt: []const u8) ![chacha_poly.key_length]u8 {
     var key: ArchiveKey = undefined;
-    try crypto.pwhash.pbkdf2(&key, password, salt, 210_000, crypto.auth.hmac.HmacSha256);
+    try crypto.pwhash.pbkdf2(&key, password, salt, 210_000, std.crypto.auth.hmac.sha2.HmacSha256);
     return key;
 }
 
@@ -29,14 +26,14 @@ pub fn encryptArchive(input: []const u8, out: []u8) ?[]u8 {
     var nonce: ArchiveNonce = undefined;
     fillRandom(&nonce);
 
-    var salt: ArchiveSalt = undefined;
+    var salt: [ArchiveSaltLen]u8 = undefined;
     fillRandom(&salt);
 
     var seed_buf: [8]u8 = undefined;
     std.mem.writeInt(u64, &seed_buf, config.SEED, .little);
     const key = deriveKey(&seed_buf, &salt) catch return null;
 
-    const header_len = chacha_poly.nonce_length + salt.len;
+    const header_len = chacha_poly.nonce_length + ArchiveSaltLen;
     if (out.len < header_len + input.len + chacha_poly.tag_length) return null;
     @memcpy(out[0..chacha_poly.nonce_length], &nonce);
     @memcpy(out[chacha_poly.nonce_length..header_len], &salt);
@@ -45,11 +42,11 @@ pub fn encryptArchive(input: []const u8, out: []u8) ?[]u8 {
 }
 
 pub fn decryptArchive(input: []const u8, out: []u8) ?[]u8 {
-    const header_len = chacha_poly.nonce_length + ArchiveSalt.len;
+    const header_len = chacha_poly.nonce_length + ArchiveSaltLen;
     if (input.len < header_len + chacha_poly.tag_length) return null;
     var nonce: ArchiveNonce = undefined;
     @memcpy(&nonce, input[0..chacha_poly.nonce_length]);
-    var salt: ArchiveSalt = undefined;
+    var salt: [ArchiveSaltLen]u8 = undefined;
     @memcpy(&salt, input[chacha_poly.nonce_length..header_len]);
 
     var seed_buf: [8]u8 = undefined;
@@ -61,19 +58,19 @@ pub fn decryptArchive(input: []const u8, out: []u8) ?[]u8 {
 }
 
 test "deriveKey deterministic" {
-    var salt: ArchiveSalt = .{0x42} ** ArchiveSalt.len;
-    var seed: [8]u8 = .{0xDE, 0xAD, 0xBE, 0xEF} ** 2;
-    const a = try deriveKey(&seed, &salt);
-    const b = try deriveKey(&seed, &salt);
+    var salt: [ArchiveSaltLen]u8 = .{0x42} ** ArchiveSaltLen;
+    var seed: [8]u8 = .{ 0xDE, 0xAD, 0xBE, 0xEF } ** 2;
+    const a = try deriveKey(&seed, &salt[0..]);
+    const b = try deriveKey(&seed, &salt[0..]);
     try std.testing.expectEqualSlices(u8, &a, &b);
 }
 
 test "deriveKey different salt -> different key" {
-    var seed: [8]u8 = .{0xCA, 0xFE} ** 4;
-    var salt_a: ArchiveSalt = .{0x00} ** ArchiveSalt.len;
-    var salt_b: ArchiveSalt = .{0xFF} ** ArchiveSalt.len;
-    const ka = try deriveKey(&seed, &salt_a);
-    const kb = try deriveKey(&seed, &salt_b);
+    var seed: [8]u8 = .{ 0xCA, 0xFE } ** 4;
+    var salt_a: [ArchiveSaltLen]u8 = .{0x00} ** ArchiveSaltLen;
+    var salt_b: [ArchiveSaltLen]u8 = .{0xFF} ** ArchiveSaltLen;
+    const ka = try deriveKey(&seed, &salt_a[0..]);
+    const kb = try deriveKey(&seed, &salt_b[0..]);
     try std.testing.expect(!std.mem.eql(u8, &ka, &kb));
 }
 
@@ -102,7 +99,7 @@ test "decryptArchive tampered ciphertext" {
     var buf: [4096]u8 = undefined;
     var dec: [4096]u8 = undefined;
     const ct = (encryptArchive("test data", &buf) orelse return error.EncodeFailed);
-    if (ct.len > chacha_poly.nonce_length + ArchiveSalt.len + chacha_poly.tag_length) {
+    if (ct.len > chacha_poly.nonce_length + ArchiveSaltLen + chacha_poly.tag_length) {
         ct[ct.len - 1] ^= 1;
         try std.testing.expect(decryptArchive(ct, &dec) == null);
     }

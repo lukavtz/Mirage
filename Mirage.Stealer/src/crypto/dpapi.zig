@@ -63,7 +63,7 @@ pub fn decrypt(input: []const u8) ?[]u8 {
     if (ret == 0) return null;
 
     const alloc = std.heap.page_allocator;
-    const copy = alloc.alloc(u8, blob_out.cbData) orelse {
+    const copy = alloc.alloc(u8, blob_out.cbData) catch {
         _ = local_free.?(blob_out.pbData);
         return null;
     };
@@ -87,6 +87,6 @@ test "decrypt too large input" {
 }
 
 test "decrypt invalid blob (expected fail)" {
-    const blob = [_]u8{0x01, 0x00, 0x00, 0x00} ++ [_]u8{0x00} ** 20;
+    const blob = [_]u8{ 0x01, 0x00, 0x00, 0x00 } ++ [_]u8{0x00} ** 20;
     try testing.expect(decrypt(&blob) == null);
 }

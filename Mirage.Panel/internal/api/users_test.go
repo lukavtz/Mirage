@@ -24,7 +24,7 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 	adminID := createTestUser(t, d, "adminuser", "adminpass")
 	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
 
-	adminToken, _, err := auth.GenerateToken(adminID, "admin", jwtSecret)
+	adminToken, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workerToken, _, err := auth.GenerateToken(workerID, "worker", jwtSecret)
+	workerToken, _, err := auth.GenerateToken(workerID, "worker", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}

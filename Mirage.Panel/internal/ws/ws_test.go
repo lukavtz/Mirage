@@ -2,6 +2,7 @@ package ws_test
 
 import (
 	"encoding/json"
+	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"strings"
@@ -18,12 +19,20 @@ import (
 
 const jwtSecret = "test-secret-12345"
 
+var testDialer = &websocket.Dialer{
+	HandshakeTimeout: 45 * time.Second,
+}
+
+func testHeader() http.Header {
+	return http.Header{"Origin": {"http://test"}}
+}
+
 func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 	t.Helper()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret))
+	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
-	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret)
+	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,8 +41,12 @@ func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 
 func connectWS(t *testing.T, srv *httptest.Server, token string) *websocket.Conn {
 	t.Helper()
-	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?token=" + token
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	conn, _, err := testDialer.Dial(url, testHeader())
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +210,7 @@ func TestHub_ConcurrentBroadcast(t *testing.T) {
 func TestServeWs_NoToken(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret))
+	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -211,7 +224,7 @@ func TestServeWs_NoToken(t *testing.T) {
 func TestServeWs_InvalidToken(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret))
+	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -229,14 +242,20 @@ func TestServeWs_ValidToken(t *testing.T) {
 	srv, token := setupTestServer(t, hub)
 	defer srv.Close()
 
-	conn, _, err := websocket.DefaultDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/ws?token="+token,
-		nil,
+	conn, _, err := testDialer.Dial(
+		"ws"+strings.TrimPrefix(srv.URL, "http")+"/ws",
+		testHeader(),
 	)
 	if err != nil {
 		t.Fatalf("expected successful upgrade, got: %v", err)
 	}
 	defer conn.Close()
+
+	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
 
 	msg := []byte(`{"type":"test","data":"hello"}`)
 	hub.Broadcast(msg)

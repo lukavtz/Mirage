@@ -25,7 +25,7 @@ func setupTestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string) 
 
 	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil)
 
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret)
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,13 +245,13 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 
 	jwtSecret := "test-secret"
 	userID := createTestUser(t, d, "broadcastuser", "testpass")
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret)
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret))
+	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	r.Group(func(r chi.Router) {
 		r.Use(api.AuthMiddleware(jwtSecret))
 		statsHandler := api.NewStatsHandler(d, hub)
@@ -261,12 +261,17 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?token=" + token
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	dialer := &websocket.Dialer{HandshakeTimeout: 45 * time.Second}
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	conn, _, err := dialer.Dial(wsURL, http.Header{"Origin": {"http://test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
+	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
+	if err != nil {
+		t.Fatal(err)
+	}
 	time.Sleep(50 * time.Millisecond)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/stats", nil)

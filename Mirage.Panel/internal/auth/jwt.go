@@ -17,8 +17,8 @@ type Claims struct {
 
 const TokenExpiry = 24 * time.Hour
 
-func GenerateToken(userID, role, secret string) (token string, expiresAt time.Time, err error) {
-	return GenerateTokenWithSession(userID, role, "", secret)
+func GenerateToken(userID, role, secret, sessionID string) (token string, expiresAt time.Time, err error) {
+	return GenerateTokenWithSession(userID, role, sessionID, secret)
 }
 
 func GenerateTokenWithSession(userID, role, sessionID, secret string) (token string, expiresAt time.Time, err error) {

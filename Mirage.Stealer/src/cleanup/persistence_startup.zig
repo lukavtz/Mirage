@@ -71,7 +71,7 @@ pub fn install(exe_path: []const u8, allocator: std.mem.Allocator) bool {
     for (tmp_fname[0..]) |c| {
         target_path.append(c) catch return false;
     }
-    var target_us = target_path.items;
+    const target_us = target_path.items;
     var path_ascii: [1024]u8 = undefined;
     var ascii_len: usize = 0;
     for (target_us) |w| {
@@ -80,7 +80,6 @@ pub fn install(exe_path: []const u8, allocator: std.mem.Allocator) bool {
             ascii_len += 1;
         }
     }
-    _ = ascii_len;
     return copyFileW(exe_path, path_ascii[0..ascii_len]);
 }
 

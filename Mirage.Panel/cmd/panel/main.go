@@ -116,7 +116,7 @@ func main() {
 	allowedOrigins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173")
 
 	tlsEnabled, _ := strconv.ParseBool(os.Getenv("TLS_ENABLED"))
-	useSelfSigned, _ := strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
+	_, _ = strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
 
 	if jwtSecret == "" {
 		secretFile := filepath.Join(filepath.Dir(dbPath), ".jwt_secret")

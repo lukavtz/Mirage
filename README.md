@@ -1,4 +1,8 @@
-# Mirage 🎭
+# Mirage
+
+<p align="center">
+  <img src="media/banner.svg" alt="Mirage Stealer" width="100%">
+</p>
 
 **Windows x64 information stealer written in Zig with a Go C2 panel.**
 

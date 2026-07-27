@@ -1,0 +1,10 @@
+CREATE TABLE IF NOT EXISTS api_keys (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    key_hash TEXT NOT NULL,
+    scope TEXT DEFAULT 'read',
+    rate_limit INTEGER DEFAULT 100,
+    created_at TEXT DEFAULT (datetime('now')),
+    last_used_at TEXT DEFAULT NULL
+);

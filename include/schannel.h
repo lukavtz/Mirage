@@ -4,6 +4,7 @@
 #include "ws2.h"
 #include <stdint.h>
 #include <stddef.h>
+#include <windows.h>
 
 typedef enum {
     TLS_OK = 0,
@@ -19,13 +20,14 @@ typedef enum {
 
 typedef struct {
     HANDLE   sock;
-    uint32_t cred_lower;
-    uint32_t cred_upper;
-    uint32_t ctx_lower;
-    uint32_t ctx_upper;
+    ULONG_PTR cred_lower;
+    ULONG_PTR cred_upper;
+    ULONG_PTR ctx_lower;
+    ULONG_PTR ctx_upper;
     uint32_t header_size;
     uint32_t trailer_size;
     uint32_t max_message;
+    int      connected;
 } tls_context_t;
 
 /*

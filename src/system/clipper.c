@@ -31,7 +31,6 @@ static int detect_btc(const char *text) {
     /* Legacy address: starts with 1 or 3, 26-62 chars */
     if (*p == '1' || *p == '3') {
         int len = 0;
-        const char *start = p;
         while (*p && !isspace((unsigned char)*p)) {
             if (!is_btc_char(*p)) return 0;
             len++;
@@ -59,7 +58,7 @@ static int detect_eth(const char *text) {
     const char *p = text;
     while (*p && isspace((unsigned char)*p)) p++;
 
-    if (p[0] != '0' || p[1] != 'x' && p[1] != 'X')
+    if (p[0] != '0' || (p[1] != 'x' && p[1] != 'X'))
         return 0;
     p += 2;
 

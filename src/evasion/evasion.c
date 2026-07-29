@@ -69,20 +69,6 @@ static inline uint64_t rdtsc(void) {
     return ((uint64_t)hi << 32) | lo;
 }
 
-/* ── Helper: resolve function from module by hash ────────── */
-
-static void* resolve_func(void* mod, const char* name) {
-    uint32_t h = mirage_encrypted_hash_func(name);
-    return mirage_get_function_by_hash(mod, h);
-}
-
-/* ── Helper: load module by hash ─────────────────────────── */
-
-static void* load_module(const char* name) {
-    uint32_t h = mirage_encrypted_hash_module(name);
-    return mirage_get_module_by_hash(h);
-}
-
 /* ── Helper: build UNICODE_STRING from ASCII ─────────────── */
 
 static void init_unicode_string(const char* s, size_t len, UNICODE_STRING* us, WCHAR* buf) {

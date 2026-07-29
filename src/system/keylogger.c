@@ -157,7 +157,6 @@ static int translate_unicode(UINT vk, UINT scan, BYTE *key_state, wchar_t *out, 
 
     (void)key_state;
 
-    UINT prev = 0;
     return ToUnicodeEx(vk, scan, kbd, out, out_max, 0, NULL);
 }
 

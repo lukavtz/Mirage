@@ -146,10 +146,14 @@ typedef struct IElevatorVtbl {
  *       3/35 → NCrypt: enc_aes_key(32) + IV(12) + CT(32) + TAG(16)
  */
 
-/* Placeholder keys — in production these are patched at build time */
-static const unsigned char FLAG1_KEY[32] = {0};
-static const unsigned char FLAG2_KEY[32] = {0};
-static const unsigned char FLAG3_XOR_KEY[32] = {0};
+/*
+ * Placeholder keys — in production these MUST be patched at build time
+ * (e.g. via objcopy --update-section or a binary patch script).
+ * If zero, Flag 1/3/35 decryption will fail silently.
+ */
+static const unsigned char FLAG1_KEY[32]      __attribute__((used)) = {0};
+static const unsigned char FLAG2_KEY[32]      __attribute__((used)) = {0};
+static const unsigned char FLAG3_XOR_KEY[32]  __attribute__((used)) = {0};
 
 /* ── NCrypt function pointers (lazy-loaded) ────────────────────── */
 

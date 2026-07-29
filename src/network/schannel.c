@@ -10,25 +10,53 @@
 #include <schannel.h>
 #pragma comment(lib, "secur32.lib")
 
-/* ── SChannel constants ────────────────────────────────────────── */
+/* ── SChannel constants (guard against mingw redefines) ─────────── */
 
+#ifndef SEC_E_OK
 #define SEC_E_OK                0x00000000L
+#endif
+#ifndef SEC_I_CONTINUE_NEEDED
 #define SEC_I_CONTINUE_NEEDED   0x00090312L
+#endif
+#ifndef SEC_I_INCOMPLETE_CREDS
 #define SEC_I_INCOMPLETE_CREDS  0x00090320L
+#endif
+#ifndef SEC_E_INCOMPLETE_MSG
 #define SEC_E_INCOMPLETE_MSG    ((HRESULT)0x80090318L)
-
+#endif
+#ifndef SECPKG_CRED_OUTBOUND
 #define SECPKG_CRED_OUTBOUND    0x00000002UL
+#endif
+#ifndef ISC_REQ_STREAM
 #define ISC_REQ_STREAM          0x00008000UL
+#endif
+#ifndef ISC_REQ_ALLOCATE_MEMORY
 #define ISC_REQ_ALLOCATE_MEMORY 0x00000100UL
+#endif
+#ifndef SCH_CRED_VERSION
 #define SCH_CRED_VERSION        4UL
+#endif
+#ifndef SECPKG_ATTR_STREAM_SIZES
 #define SECPKG_ATTR_STREAM_SIZES 0x0AUL
-
+#endif
+#ifndef SECBUFFER_EMPTY
 #define SECBUFFER_EMPTY         0UL
+#endif
+#ifndef SECBUFFER_DATA
 #define SECBUFFER_DATA          1UL
+#endif
+#ifndef SECBUFFER_TOKEN
 #define SECBUFFER_TOKEN         2UL
+#endif
+#ifndef SECBUFFER_EXTRA
 #define SECBUFFER_EXTRA         5UL
+#endif
+#ifndef SECBUFFER_STREAM_HEADER
 #define SECBUFFER_STREAM_HEADER 7UL
+#endif
+#ifndef SECBUFFER_STREAM_TRAILER
 #define SECBUFFER_STREAM_TRAILER 6UL
+#endif
 
 /* ── types ─────────────────────────────────────────────────────── */
 
@@ -215,13 +243,13 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
     ctx->header_size  = sizes.cbHeader;
     ctx->trailer_size = sizes.cbTrailer;
     ctx->max_message  = sizes.cbMaximumMessage;
+    ctx->connected    = 1;
     return TLS_OK;
 }
 
 tls_result_t tls_send(tls_context_t *ctx, const uint8_t *data, size_t len, size_t *out_sent) {
     if (!sec_ensure_loaded()) return TLS_ERR_ENCRYPT_FAILED;
 
-    CredHandle cred = {ctx->cred_lower, ctx->cred_upper};
     CtxtHandle ctxt = {ctx->ctx_lower,  ctx->ctx_upper};
 
     uint32_t hdr  = ctx->header_size;
@@ -288,7 +316,6 @@ tls_result_t tls_send(tls_context_t *ctx, const uint8_t *data, size_t len, size_
 tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *out_read) {
     if (!sec_ensure_loaded()) return TLS_ERR_DECRYPT_FAILED;
 
-    CredHandle cred = {ctx->cred_lower, ctx->cred_upper};
     CtxtHandle ctxt = {ctx->ctx_lower,  ctx->ctx_upper};
 
     unsigned char recv_buf[0x10000];
@@ -357,7 +384,8 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
 }
 
 void tls_disconnect(tls_context_t *ctx) {
-    if (!sec_ensure_loaded()) return;
+    if (!ctx->connected) return;
+    if (!sec_ensure_loaded()) { memset(ctx, 0, sizeof(*ctx)); return; }
     CredHandle cred = {ctx->cred_lower, ctx->cred_upper};
     CtxtHandle ctxt = {ctx->ctx_lower,  ctx->ctx_upper};
     fn_DeleteCtx(&ctxt);

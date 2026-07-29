@@ -29,8 +29,10 @@
 #define TRUE  1
 #endif
 
-/* HKEY is defined in windows.h */
+/* HKEY is defined in windows.h; REG_SZ in winnt.h */
+#ifndef REG_SZ
 #define REG_SZ 1
+#endif
 
 #define PERSIST_VAL_NAME     "MirageUpdate"
 #define PERSIST_STARTUP_FILE "WindowsHelper.exe"

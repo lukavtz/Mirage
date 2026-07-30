@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="420" viewBox="0 0 1200 420"
+     role="img" aria-labelledby="hero-title hero-desc">
+  <title id="hero-title">zialfi — C11 Windows Stealer</title>
+  <desc id="hero-desc">C11 Windows information stealer with indirect syscalls, PEB walk, full evasion suite, and Go+React C2 panel. Ported from Mirage Zig.</desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0b0f"/>
+      <stop offset="100%" stop-color="#0d0e14"/>
+    </linearGradient>
+    <linearGradient id="accent-bar" x1="0" y1="0" x2="1200" y2="0">
+      <stop offset="0%" stop-color="#f59e0b"/>
+      <stop offset="100%" stop-color="#ef4444"/>
+    </linearGradient>
+    <linearGradient id="glow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="420" fill="url(#bg)"/>
+  <rect x="0" y="0" width="1200" height="3" fill="url(#accent-bar)"/>
+  <rect x="0" y="0" width="600" height="200" fill="url(#glow)"/>
+
+  <g transform="translate(56, 40)">
+    <rect x="0" y="0" width="142" height="28" rx="14" fill="#f59e0b" fill-opacity="0.15"/>
+    <text x="71" y="18" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13" font-weight="600" fill="#f59e0b">C11 · STEALER</text>
+
+    <text x="0" y="80" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="64" font-weight="700" fill="#e2e4ea" letter-spacing="-1.5">zialfi</text>
+
+    <text x="0" y="120" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="24" font-weight="500" fill="#9ca3af">C11 Windows Stealer · Indirect Syscalls · C2 Panel</text>
+
+    <text x="0" y="152" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="16" fill="#6b7280">Порт Mirage (Zig → C11). 39K LOC. 86/86 тестов. 0 детектов Defender.</text>
+
+    <g transform="translate(0, 186)">
+      <rect x="0" y="0" width="104" height="24" rx="4" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <text x="52" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#6b7280">⚡ 209 KB</text>
+
+      <rect x="114" y="0" width="114" height="24" rx="4" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <text x="171" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#6b7280">⊞ Windows x64</text>
+
+      <rect x="238" y="0" width="130" height="24" rx="4" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <text x="303" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#22c55e">✔ 86/86 Tests</text>
+
+      <rect x="378" y="0" width="142" height="24" rx="4" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <text x="449" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" fill="#22c55e">🛡 0 Defender</text>
+    </g>
+
+    <g transform="translate(0, 234)">
+      <rect x="0" y="0" width="484" height="120" rx="8" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <rect x="0" y="0" width="484" height="28" rx="8" fill="#12141a"/>
+      <rect x="0" y="20" width="484" height="8" fill="#12141a"/>
+      <circle cx="16" cy="14" r="4" fill="#ef4444" fill-opacity="0.6"/>
+      <circle cx="32" cy="14" r="4" fill="#f59e0b" fill-opacity="0.6"/>
+      <circle cx="48" cy="14" r="4" fill="#22c55e" fill-opacity="0.6"/>
+      <text x="70" y="18" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#6b7280">asm/mirage_stubs_v2.asm — Indirect Syscall</text>
+
+      <text font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+        <tspan x="16" y="52" fill="#6366f1">syscall_nop:</tspan>
+        <tspan x="16" dy="20" fill="#e2e4ea">  mov    r10, rcx</tspan>
+        <tspan x="16" dy="20" fill="#e2e4ea">  mov    eax, [</tspan><tspan fill="#f59e0b">ssn</tspan><tspan fill="#e2e4ea">]</tspan>
+        <tspan x="16" dy="20" fill="#e2e4ea">  xor    eax, 0x</tspan><tspan fill="#f59e0b">A3B5C7D9</tspan>
+        <tspan x="16" dy="20" fill="#e2e4ea">  </tspan><tspan fill="#f59e0b">syscall</tspan>
+        <tspan x="16" dy="20" fill="#e2e4ea">  ret</tspan>
+      </text>
+    </g>
+  </g>
+
+  <g transform="translate(656, 40)">
+    <text x="0" y="18" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" font-weight="600" fill="#6b7280">COVERAGE</text>
+
+    <g transform="translate(0, 34)" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="13">
+      <rect x="0" y="0" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="18" r="4" fill="#22c55e"/>
+      <text x="28" y="23" fill="#e2e4ea">Browsers</text>
+      <text x="236" y="23" text-anchor="end" fill="#6b7280">58+10</text>
+
+      <rect x="0" y="44" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="62" r="4" fill="#22c55e"/>
+      <text x="28" y="67" fill="#e2e4ea">Wallets</text>
+      <text x="236" y="67" text-anchor="end" fill="#6b7280">134</text>
+
+      <rect x="0" y="88" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="106" r="4" fill="#22c55e"/>
+      <text x="28" y="111" fill="#e2e4ea">Messengers</text>
+      <text x="236" y="111" text-anchor="end" fill="#6b7280">14</text>
+
+      <rect x="0" y="132" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="150" r="4" fill="#22c55e"/>
+      <text x="28" y="155" fill="#e2e4ea">VPN Clients</text>
+      <text x="236" y="155" text-anchor="end" fill="#6b7280">18</text>
+
+      <rect x="0" y="176" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="194" r="4" fill="#22c55e"/>
+      <text x="28" y="199" fill="#e2e4ea">2FA Apps</text>
+      <text x="236" y="199" text-anchor="end" fill="#6b7280">7</text>
+
+      <rect x="0" y="220" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="238" r="4" fill="#22c55e"/>
+      <text x="28" y="243" fill="#e2e4ea">Password Managers</text>
+      <text x="236" y="243" text-anchor="end" fill="#6b7280">8</text>
+
+      <rect x="0" y="264" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="282" r="4" fill="#22c55e"/>
+      <text x="28" y="287" fill="#e2e4ea">Gaming</text>
+      <text x="236" y="287" text-anchor="end" fill="#6b7280">Steam+MC+RBX</text>
+
+      <rect x="0" y="308" width="244" height="36" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+      <circle cx="16" cy="326" r="4" fill="#22c55e"/>
+      <text x="28" y="331" fill="#e2e4ea">Evasion Modules</text>
+      <text x="236" y="331" text-anchor="end" fill="#6b7280">12</text>
+    </g>
+  </g>
+</svg>

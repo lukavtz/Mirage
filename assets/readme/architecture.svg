@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="380" viewBox="0 0 1200 380"
+     role="img" aria-labelledby="arch-title arch-desc">
+  <title id="arch-title">zialfi — Architecture Pipeline</title>
+  <desc id="arch-desc">Execution pipeline: Entry → Collection → Packaging → Exfiltration → C2 Panel</desc>
+
+  <defs>
+    <linearGradient id="arch-bg" x1="0" y1="0" x2="1200" y2="380" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0b0f"/>
+      <stop offset="100%" stop-color="#0d0e14"/>
+    </linearGradient>
+    <marker id="arrow" markerWidth="8" markerHeight="8" refX="8" refY="4" orient="auto">
+      <path d="M0,0 L8,4 L0,8 Z" fill="#3b82f6"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="380" fill="url(#arch-bg)"/>
+
+  <!-- Title -->
+  <text x="56" y="40" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="20" font-weight="700" fill="#e2e4ea">Pipeline Architecture</text>
+  <text x="56" y="62" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" fill="#6b7280">Execution flow: от запуска до доставки данных на C2</text>
+
+  <!-- Phase 1: Entry -->
+  <g transform="translate(56, 90)">
+    <rect x="0" y="0" width="160" height="100" rx="8" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+    <rect x="0" y="0" width="160" height="24" rx="8" fill="#6366f1" fill-opacity="0.15"/>
+    <rect x="0" y="16" width="160" height="8" fill="#12141a"/>
+    <text x="80" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="600" fill="#6366f1">ENTRY</text>
+    <text x="80" y="48" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">main()</text>
+    <text x="80" y="66" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#6b7280">Anti-analysis</text>
+    <text x="80" y="82" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#6b7280">UAC Bypass</text>
+    <text x="80" y="96" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#6b7280">PEB Hide</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="216" y1="140" x2="260" y2="140" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Phase 2: Collection -->
+  <g transform="translate(268, 90)">
+    <rect x="0" y="0" width="200" height="100" rx="8" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+    <rect x="0" y="0" width="200" height="24" rx="8" fill="#f59e0b" fill-opacity="0.15"/>
+    <rect x="0" y="16" width="200" height="8" fill="#12141a"/>
+    <text x="100" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="600" fill="#f59e0b">COLLECTION</text>
+    <text x="100" y="44" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">Browsers</text>
+    <text x="100" y="60" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">Wallets · VPN · 2FA</text>
+    <text x="100" y="76" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">Messengers · Gaming</text>
+    <text x="100" y="92" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="11" fill="#6b7280">Syscalls · SQLite · DPAPI</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="468" y1="140" x2="512" y2="140" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Phase 3: Package -->
+  <g transform="translate(520, 90)">
+    <rect x="0" y="0" width="160" height="100" rx="8" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+    <rect x="0" y="0" width="160" height="24" rx="8" fill="#ef4444" fill-opacity="0.15"/>
+    <rect x="0" y="16" width="160" height="8" fill="#12141a"/>
+    <text x="80" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="600" fill="#ef4444">PACKAGE</text>
+    <text x="80" y="48" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">Archive (ZIP)</text>
+    <text x="80" y="66" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">ChaCha20-Poly1305</text>
+    <text x="80" y="84" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">Encrypt</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="680" y1="140" x2="724" y2="140" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Phase 4: Exfil -->
+  <g transform="translate(732, 90)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+    <rect x="0" y="0" width="180" height="24" rx="8" fill="#f59e0b" fill-opacity="0.15"/>
+    <rect x="0" y="16" width="180" height="8" fill="#12141a"/>
+    <text x="90" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="600" fill="#f59e0b">EXFILTRATION</text>
+    <text x="90" y="48" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">SChannel TLS</text>
+    <text x="90" y="66" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">HTTP Upload</text>
+    <text x="90" y="84" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">SOCKS5 Proxy</text>
+  </g>
+
+  <!-- Arrow -->
+  <line x1="912" y1="140" x2="956" y2="140" stroke="#3b82f6" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- Phase 5: C2 -->
+  <g transform="translate(964, 90)">
+    <rect x="0" y="0" width="180" height="100" rx="8" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+    <rect x="0" y="0" width="180" height="24" rx="8" fill="#22c55e" fill-opacity="0.15"/>
+    <rect x="0" y="16" width="180" height="8" fill="#12141a"/>
+    <text x="90" y="16" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="600" fill="#22c55e">C2 PANEL</text>
+    <text x="90" y="48" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">Go + React</text>
+    <text x="90" y="66" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">SQLite + JWT</text>
+    <text x="90" y="84" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="13" fill="#e2e4ea">WebSocket</text>
+  </g>
+
+  <!-- Evasion layer (below the pipeline) -->
+  <g transform="translate(56, 220)">
+    <rect x="0" y="0" width="1088" height="120" rx="8" fill="#12141a" stroke="#1f2230" stroke-width="1" stroke-dasharray="4"/>
+    <text x="544" y="22" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" font-weight="600" fill="#6b7280">EVASION · BYPASS · LOW-LEVEL</text>
+
+    <!-- Smaller sub-modules -->
+    <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">
+      <rect x="20" y="36" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="80" y="54" text-anchor="middle" fill="#e2e4ea">AMSI Patch</text>
+
+      <rect x="152" y="36" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="212" y="54" text-anchor="middle" fill="#e2e4ea">ETW Bypass</text>
+
+      <rect x="284" y="36" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="344" y="54" text-anchor="middle" fill="#e2e4ea">PEB Hide</text>
+
+      <rect x="416" y="36" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="476" y="54" text-anchor="middle" fill="#e2e4ea">Defender Disable</text>
+
+      <rect x="548" y="36" width="140" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="618" y="54" text-anchor="middle" fill="#e2e4ea">Indirect Syscalls</text>
+
+      <rect x="700" y="36" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="760" y="54" text-anchor="middle" fill="#e2e4ea">Export Resolve</text>
+
+      <rect x="832" y="36" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="892" y="54" text-anchor="middle" fill="#e2e4ea">Hash Resolution</text>
+
+      <rect x="964" y="36" width="104" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="1016" y="54" text-anchor="middle" fill="#e2e4ea">Persistence</text>
+
+      <!-- Bottom row -->
+      <rect x="20" y="76" width="140" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="90" y="94" text-anchor="middle" fill="#e2e4ea">Anti-Analysis (15 checks)</text>
+
+      <rect x="172" y="76" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="232" y="94" text-anchor="middle" fill="#e2e4ea">Self-Delete</text>
+
+      <rect x="304" y="76" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="364" y="94" text-anchor="middle" fill="#e2e4ea">Temp Wipe</text>
+
+      <rect x="436" y="76" width="150" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="511" y="94" text-anchor="middle" fill="#e2e4ea">PEB Walk (module hash)</text>
+
+      <rect x="598" y="76" width="140" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="668" y="94" text-anchor="middle" fill="#e2e4ea">App-Bound Decrypt</text>
+
+      <rect x="750" y="76" width="120" height="28" rx="4" fill="#08090c" stroke="#1f2230" stroke-width="1"/>
+      <text x="810" y="94" text-anchor="middle" fill="#e2e4ea">DPAPI Unprotect</text>
+    </g>
+  </g>
+
+  <!-- Cleanup phase (below entry) -->
+  <g transform="translate(56, 230)">
+    <rect x="0" y="100" width="160" height="40" rx="6" fill="#12141a" stroke="#1f2230" stroke-width="1"/>
+    <text x="80" y="124" text-anchor="middle" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="12" fill="#6b7280">Cleanup · Self-Delete</text>
+  </g>
+
+  <!-- Connection lines from entry to cleanup -->
+  <path d="M136,190 L136,220 L90,220 L90,230" stroke="#1f2230" stroke-width="1" fill="none" stroke-dasharray="3"/>
+  <path d="M136,190 L136,220 L180,220 L180,230" stroke="#1f2230" stroke-width="1" fill="none" stroke-dasharray="3"/>
+</svg>

@@ -1,81 +1,57 @@
-# ── OS ──
-.DS_Store
-Thumbs.db
-Desktop.ini
-*.swp
-*.swo
-*~
-
-# ── IDE / Editor ──
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-.vs/
-*.user
-*.suo
-
-# ── Agent / AI tools ──
-.opencode/
-.codegraph/
-.codebase-memory/
-.claude/
-.cursor/
-.agents/
-.belief_map.sexp
-
-# ── Build artifacts ──
-zig-out/
-.zig-cache/
-.zig-cache/
-target/
-bin/
-obj/
-
-# ── Zig build ──
+# Build artifacts
+*.o
 *.exe
 *.obj
 *.pdb
 *.ilk
 *.exp
 *.lib
-*.dll
-*.pdb
 
-# ── Go build ──
-vendor/
+# Binaries in root
+/mirage.exe
+/mirage_stripped.exe
+/mirage_test.exe
+tests/*.exe
+tests/*.o
 
-# ── Node / frontend ──
+# Cache
+.zig-cache/
+zig-out/
+.ziglocal
 node_modules/
-frontend/dist/
-cmd/panel/frontend/dist/
 
-# ── Python ──
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.venv/
-venv/
-
-# ── Data / logs ──
+# Local DB
 *.db
-*.db-shm
 *.db-wal
-*.log
-data/
-test_logs/
-panel_output.log
-panel_error.log
+*.db-shm
 
-# ── Env / secrets ──
-.env
-.env.local
-*.pem
-*.key
-cert.pem
+# IDE/OS
+.vscode/
+.idea/
+*.suo
+*.user
+Thumbs.db
+.DS_Store
+*~
 
-# ── Test / temp ──
-tmp/
-temp/
-*.tmp
+# CodeGraph per-machine index
+.codegraph/
+
+# Obsolete project directories
+/Mirage.Stealer/
+/Mirage.Panel/
+
+# Build output
+build/
+
+# Test binaries (Linux native)
+tests/test_crypto
+tests/test_sqlite
+tests/test_peb
+tests/test_chromium
+tests/test_wallets
+tests/test_messengers
+tests/test_network
+tests/test_evasion
+tests/test_hash
+tests/test_e2e

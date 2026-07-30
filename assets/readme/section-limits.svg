@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="1200" height="100" viewBox="0 0 1200 100"
+     role="img" aria-labelledby="s-limits">
+  <title id="s-limits">Limitations</title>
+  <rect width="1200" height="100" fill="#0a0b0f"/>
+  <rect x="56" y="20" width="3" height="48" rx="1.5" fill="#f59e0b"/>
+  <text x="76" y="52" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="28" font-weight="700" fill="#e2e4ea">Limitations</text>
+  <text x="76" y="74" font-family="-apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="14" fill="#6b7280">Известные ограничения и обходные пути</text>
+</svg>

@@ -11,7 +11,7 @@
 
 /* ── Disable Windows Defender via registry ──────────────────── */
 
-int mirage_defender_disable(void) {
+mirage_defender_result mirage_disable_defender(void) {
     HKEY hKey;
     LONG result;
     

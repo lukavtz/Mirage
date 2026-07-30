@@ -125,20 +125,20 @@ int mirage_anti_analysis_should_exit(mirage_analysis_result result) {
 /* ── Print result ────────────────────────────────────────── */
 
 void mirage_anti_analysis_print(mirage_analysis_result result) {
-    printf("  Score: %u/%u\n", result.score, EVASION_SCORE_THRESHOLD);
+    dbg_printf("  Score: %u/%u\n", result.score, EVASION_SCORE_THRESHOLD);
 
-    if (result.flags.ram_low)         printf("    - ram_low detected\n");
-    if (result.flags.cpu_few)         printf("    - cpu_few detected\n");
-    if (result.flags.vm_registry)     printf("    - vm_registry detected\n");
-    if (result.flags.timing_anomaly)  printf("    - timing_anomaly detected\n");
-    if (result.flags.debugger)        printf("    - debugger detected\n");
-    if (result.flags.small_screen)    printf("    - small_screen detected\n");
-    if (result.flags.process_list)    printf("    - process_list detected\n");
-    if (result.flags.disk_small)      printf("    - disk_small detected\n");
-    if (result.flags.uptime_low)      printf("    - uptime_low detected\n");
-    if (result.flags.mouse_static)    printf("    - mouse_static detected\n");
-    if (result.flags.geo_cis)         printf("    - geo_cis detected\n");
-    if (result.flags.hosting_ip)      printf("    - hosting_ip detected\n");
+    if (result.flags.ram_low)         dbg_printf("    - ram_low detected\n");
+    if (result.flags.cpu_few)         dbg_printf("    - cpu_few detected\n");
+    if (result.flags.vm_registry)     dbg_printf("    - vm_registry detected\n");
+    if (result.flags.timing_anomaly)  dbg_printf("    - timing_anomaly detected\n");
+    if (result.flags.debugger)        dbg_printf("    - debugger detected\n");
+    if (result.flags.small_screen)    dbg_printf("    - small_screen detected\n");
+    if (result.flags.process_list)    dbg_printf("    - process_list detected\n");
+    if (result.flags.disk_small)      dbg_printf("    - disk_small detected\n");
+    if (result.flags.uptime_low)      dbg_printf("    - uptime_low detected\n");
+    if (result.flags.mouse_static)    dbg_printf("    - mouse_static detected\n");
+    if (result.flags.geo_cis)         dbg_printf("    - geo_cis detected\n");
+    if (result.flags.hosting_ip)      dbg_printf("    - hosting_ip detected\n");
 }
 
 #endif /* ENABLE_ANTI_ANALYSIS */

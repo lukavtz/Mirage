@@ -8,6 +8,7 @@
  */
 
 #include "chrome_crypto.h"
+#include "config.h"
 #include "utils/base64.h"
 #include <stdlib.h>
 #include <string.h>
@@ -149,7 +150,7 @@ int chrome_decrypt_dpapi_key(const unsigned char *encrypted_key, size_t len,
         offset = 5;
 
     if (encrypted_key[offset] != 0x01) {
-        printf("[!] chrome_decrypt_dpapi_key: version mismatch: 0x%02x (expected 0x01)\n", encrypted_key[offset]);
+        dbg_printf("[!] chrome_decrypt_dpapi_key: version mismatch: 0x%02x (expected 0x01)\n", encrypted_key[offset]);
         return -1;
     }
 
@@ -158,7 +159,7 @@ int chrome_decrypt_dpapi_key(const unsigned char *encrypted_key, size_t len,
     input.pbData = (BYTE *)(encrypted_key + offset + 1);
 
     if (!CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
-        printf("[!] CryptUnprotectData failed: GetLastError=%lu\n", GetLastError());
+        dbg_printf("[!] CryptUnprotectData failed: GetLastError=%lu\n", GetLastError());
         return -1;
     }
 

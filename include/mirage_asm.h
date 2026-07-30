@@ -17,6 +17,9 @@ extern "C" {
 /* ── PEB access (asm/mirage_stubs.asm) ────────────────────── */
 PVOID getPeb(void);
 
+/* ── Dynamic SSN XOR key (set at runtime by engine.c) ──────── */
+extern uint32_t ssn_xor_key;
+
 /* ── SSN storage (written by C engine, read by ASM stubs) ─── */
 extern uint32_t ssn_NtAllocateVirtualMemory;
 extern uint32_t ssn_NtProtectVirtualMemory;

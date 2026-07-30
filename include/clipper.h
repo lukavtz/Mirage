@@ -26,4 +26,9 @@ int clipper_extract_address(const char *text, char *addr_buf, size_t buflen);
 int clipper_replace(const char *original, const char *replacement,
                     char *output, size_t outlen);
 
+/* Get replacement address for detected address type.
+ * type: 1=BTC, 2=ETH, 3=LTC. Copies replacement to buf.
+ * Returns 0 on success, -1 on error. */
+int clipper_get_replacement(int type, char *buf, size_t buf_len);
+
 #endif

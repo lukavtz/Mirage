@@ -26,6 +26,8 @@ getPeb:
 
 section .data
 
+extern ssn_xor_key
+
 %macro DEF_SSN 1
     global ssn_%1
     ssn_%1: dd 0
@@ -88,7 +90,7 @@ section .text
     %1:
         mov r10, rcx
         mov eax, dword [rel ssn_%2]
-        xor eax, 0xA3B5C7D9
+        xor eax, dword [rel ssn_xor_key]
         syscall
         ret
 %endmacro

@@ -1,3 +1,0 @@
-2026/07/15 00:10:26 INFO starting Mirage Panel port=8080 db=data\mirage.db provider=sqlite tls=false allowed_origins=*
-2026/07/15 00:10:27 INFO loaded stealer executable path=..\Mirage.Stealer\zig-out\bin\Mirage.exe size=1210368
-2026/07/15 00:10:27 INFO listening addr=:8080 scheme=http

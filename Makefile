@@ -59,7 +59,9 @@ SRCS = src/main.c \
 
 ASM_SRCS = asm/mirage_stubs_v2.asm
 
-OBJS = $(SRCS:.c=.o) $(ASM_SRCS:.asm=.o)
+OBJ_DIR = build
+OBJS = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(SRCS)) \
+       $(patsubst asm/%.asm, $(OBJ_DIR)/asm/%.o, $(ASM_SRCS))
 TARGET = mirage.exe
 
 .PHONY: all clean test
@@ -74,14 +76,16 @@ $(TARGET): $(OBJS)
 	x86_64-w64-mingw32-strip --strip-all $@
 	-$(shell command -v upx >/dev/null && echo "upx --best \$@" || true)
 
-%.o: %.c
+$(OBJ_DIR)/%.o: src/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-%.o: %.asm
+$(OBJ_DIR)/asm/%.o: asm/%.asm
+	@mkdir -p $(dir $@)
 	$(NASM) -f win64 $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -rf $(OBJ_DIR) $(TARGET)
 
 test-hash: tests/test_hash.c src/types/hash.c include/hash.h include/config.h
 	$(CC) -Wall -Wextra -O2 -Iinclude -c src/types/hash.c -o src/types/hash.o

@@ -1,0 +1,45 @@
+# Build artifacts
+*.o
+*.exe
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+
+# Binaries in root
+/mirage.exe
+/mirage_stripped.exe
+/mirage_test.exe
+tests/*.exe
+tests/*.o
+
+# Cache
+.zig-cache/
+zig-out/
+.ziglocal
+node_modules/
+
+# Local DB
+*.db
+*.db-wal
+*.db-shm
+
+# IDE/OS
+.vscode/
+.idea/
+*.suo
+*.user
+Thumbs.db
+.DS_Store
+*~
+
+# CodeGraph per-machine index
+.codegraph/
+
+# Obsolete project directories
+/Mirage.Stealer/
+/Mirage.Panel/
+
+# Build output
+build/

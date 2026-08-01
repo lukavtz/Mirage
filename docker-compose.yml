@@ -1,0 +1,26 @@
+services:
+  panel:
+    build: ./panel
+    ports:
+      - "8080:8080"
+    volumes:
+      - panel-data:/app/data
+    environment:
+      - DB_PATH=data/mirage.db
+      - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in .env}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-https://panel.example.com}
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+volumes:
+  panel-data:
+  caddy-data:
+  caddy-config:

@@ -42,10 +42,22 @@ func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = "50"
 	}
 
-	rows, err := h.db.Query(
-		"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
-		sinceFormatted, limit,
-	)
+	// Private conversation model: a non-admin sees only its own messages plus
+	// admin replies; admins see the full feed. Claims==nil (no auth middleware
+	// on the route, unit tests) keeps the unscoped feed, matching List/Detail.
+	claims := middleware.ClaimsFromContext(r.Context())
+	var rows *sql.Rows
+	if claims != nil && claims.Role != "admin" {
+		rows, err = h.db.Query(
+			"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE (user_id = ? OR user_id IN (SELECT id FROM users WHERE role = 'admin')) AND created_at > ? ORDER BY created_at DESC LIMIT ?",
+			claims.UserID, sinceFormatted, limit,
+		)
+	} else {
+		rows, err = h.db.Query(
+			"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
+			sinceFormatted, limit,
+		)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query messages")
 		return
@@ -110,7 +122,16 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.hub.BroadcastChat(m)
+	// Deliver to the author's own channel (echo) and, for workers, to the
+	// admins' channel. Admin replies are not pushed to clients in real time —
+	// there is no chat UI and no target_user_id yet; clients pick them up on
+	// the next REST List.
+	if claims.Role == "admin" {
+		h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+	} else {
+		h.hub.Broadcast("chat:"+claims.UserID, ws.NewChatEvent(m))
+		h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+	}
 
 	writeJSON(w, http.StatusCreated, m)
 }

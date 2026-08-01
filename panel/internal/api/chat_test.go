@@ -216,3 +216,66 @@ func TestChat_ListBadSince(t *testing.T) {
 		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestChat_ListTenantIsolation(t *testing.T) {
+	d := openTestDB(t)
+	handler := api.NewChatHandler(d, nil)
+
+	userA, _ := workerToken(t, d, "worker-a")
+	userB, _ := workerToken(t, d, "worker-b")
+	adminID := createTestUser(t, d, "chatadmin", "pass")
+
+	insert := func(userID, username, message string) {
+		t.Helper()
+		_, err := d.Exec(
+			"INSERT INTO chat_messages (id, user_id, username, message, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+			uuid.New().String(), userID, username, message,
+		)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	insert(userA, "worker-a", "hello from A")
+	insert(userB, "worker-b", "hello from B")
+	insert(adminID, "chatadmin", "admin reply")
+
+	r := chi.NewRouter()
+	r.Get("/api/chat/messages", handler.List)
+
+	listAs := func(claims *auth.Claims) []map[string]any {
+		t.Helper()
+		q := url.Values{}
+		q.Set("since", time.Now().UTC().Add(-1*time.Hour).Format(time.RFC3339))
+		req := httptest.NewRequest(http.MethodGet, "/api/chat/messages?"+q.Encode(), nil)
+		if claims != nil {
+			req = req.WithContext(middleware.ContextWithClaims(req.Context(), claims))
+		}
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var messages []map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &messages); err != nil {
+			t.Fatal(err)
+		}
+		return messages
+	}
+
+	// worker A sees only its own messages plus admin messages
+	msgsA := map[string]bool{}
+	for _, m := range listAs(&auth.Claims{UserID: userA, Role: "worker"}) {
+		msgsA[m["message"].(string)] = true
+	}
+	if !msgsA["hello from A"] || !msgsA["admin reply"] {
+		t.Errorf("worker A should see own + admin messages, got %v", msgsA)
+	}
+	if msgsA["hello from B"] {
+		t.Errorf("worker A must not see worker B's message, got %v", msgsA)
+	}
+
+	// admin sees everything
+	if got := len(listAs(&auth.Claims{UserID: adminID, Role: "admin"})); got != 3 {
+		t.Errorf("admin should see all 3 messages, got %d", got)
+	}
+}

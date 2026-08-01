@@ -158,7 +158,12 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 			SessionsToday:  resp.Sessions.Today,
 			PasswordsTotal: resp.Passwords.Total,
 		})
-		h.hub.Broadcast("stats", event)
+		// Dashboard already computes owner-scoped stats; deliver them on the
+		// caller's per-user channel. Admins see global stats via their own
+		// channel — no separate stats:all needed.
+		if uid := claimsUserID(r); uid != "" {
+			h.hub.Broadcast("stats:"+uid, event)
+		}
 	}
 }
 

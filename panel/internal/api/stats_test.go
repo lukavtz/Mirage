@@ -300,7 +300,7 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	if err := json.Unmarshal(msg, &ev); err != nil {
 		t.Fatal(err)
 	}
-	if ev.Type != "stats" {
-		t.Errorf("expected type 'stats', got %q", ev.Type)
+	if ev.Type != "stats_update" {
+		t.Errorf("expected type 'stats_update', got %q", ev.Type)
 	}
 }

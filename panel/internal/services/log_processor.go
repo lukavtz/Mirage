@@ -389,11 +389,17 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 
 	if p.hub != nil {
-		p.hub.Broadcast("sessions", ws.NewSessionEvent(ws.NewSessionPayload{
+		ev := ws.NewSessionEvent(ws.NewSessionPayload{
 			ID:             sessionID,
 			CountryCode:    meta["country"],
 			PasswordsCount: len(passwords),
-		}))
+		})
+		// admins see every new session; the owning tenant sees its own.
+		// Sessions without an owner (legacy) reach admins only.
+		p.hub.Broadcast("sessions:all", ev)
+		if ownerID != "" {
+			p.hub.Broadcast("sessions:"+ownerID, ev)
+		}
 	}
 
 	return sessionID, nil

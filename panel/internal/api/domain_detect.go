@@ -97,6 +97,12 @@ func (h *DomainDetectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
+	// tenant guard: workers may only auto-tag their own sessions (admins bypass)
+	if !sessionOwnedBy(h.d, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	rules, err := h.d.Query("SELECT id, domain, tag, color FROM domain_detect")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query rules")

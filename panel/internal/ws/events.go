@@ -36,7 +36,7 @@ func newEvent(eventType string, data interface{}) []byte {
 }
 
 func NewStatsEvent(payload StatsPayload) []byte {
-	return newEvent("stats", payload)
+	return newEvent("stats_update", payload)
 }
 
 func NewSessionEvent(payload NewSessionPayload) []byte {

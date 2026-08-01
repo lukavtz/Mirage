@@ -65,10 +65,13 @@ func ServeWs(hub *Hub, jwtSecret string, allowedOrigins string) http.HandlerFunc
 			send:   make(chan []byte, sendBufSize),
 			userID: claims.UserID,
 			channels: []string{
-				"chat",
-				"sessions",
-				"stats",
+				"sessions:" + claims.UserID,
+				"stats:" + claims.UserID,
+				"chat:" + claims.UserID,
 			},
+		}
+		if claims.Role == "admin" {
+			client.channels = append(client.channels, "sessions:all", "chat:all")
 		}
 
 		hub.register <- client

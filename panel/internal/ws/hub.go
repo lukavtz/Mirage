@@ -61,7 +61,3 @@ func (h *Hub) Broadcast(channel string, message []byte) {
 	h.broadcast <- &channelMessage{channel: channel, data: message}
 }
 
-func (h *Hub) BroadcastChat(msg ChatMessage) {
-	// ponytail: global chat channel, all authenticated users receive all messages
-	h.Broadcast("chat", NewChatEvent(msg))
-}

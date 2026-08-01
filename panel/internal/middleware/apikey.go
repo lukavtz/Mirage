@@ -34,7 +34,7 @@ func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			apiKey := r.Header.Get("X-API-Key")
 			if apiKey == "" {
-				next.ServeHTTP(w, r)
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "API key required"})
 				return
 			}
 

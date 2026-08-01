@@ -127,7 +127,7 @@ const (
 	maxFileCount   = 500
 )
 
-func (p *LogProcessor) Process(archive []byte, metadataJSON string) (string, error) {
+func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID string) (string, error) {
 	if len(archive) > maxArchiveSize {
 		return "", errors.New("archive too large")
 	}
@@ -298,9 +298,9 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string) (string, err
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, '', ?, ?, ?, ?, ?, datetime('now'))`,
-		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"])
+	_, err = tx.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
+		VALUES (?, '', ?, ?, ?, ?, ?, ?, datetime('now'))`,
+		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"], ownerID)
 	if err != nil {
 		return "", err
 	}

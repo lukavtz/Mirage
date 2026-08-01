@@ -28,6 +28,11 @@ type Note struct {
 func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	rows, err := h.db.Query(
 		"SELECT id, session_id, content, created_by, created_at FROM notes WHERE session_id = ? ORDER BY created_at DESC",
 		sessionID,
@@ -52,6 +57,11 @@ func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
+
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
 	var req struct {
 		Content string `json:"content"`
@@ -89,6 +99,17 @@ func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 func (h *NotesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	var sessionID string
+	err := h.db.QueryRow("SELECT session_id FROM notes WHERE id = ?", id).Scan(&sessionID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "note not found")
+		return
+	}
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
 	result, err := h.db.Exec("DELETE FROM notes WHERE id = ?", id)
 	if err != nil {

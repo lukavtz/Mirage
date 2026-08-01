@@ -1,0 +1,7 @@
+panel.example.com {
+    reverse_proxy panel:8080
+    encode gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    }
+}

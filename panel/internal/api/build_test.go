@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/services"
 )
@@ -337,5 +338,76 @@ func TestBuild_ListByTag(t *testing.T) {
 	}
 	if builds[0]["build_tag"] != "campaign-a" {
 		t.Errorf("build_tag = %v, want campaign-a", builds[0]["build_tag"])
+	}
+}
+
+
+func insertBuildWithUser(t *testing.T, d *sql.DB, userID string) string {
+	t.Helper()
+	buildID := uuid.New().String()
+	_, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
+		VALUES (?, 'hash', 4, x'01020304', 'sha', 'tag', '{}', ?)`, buildID, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return buildID
+}
+
+func TestBuildList_OwnerIsolation(t *testing.T) {
+	d := openTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+
+	tokenA, userA := workerToken(t, d, "builda")
+	tokenB, userB := workerToken(t, d, "buildb")
+
+	buildA := insertBuildWithUser(t, d, userA)
+	buildB := insertBuildWithUser(t, d, userB)
+
+	for _, tc := range []struct {
+		token    string
+		wantID   string
+	}{
+		{tokenA, buildA},
+		{tokenB, buildB},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/build", nil)
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var builds []map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &builds); err != nil {
+			t.Fatal(err)
+		}
+		if len(builds) != 1 {
+			t.Fatalf("expected 1 build, got %d", len(builds))
+		}
+		if builds[0]["id"] != tc.wantID {
+			t.Errorf("expected build %s, got %v", tc.wantID, builds[0]["id"])
+		}
+	}
+}
+
+func TestBuildDownload_OwnerForbidden(t *testing.T) {
+	d := openTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+
+	_, userA := workerToken(t, d, "builda")
+	tokenB, _ := workerToken(t, d, "buildb")
+
+	buildA := insertBuildWithUser(t, d, userA)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/build/"+buildA+"/download", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
 	}
 }

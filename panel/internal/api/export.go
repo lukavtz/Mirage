@@ -72,6 +72,11 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !sessionOwnedBy(h.db, r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	passwords := queryPasswords(h.db, id)
 	if !reveal {
 		for i := range passwords {
@@ -119,6 +124,11 @@ func (h *ExportHandler) exportNetscape(w http.ResponseWriter, r *http.Request) {
 	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
 	if err != nil || !exists {
 		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -176,6 +186,10 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 	zw := zip.NewWriter(&buf)
 
 	for _, id := range req.IDs {
+		if !sessionOwnedBy(h.db, r, id) {
+			continue
+		}
+
 		var lockedBy string
 		locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 		if locked && lockedBy != claims.UserID && claims.Role != "admin" {

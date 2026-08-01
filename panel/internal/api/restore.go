@@ -88,6 +88,11 @@ func (h *RestoreHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !sessionOwnedBy(h.db, r, req.SessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	rows, err := h.db.Query(
 		"SELECT domain, name, value, path FROM cookies WHERE session_id = ?",
 		req.SessionID)
@@ -137,6 +142,11 @@ func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Cookies) == 0 {
 		writeError(w, http.StatusBadRequest, "cookies are required")
+		return
+	}
+
+	if !sessionOwnedBy(h.db, r, req.SessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 

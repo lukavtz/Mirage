@@ -195,10 +195,12 @@ func RunPGMigrations(db *sql.DB, migrationsFS embed.FS) error {
 
 func translateSQLiteToPG(sql string) string {
 	repl := map[string]string{
+		"lower(hex(randomblob(16)))":        "gen_random_uuid()::text",
 		" INTEGER PRIMARY KEY AUTOINCREMENT": " SERIAL PRIMARY KEY",
 		" INTEGER PRIMARY KEY":               " SERIAL PRIMARY KEY",
 		" BLOB":                              " BYTEA",
 		" TEXT":                              " TEXT",
+		" DATETIME":                          " TIMESTAMP",
 		"datetime('now')":                    "NOW()",
 		"datetime('now',":                    "NOW() + INTERVAL '",
 		" CURRENT_TIMESTAMP":                 " NOW()",
@@ -232,7 +234,10 @@ func translateSQLiteToPG(sql string) string {
 			// conflict target on SELECT queries. Add explicit handling
 			// when PostgreSQL INSERT...SELECT migrations are needed.
 			if valuesIdx != -1 && !strings.Contains(upper, "SELECT") {
-				result = result + " ON CONFLICT DO NOTHING"
+				// TrimSuffix won't cut ";" when the file ends with "\n"; trim all
+				// trailing semicolons/whitespace so ON CONFLICT attaches to the
+				// final statement instead of starting a new (invalid) one.
+				result = strings.TrimRight(result, "; \t\r\n") + " ON CONFLICT DO NOTHING"
 			}
 		}
 	}

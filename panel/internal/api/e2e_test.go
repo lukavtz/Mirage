@@ -33,7 +33,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 	hub := ws.NewHub()
 	go hub.Run()
 
-	r, token := setupTestRouter(t, d, hub)
+	r, token, apiKey := setupE2ETestRouter(t, d, hub)
 
 	t.Run("1_Login", func(t *testing.T) {
 		body := `{"username":"testuser","password":"testpass"}`
@@ -59,7 +59,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 		req.Header.Set("Content-Type", mw.FormDataContentType())
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-API-Key", apiKey)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -194,7 +194,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 		req.Header.Set("Content-Type", mw.FormDataContentType())
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-API-Key", apiKey)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -219,7 +219,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 
 			req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 			req.Header.Set("Content-Type", mw.FormDataContentType())
-			req.Header.Set("Authorization", "Bearer "+token)
+			req.Header.Set("X-API-Key", apiKey)
 			w := httptest.NewRecorder()
 			r.ServeHTTP(w, req)
 
@@ -346,7 +346,7 @@ func TestE2E_ConcurrentUploads(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	r, token := setupTestRouter(t, d, hub)
+	r, _, apiKey := setupE2ETestRouter(t, d, hub)
 
 	const numUploads = 10
 	successes := 0
@@ -365,7 +365,7 @@ func TestE2E_ConcurrentUploads(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 		req.Header.Set("Content-Type", mw.FormDataContentType())
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-API-Key", apiKey)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -387,7 +387,7 @@ func TestE2E_LargePayload(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	r, token := setupTestRouter(t, d, hub)
+	r, _, apiKey := setupE2ETestRouter(t, d, hub)
 
 	// Create a ZIP with many files (simulating large browser history)
 	files := make(map[string]string)
@@ -409,7 +409,7 @@ func TestE2E_LargePayload(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

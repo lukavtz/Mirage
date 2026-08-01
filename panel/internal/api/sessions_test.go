@@ -637,3 +637,118 @@ func TestSessionsList_SearchByHWID(t *testing.T) {
 		t.Errorf("expected total=2, got %v", resp["total"])
 	}
 }
+
+
+func workerToken(t *testing.T, d *sql.DB, username string) (string, string) {
+	t.Helper()
+	userID := createTestUserWithRole(t, d, username, "testpass", "worker")
+	token, _, err := auth.GenerateToken(userID, "worker", "test-secret", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return token, userID
+}
+
+func insertSessionWithOwner(t *testing.T, d *sql.DB, id, ownerID string) {
+	t.Helper()
+	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
+		VALUES (?, 'b1', 'hwid', 'win10', 'user', '1.2.3.4', 'US', ?, datetime('now'))`, id, ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSessionsList_OwnerIsolation(t *testing.T) {
+	d := openTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+
+	tokenA, userA := workerToken(t, d, "ownera")
+	tokenB, userB := workerToken(t, d, "ownerb")
+
+	sessionA := uuid.New().String()
+	sessionB := uuid.New().String()
+	insertSessionWithOwner(t, d, sessionA, userA)
+	insertSessionWithOwner(t, d, sessionB, userB)
+
+	for _, tc := range []struct {
+		token      string
+		wantCount  int
+		wantID     string
+	}{
+		{tokenA, 1, sessionA},
+		{tokenB, 1, sessionB},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/sessions", nil)
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var resp map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+			t.Fatal(err)
+		}
+		items := resp["items"].([]any)
+		if len(items) != tc.wantCount {
+			t.Fatalf("expected %d items, got %d", tc.wantCount, len(items))
+		}
+		first := items[0].(map[string]any)
+		if first["id"] != tc.wantID {
+			t.Errorf("expected session %s, got %v", tc.wantID, first["id"])
+		}
+		if resp["total"].(float64) != float64(tc.wantCount) {
+			t.Errorf("expected total=%d, got %v", tc.wantCount, resp["total"])
+		}
+	}
+}
+
+func TestSessionsDetail_OwnerForbidden(t *testing.T) {
+	d := openTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+
+	_, userA := workerToken(t, d, "ownera")
+	tokenB, _ := workerToken(t, d, "ownerb")
+
+	sessionA := uuid.New().String()
+	insertSessionWithOwner(t, d, sessionA, userA)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/sessions/"+sessionA, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSessionsDelete_OwnerForbidden(t *testing.T) {
+	d := openTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+
+	_, userA := workerToken(t, d, "ownera")
+	tokenB, _ := workerToken(t, d, "ownerb")
+
+	sessionA := uuid.New().String()
+	insertSessionWithOwner(t, d, sessionA, userA)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/sessions/"+sessionA, nil)
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var count int
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", sessionA).Scan(&count)
+	if count != 1 {
+		t.Errorf("expected session to survive, got count=%d", count)
+	}
+}

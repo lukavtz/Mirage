@@ -58,7 +58,7 @@ func TestProcess_ValidZip(t *testing.T) {
 	})
 
 	metadata := `{"hwid":"hw-001","os":"win10","username":"alice","ip":"1.2.3.4","country":"US"}`
-	sessionID, err := processor.Process(archive, metadata)
+	sessionID, err := processor.Process(archive, metadata, "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestProcess_PathTraversal(t *testing.T) {
 		"../../etc/passwd": "root:x:0:0:root:/root:/bin/bash",
 	})
 
-	sessionID, err := processor.Process(archive, "")
+	sessionID, err := processor.Process(archive, "", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestProcess_AbsolutePath(t *testing.T) {
 		"/etc/passwd": "root:x:0:0:root:/root:/bin/bash",
 	})
 
-	_, err := processor.Process(archive, "")
+	_, err := processor.Process(archive, "", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestProcess_EmptyZip(t *testing.T) {
 	processor := services.NewLogProcessor(d, nil)
 
 	archive := createTestZip(t, map[string]string{})
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +176,7 @@ func TestProcess_MalformedMetadata(t *testing.T) {
 		"passwords.txt": "https://x.com\tu\tp",
 	})
 
-	sessionID, err := processor.Process(archive, "{not valid json!!!")
+	sessionID, err := processor.Process(archive, "{not valid json!!!", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestProcess_MultipleBrowsers(t *testing.T) {
 		"Browser Data/Firefox_passwords.txt": "https://b.com\tu2\tp2",
 	})
 
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestProcess_MultiplePasswordLines(t *testing.T) {
 		"passwords.txt": strings.Join(lines, "\n"),
 	})
 
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestProcess_MalformedLine(t *testing.T) {
 		"passwords.txt": content,
 	})
 
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,5 +279,29 @@ func TestProcess_MalformedLine(t *testing.T) {
 	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
 	if count != 2 {
 		t.Errorf("expected 2 passwords (malformed line skipped), got %d", count)
+	}
+}
+
+
+func TestProcess_SetsOwnerID(t *testing.T) {
+	d := openTestDB(t)
+	processor := services.NewLogProcessor(d, nil)
+
+	archive := createTestZip(t, map[string]string{
+		"passwords.txt": "https://example.com\tuser\tpass",
+	})
+
+	sessionID, err := processor.Process(archive, "{}", "user-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var ownerID string
+	err = d.QueryRow("SELECT COALESCE(owner_id, '') FROM sessions WHERE id = ?", sessionID).Scan(&ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownerID != "user-123" {
+		t.Errorf("owner_id = %q, want user-123", ownerID)
 	}
 }

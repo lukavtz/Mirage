@@ -2,17 +2,21 @@ package api_test
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/ws"
 )
 
 func openTestDB(t *testing.T) *sql.DB {
@@ -36,17 +40,66 @@ func openTestDB(t *testing.T) *sql.DB {
 
 func createTestUser(t *testing.T, d *sql.DB, username, password string) string {
 	t.Helper()
+	return createTestUserWithRole(t, d, username, password, "admin")
+}
+
+func createTestUserWithRole(t *testing.T, d *sql.DB, username, password, role string) string {
+	t.Helper()
 	id := uuid.New().String()
 	hash, err := auth.HashPassword(password)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
-		id, username, hash, "admin")
+		id, username, hash, role)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return id
+}
+
+// createTestAPIKey inserts an API key bound to userID and returns the raw key
+// that the caller sends as the X-API-Key header.
+func createTestAPIKey(t *testing.T, d *sql.DB, userID string) string {
+	t.Helper()
+	raw := uuid.New().String() + uuid.New().String()
+	hash := sha256.Sum256([]byte(raw))
+	keyHash := fmt.Sprintf("%x", hash)
+	_, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash) VALUES (?, ?, ?, ?)",
+		uuid.New().String(), userID, "test-key", keyHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// setupLogsTestRouter wires a router whose /api/log routes are reachable via a
+// real API key (the routes sit behind APIKeyAuth, which rejects requests
+// without an X-API-Key header).
+func setupLogsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
+	t.Helper()
+	jwtSecret := "test-secret"
+	r := chi.NewRouter()
+	userID := createTestUser(t, d, "logsuser", "testpass")
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	key := createTestAPIKey(t, d, userID)
+	return r, key
+}
+
+// setupE2ETestRouter wires a router and returns the JWT token (for authed
+// routes) plus a valid API key (for /api/log ingestion routes).
+func setupE2ETestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string, string) {
+	t.Helper()
+	jwtSecret := "test-secret"
+	r := chi.NewRouter()
+	userID := createTestUser(t, d, "testuser", "testpass")
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil)
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := createTestAPIKey(t, d, userID)
+	return r, token, key
 }
 
 func TestLogin_Success(t *testing.T) {

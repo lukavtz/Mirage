@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Sun, Moon, Loader2 } from 'lucide-react'
+import { TotpSetupCard } from '@/components/totp-setup'
 
 interface SettingsResponse {
   settings: Record<string, string>
@@ -63,7 +64,7 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t('settings.title')}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t('settings.title')}</h1>
 
       <Card>
         <CardHeader><CardTitle>{t('settings.telegram')}</CardTitle></CardHeader>
@@ -90,7 +91,7 @@ export default function Settings() {
             {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>
-          {saveMutation.isSuccess && <p className="text-sm text-emerald-500">{t('common.saved')}</p>}
+          {saveMutation.isSuccess && <p className="text-sm text-success">{t('common.saved')}</p>}
           {saveMutation.isError && <p className="text-sm text-destructive">Failed to save</p>}
         </CardContent>
       </Card>
@@ -119,11 +120,13 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      <TotpSetupCard />
+
       <Card>
         <CardHeader><CardTitle>{t('settings.database')}</CardTitle></CardHeader>
         <CardContent>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="inline-block h-2 w-2 rounded-full bg-success" />
             <span>SQLite</span>
             <span className="text-xs">— connected</span>
           </div>

@@ -59,7 +59,7 @@ export default function BuildPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">{t('build.title')}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t('build.title')}</h1>
 
       <Card>
         <CardHeader><CardTitle className="text-sm font-medium">{t('build.config')}</CardTitle></CardHeader>
@@ -113,7 +113,7 @@ export default function BuildPage() {
             </Button>
 
             {buildMutation.data && (
-              <div className="rounded-md bg-emerald-500/10 p-3 text-sm text-emerald-600 dark:text-emerald-400 space-y-1">
+              <div className="rounded-md bg-success/10 p-3 text-sm text-success space-y-1">
                 <p>✅ {t('build.success')}</p>
                 <p className="text-xs font-mono">Size: {(buildMutation.data.file_size / 1024).toFixed(1)} KB</p>
                 <p className="text-xs font-mono">SHA256: {buildMutation.data.sha256}</p>

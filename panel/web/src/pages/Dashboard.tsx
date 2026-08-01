@@ -14,7 +14,7 @@ export default function Dashboard() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 relative before:fixed before:inset-0 before:-z-10 before:bg-[radial-gradient(1200px_600px_at_50%_-200px,hsl(262_64%_53%/0.12),transparent)] before:pointer-events-none">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <StatCard title={t('dashboard.sessions')} value={0} icon={Users} isLoading />
           <StatCard title={t('dashboard.passwords')} value={0} icon={Key} isLoading />
@@ -35,7 +35,7 @@ export default function Dashboard() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] gap-8">
         <div className="relative">
-          <div className="rounded-2xl bg-gradient-to-br from-primary/5 via-primary/10 to-transparent p-8 ring-1 ring-primary/10">
+          <div className="rounded-2xl bg-gradient-to-br from-primary/10 via-primary/15 to-transparent p-8 ring-1 ring-primary/15 shadow-glow">
             <Activity className="h-16 w-16 text-primary/40" />
           </div>
           <div className="absolute -top-2 -right-2">
@@ -65,12 +65,12 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative before:fixed before:inset-0 before:-z-10 before:bg-[radial-gradient(1200px_600px_at_50%_-200px,hsl(262_64%_53%/0.12),transparent)] before:pointer-events-none">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <StatCard title={t('dashboard.sessions')} value={data.sessions.total} subtitle={t('dashboard.today', { n: data.sessions.today })} icon={Users} isLoading={false} />
-        <StatCard title={t('dashboard.passwords')} value={data.passwords.total} icon={Key} isLoading={false} />
-        <StatCard title={t('dashboard.cookies')} value={data.cookies.total} icon={Cookie} isLoading={false} />
-        <StatCard title={t('dashboard.wallets')} value={data.wallets.total} icon={CreditCard} isLoading={false} />
+        <StatCard title={t('dashboard.sessions')} value={data.sessions.total} subtitle={t('dashboard.today', { n: data.sessions.today })} icon={Users} isLoading={false} accent="warning" />
+        <StatCard title={t('dashboard.passwords')} value={data.passwords.total} icon={Key} isLoading={false} accent="warning" />
+        <StatCard title={t('dashboard.cookies')} value={data.cookies.total} icon={Cookie} isLoading={false} accent="warning" />
+        <StatCard title={t('dashboard.wallets')} value={data.wallets.total} icon={CreditCard} isLoading={false} accent="warning" />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">

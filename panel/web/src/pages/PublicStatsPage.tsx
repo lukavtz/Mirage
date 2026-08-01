@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { Users, Key, Wallet, Cookie, TrendingUp } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, PieChart, Pie, Cell } from 'recharts'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FlagIcon } from '@/components/charts/flag-icon'
 import { api } from '@/lib/api'
+import { PIE_COLORS, useChartGradientId } from '@/lib/chart-tokens'
 
 interface PublicStats {
   total_sessions: number
@@ -20,14 +21,6 @@ interface PublicStats {
   timeline: Array<{ date: string; count: number }>
 }
 
-const PIE_COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-]
-
 export default function PublicStatsPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ['public-stats'],
@@ -35,6 +28,8 @@ export default function PublicStatsPage() {
     retry: 1,
     staleTime: 60000,
   })
+
+  const timelineGradientId = useChartGradientId('public-timeline')
 
   if (isLoading) {
     return (
@@ -116,23 +111,24 @@ export default function PublicStatsPage() {
                 <ResponsiveContainer width="100%" height={200}>
                   <AreaChart data={data.timeline}>
                     <defs>
-                      <linearGradient id="publicTimeline" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                      <linearGradient id={timelineGradientId} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
+                        <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
                         <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                       </linearGradient>
                     </defs>
+                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" tickFormatter={(v, i) => i % 5 === 0 ? v : ''} />
                     <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
                     <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', fontSize: 12 }} />
-                    <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="url(#publicTimeline)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill={`url(#${timelineGradientId})`} strokeWidth={2.5} />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
-
           <Card>
-            <CardHeader><CardTitle className="text-sm font-medium">Country Distribution</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm font-medium">Top Countries</CardTitle></CardHeader>
             <CardContent>
               {data.country_distribution.length === 0 ? (
                 <div className="flex items-center justify-center h-[200px] text-muted-foreground text-xs">No data</div>

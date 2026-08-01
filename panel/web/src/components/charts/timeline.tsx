@@ -1,5 +1,6 @@
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useChartGradientId } from '@/lib/chart-tokens'
 
 interface TimelineProps {
   data: Array<{ date: string; count: number }>
@@ -7,6 +8,8 @@ interface TimelineProps {
 }
 
 export function Timeline({ data, isLoading }: TimelineProps) {
+  const gradientId = useChartGradientId('timeline')
+
   if (isLoading) {
     return <Skeleton className="h-[300px] w-full" />
   }
@@ -23,11 +26,13 @@ export function Timeline({ data, isLoading }: TimelineProps) {
     <ResponsiveContainer width="100%" height={300}>
       <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
         <defs>
-          <linearGradient id="timelineGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+            <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
             <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
           </linearGradient>
         </defs>
+        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="date"
           tick={{ fontSize: 11 }}
@@ -53,7 +58,7 @@ export function Timeline({ data, isLoading }: TimelineProps) {
           labelFormatter={(label) => `Date: ${label ?? ''}`}
           formatter={(value) => Number(value ?? 0).toLocaleString()}
         />
-        <Area type="monotone" dataKey="count" name="Sessions" stroke="hsl(var(--primary))" fill="url(#timelineGradient)" strokeWidth={2} />
+        <Area type="monotone" dataKey="count" name="Sessions" stroke="hsl(var(--primary))" fill={`url(#${gradientId})`} strokeWidth={2.5} />
       </AreaChart>
     </ResponsiveContainer>
   )

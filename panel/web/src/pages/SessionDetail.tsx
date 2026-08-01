@@ -130,7 +130,7 @@ export default function SessionDetail() {
       </div>
 
       <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold font-mono">{session.ip}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight font-mono">{session.ip}</h1>
         <FlagIcon country={session.country_code ?? ''} width={24} height={24} />
         <span className="text-sm text-muted-foreground font-mono">{session.country_code}</span>
       </div>
@@ -144,7 +144,7 @@ export default function SessionDetail() {
       </div>
 
       <Tabs defaultValue="passwords">
-        <TabsList className="w-full justify-start">
+        <TabsList className="w-full justify-start bg-muted/60 border border-border p-1">
           <TabsTrigger value="passwords">
             <Key className="h-4 w-4 mr-1" />
             {t("session.passwords")} ({session.passwords?.length ?? 0})

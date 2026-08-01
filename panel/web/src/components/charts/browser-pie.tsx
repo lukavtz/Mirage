@@ -1,18 +1,11 @@
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
+import { PIE_COLORS } from '@/lib/chart-tokens'
 
 interface BrowserPieProps {
   data: Array<{ name: string; count: number }>
   isLoading: boolean
 }
-
-const PIE_COLORS = [
-  'hsl(var(--chart-1))',
-  'hsl(var(--chart-2))',
-  'hsl(var(--chart-3))',
-  'hsl(var(--chart-4))',
-  'hsl(var(--chart-5))',
-]
 
 export function BrowserPie({ data, isLoading }: BrowserPieProps) {
   if (isLoading) {
@@ -39,7 +32,8 @@ export function BrowserPie({ data, isLoading }: BrowserPieProps) {
             cy="50%"
             innerRadius="60%"
             outerRadius="80%"
-            strokeWidth={0}
+            strokeWidth={2}
+            stroke="hsl(var(--background))"
             label={({ name, percent }) =>
               `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`
             }
@@ -62,9 +56,9 @@ export function BrowserPie({ data, isLoading }: BrowserPieProps) {
       <div className="flex flex-wrap justify-center gap-4 mt-4">
         {data.map((b, i) => (
           <div key={b.name} className="flex items-center gap-2 text-sm">
-            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: PIE_COLORS[Math.min(i, PIE_COLORS.length - 1)] }} />
+            <div className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: PIE_COLORS[Math.min(i, PIE_COLORS.length - 1)] }} />
             <span className="text-muted-foreground">{b.name}</span>
-            <span className="font-medium">{b.count.toLocaleString()}</span>
+            <span className="font-medium tabular-nums">{b.count.toLocaleString()}</span>
           </div>
         ))}
       </div>

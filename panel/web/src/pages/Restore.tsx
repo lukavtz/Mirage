@@ -38,7 +38,7 @@ export default function Restore() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Cookie Restore</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Cookie Restore</h1>
 
       <Card>
         <CardHeader>
@@ -97,7 +97,7 @@ export default function Restore() {
             <div className="space-y-1">
               {result.cookies.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm font-mono">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
                   <span className="text-muted-foreground">{c.domain}</span>
                   <span>{c.name}</span>
                 </div>

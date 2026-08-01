@@ -252,9 +252,12 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
+	var totpEnabled bool
+	h.db.QueryRow("SELECT totp_enabled FROM users WHERE id = ?", claims.UserID).Scan(&totpEnabled)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"user_id": claims.UserID,
-		"role":    claims.Role,
+		"user_id":      claims.UserID,
+		"role":         claims.Role,
+		"totp_enabled": totpEnabled,
 	})
 }
 

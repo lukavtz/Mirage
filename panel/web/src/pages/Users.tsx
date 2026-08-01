@@ -36,7 +36,7 @@ export default function UsersPage() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold flex items-center gap-2"><UsersIcon className="h-5 w-5" />{t("users.title")}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><UsersIcon className="h-5 w-5" />{t("users.title")}</h1>
 
             <Card>
                 <CardHeader><CardTitle className="text-sm font-medium">{t("users.title")}</CardTitle></CardHeader>
@@ -96,7 +96,7 @@ export default function UsersPage() {
                         <div className="flex items-center gap-2 rounded-md bg-muted p-3">
                             <code className="font-mono text-sm flex-1">{inviteCode}</code>
                             <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
-                                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
                             </Button>
                         </div>
                     )}

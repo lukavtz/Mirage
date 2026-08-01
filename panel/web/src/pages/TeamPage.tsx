@@ -42,7 +42,7 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2"><UsersIcon className="h-5 w-5" />Team</h1>
+      <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><UsersIcon className="h-5 w-5" />Team</h1>
 
       <div className="flex items-center gap-2">
         <select
@@ -78,8 +78,8 @@ export default function TeamPage() {
                 ) : (members ?? []).map(m => (
                   <TableRow key={m.id}>
                     <TableCell className="font-mono text-xs">{m.username}</TableCell>
-                    <TableCell><span className={`text-xs px-2 py-0.5 rounded-full ${m.role === 'admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>{m.role}</span></TableCell>
-                    <TableCell><span className={`inline-block w-2 h-2 rounded-full ${m.status === 'online' ? 'bg-emerald-500' : 'bg-gray-500'}`} /> {m.status}</TableCell>
+                    <TableCell><span className={`text-xs px-2 py-0.5 rounded-full ${m.role === 'admin' ? 'bg-brand-500/20 text-brand-400' : 'bg-brand-400/20 text-brand-400'}`}>{m.role}</span></TableCell>
+                    <TableCell><span className={`inline-block w-2 h-2 rounded-full ${m.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}`} /> {m.status}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{m.last_login ?? 'Never'}</TableCell>
                     <TableCell>{m.sessions}</TableCell>
                     <TableCell className="text-right">
@@ -88,7 +88,7 @@ export default function TeamPage() {
                           <Shield className="h-4 w-4" />
                         </Button>
                         <Button variant="ghost" size="sm" onClick={() => setRemoveTarget(m)}>
-                          <Trash2 className="h-4 w-4 text-red-400" />
+                          <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>

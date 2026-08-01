@@ -46,16 +46,17 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'flex flex-col border-r bg-card transition-all duration-200',
+        'flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-200',
         collapsed ? 'w-14' : 'w-56',
       )}
     >
       <div className={cn(
-        'flex items-center gap-2 border-b px-3 h-14 shrink-0',
+        'flex items-center gap-2 border-b border-sidebar-border px-3 h-14 shrink-0 relative overflow-hidden',
         collapsed && 'justify-center px-0',
       )}>
-        <div className="rounded-lg bg-primary p-1.5">
-          <Terminal className="h-4 w-4 text-primary-foreground" />
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_30%_50%,hsl(262_64%_53%/0.35),transparent_70%)]" />
+        <div className="relative rounded-lg bg-gradient-to-br from-brand-500 to-brand-700 p-1.5 shadow-glow">
+          <Terminal className="h-4 w-4 text-white" />
         </div>
         {!collapsed && <span className="font-semibold text-sm tracking-wide">Eidos Panel</span>}
       </div>
@@ -68,11 +69,12 @@ export function Sidebar() {
             end={item.end}
             title={t(item.labelKey)}
             className={({ isActive }) => cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              collapsed && 'justify-center px-2',
+              'relative flex items-center gap-3 rounded-lg pl-4 pr-3 py-2 text-sm transition-colors',
+              'before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-0.5 before:rounded-full before:bg-transparent',
+              collapsed && 'justify-center px-2 pl-2',
               isActive
-                ? 'bg-primary/10 text-primary font-medium'
-                : 'text-muted-foreground hover:text-primary hover:bg-accent',
+                ? 'bg-sidebar-primary/15 text-sidebar-primary font-medium before:bg-brand-500'
+                : 'text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground',
             )}
           >
             <item.icon className="h-4 w-4 shrink-0" />
@@ -81,11 +83,11 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t p-2">
+      <div className="border-t border-sidebar-border p-2">
         <Button
           variant="ghost"
           size="sm"
-          className={cn('w-full', collapsed && 'px-0')}
+          className={cn('w-full text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent', collapsed && 'px-0')}
           onClick={toggleCollapsed}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}

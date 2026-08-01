@@ -3,6 +3,8 @@ package api
 import (
 	"database/sql"
 	"net/http"
+
+	"zialfi-panel/internal/middleware"
 )
 
 type DuplicateDetectHandler struct {
@@ -34,13 +36,20 @@ func (h *DuplicateDetectHandler) Detect(w http.ResponseWriter, r *http.Request) 
 
 	resp := DuplicateResponse{}
 
+	ownerClause := ""
+	var ownerArg any
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+		ownerClause = " AND owner_id = ?"
+		ownerArg = claims.UserID
+	}
+
 	if hwid != "" {
 		var count int
-		err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE hwid = ?", hwid).Scan(&count)
+		err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE hwid = ?"+ownerClause, append([]any{hwid}, ownerArg)...).Scan(&count)
 		if err == nil {
 			resp.Hwid.Count = count
 			if count > 1 {
-				rows, err := h.db.Query("SELECT id FROM sessions WHERE hwid = ? ORDER BY created_at DESC", hwid)
+				rows, err := h.db.Query("SELECT id FROM sessions WHERE hwid = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{hwid}, ownerArg)...)
 				if err == nil {
 					defer rows.Close()
 					for rows.Next() {
@@ -56,11 +65,11 @@ func (h *DuplicateDetectHandler) Detect(w http.ResponseWriter, r *http.Request) 
 
 	if ip != "" {
 		var count int
-		err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE ip = ?", ip).Scan(&count)
+		err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE ip = ?"+ownerClause, append([]any{ip}, ownerArg)...).Scan(&count)
 		if err == nil {
 			resp.Ip.Count = count
 			if count > 1 {
-				rows, err := h.db.Query("SELECT id FROM sessions WHERE ip = ? ORDER BY created_at DESC", ip)
+				rows, err := h.db.Query("SELECT id FROM sessions WHERE ip = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{ip}, ownerArg)...)
 				if err == nil {
 					defer rows.Close()
 					for rows.Next() {

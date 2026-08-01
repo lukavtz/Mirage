@@ -117,6 +117,11 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		conditions = append(conditions, "(s.viewed IS NULL OR s.viewed = 0)")
 	}
 
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+		conditions = append(conditions, "s.owner_id = ?")
+		args = append(args, claims.UserID)
+	}
+
 	where := ""
 	if len(conditions) > 0 {
 		where = "WHERE " + strings.Join(conditions, " AND ")
@@ -221,12 +226,13 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		CountryCode string
 		CreatedAt   string
 		Viewed      int
+		OwnerID     string
 	}
 	err := h.db.QueryRow(`
-		SELECT id, build_id, hwid, os, username, ip, country_code, created_at, COALESCE(viewed, 0)
+		SELECT id, build_id, hwid, os, username, ip, country_code, created_at, COALESCE(viewed, 0), COALESCE(owner_id, '')
 		FROM sessions WHERE id = ?`, id).Scan(
 		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
-		&s.Ip, &s.CountryCode, &s.CreatedAt, &s.Viewed,
+		&s.Ip, &s.CountryCode, &s.CreatedAt, &s.Viewed, &s.OwnerID,
 	)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "session not found")
@@ -234,6 +240,11 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch session")
+		return
+	}
+
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" && s.OwnerID != claims.UserID {
+		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -292,6 +303,11 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
+	if !h.ownsSession(r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	result, err := h.db.Exec("DELETE FROM sessions WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete session")
@@ -314,6 +330,11 @@ func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 func (h *SessionsHandler) MarkViewed(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	if !h.ownsSession(r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
 
 	result, err := h.db.Exec("UPDATE sessions SET viewed = 1 WHERE id = ?", id)
 	if err != nil {
@@ -470,6 +491,11 @@ func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.ownsSession(r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	// Auto-unlock stale locks (>30 min)
 	h.db.Exec("DELETE FROM session_locks WHERE session_id = ? AND locked_at < datetime('now', '-30 minutes')", sessionID)
 
@@ -523,6 +549,11 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.ownsSession(r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	if lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
@@ -537,4 +568,8 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "session unlocked",
 	})
+}
+
+func (h *SessionsHandler) ownsSession(r *http.Request, sessionID string) bool {
+	return sessionOwnedBy(h.db, r, sessionID)
 }

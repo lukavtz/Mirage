@@ -13,6 +13,7 @@ import (
 	"regexp"
 
 	"github.com/go-chi/chi/v5"
+	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
 )
 
@@ -83,9 +84,9 @@ func (h *BuildHandler) Build(w http.ResponseWriter, r *http.Request) {
 	modulesJSON, _ := json.Marshal(config.Modules)
 
 	result, err := h.db.Exec(
-		`INSERT INTO builds (config_hash, file_size, file_data, sha256, build_tag, module_config)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		configHash, len(built), built, sha, config.BuildTag, string(modulesJSON),
+		`INSERT INTO builds (config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		configHash, len(built), built, sha, config.BuildTag, string(modulesJSON), claimsUserID(r),
 	)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to store build")
@@ -112,15 +113,29 @@ func (h *BuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	var err error
 	if tagFilter != "" {
-		rows, err = h.db.Query(`
-			SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
-			FROM builds WHERE build_tag = ? ORDER BY created_at DESC LIMIT 50
-		`, tagFilter)
+		if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+			rows, err = h.db.Query(`
+				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				FROM builds WHERE build_tag = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50
+			`, tagFilter, claims.UserID)
+		} else {
+			rows, err = h.db.Query(`
+				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				FROM builds WHERE build_tag = ? ORDER BY created_at DESC LIMIT 50
+			`, tagFilter)
+		}
 	} else {
-		rows, err = h.db.Query(`
-			SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
-			FROM builds ORDER BY created_at DESC LIMIT 50
-		`)
+		if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+			rows, err = h.db.Query(`
+				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				FROM builds WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
+			`, claims.UserID)
+		} else {
+			rows, err = h.db.Query(`
+				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				FROM builds ORDER BY created_at DESC LIMIT 50
+			`)
+		}
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query builds")
@@ -174,6 +189,11 @@ func (h *BuildHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.ownsBuild(r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	h.db.Exec("UPDATE builds SET download_count = download_count + 1 WHERE id = ?", id)
 
 	w.Header().Set("Content-Type", "application/octet-stream")
@@ -197,6 +217,11 @@ func (h *BuildHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !h.ownsBuild(r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	result, err := h.db.Exec("UPDATE builds SET build_tag = ? WHERE id = ?", body.Tag, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update build tag")
@@ -215,6 +240,11 @@ func (h *BuildHandler) UploadIcon(w http.ResponseWriter, r *http.Request) {
 	id := safeIDParam(r)
 	if id == "" {
 		writeError(w, http.StatusBadRequest, "missing or invalid build id")
+		return
+	}
+
+	if !h.ownsBuild(r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -255,11 +285,24 @@ func (h *BuildHandler) UploadIcon(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *BuildHandler) ownsBuild(r *http.Request, buildID string) bool {
+	return buildOwnedBy(h.db, r, buildID)
+}
+
 func (h *BuildHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query(`
-		SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
-		FROM builds ORDER BY created_at DESC
-	`)
+	var rows *sql.Rows
+	var err error
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+		rows, err = h.db.Query(`
+			SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
+			FROM builds WHERE user_id = ? ORDER BY created_at DESC
+		`, claims.UserID)
+	} else {
+		rows, err = h.db.Query(`
+			SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
+			FROM builds ORDER BY created_at DESC
+		`)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query stats")
 		return

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -85,10 +86,32 @@ func (rl *rateLimiter) cleanup() {
 	}
 }
 
-func extractIP(r *http.Request) string {
+// ExtractIP returns the client IP from the request, preferring
+// X-Forwarded-For (first entry, if behind a reverse proxy), then
+// X-Real-IP, then RemoteAddr. Non-IP values are rejected; the
+// caller falls back to RemoteAddr on any parse failure.
+func ExtractIP(r *http.Request) string {
+	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+		// X-Forwarded-For may contain "client, proxy1, proxy2"; take the first.
+		if comma := strings.IndexByte(xff, ','); comma != -1 {
+			xff = strings.TrimSpace(xff[:comma])
+		}
+		if ip := net.ParseIP(xff); ip != nil {
+			return ip.String()
+		}
+	}
+	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
+		if ip := net.ParseIP(realIP); ip != nil {
+			return ip.String()
+		}
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
 	return host
 }
+
+// extractIP is the unexported alias kept for in-package callers
+// (ratelimit, ban middleware) so the rename touches no call sites.
+func extractIP(r *http.Request) string { return ExtractIP(r) }

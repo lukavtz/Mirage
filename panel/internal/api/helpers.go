@@ -3,7 +3,6 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
-	"net"
 	"net/http"
 
 	"zialfi-panel/internal/auth"
@@ -21,16 +20,7 @@ func writeError(w http.ResponseWriter, status int, message string) {
 }
 
 func extractIP(r *http.Request) string {
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		if ip := net.ParseIP(realIP); ip != nil {
-			return ip.String()
-		}
-	}
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
+	return middleware.ExtractIP(r)
 }
 
 func getClaims(r *http.Request) (*auth.Claims, bool) {

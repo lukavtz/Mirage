@@ -131,3 +131,93 @@ func TestRateLimit_ZeroRequests(t *testing.T) {
 		t.Errorf("expected 429 for zero limit, got %d", rec.Code)
 	}
 }
+
+func TestExtractIP_XForwardedFor(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50, 70.41.3.18, 150.172.238.178")
+	got := middleware.ExtractIP(req)
+	if got != "203.0.113.50" {
+		t.Errorf("expected first XFF entry, got %q", got)
+	}
+}
+
+func TestExtractIP_XForwardedForSingle(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	got := middleware.ExtractIP(req)
+	if got != "203.0.113.50" {
+		t.Errorf("expected 203.0.113.50, got %q", got)
+	}
+}
+
+func TestExtractIP_XRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Real-IP", "198.51.100.77")
+	got := middleware.ExtractIP(req)
+	if got != "198.51.100.77" {
+		t.Errorf("expected 198.51.100.77, got %q", got)
+	}
+}
+
+func TestExtractIP_XFFTakesPrecedenceOverXRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	req.Header.Set("X-Real-IP", "198.51.100.77")
+	got := middleware.ExtractIP(req)
+	if got != "203.0.113.50" {
+		t.Errorf("expected XFF to win, got %q", got)
+	}
+}
+
+func TestExtractIP_FallbackToRemoteAddr(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.42:12345"
+	got := middleware.ExtractIP(req)
+	if got != "192.168.1.42" {
+		t.Errorf("expected 192.168.1.42, got %q", got)
+	}
+}
+
+func TestExtractIP_RemoteAddrNoPort(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.42"
+	got := middleware.ExtractIP(req)
+	if got != "192.168.1.42" {
+		t.Errorf("expected 192.168.1.42, got %q", got)
+	}
+}
+
+func TestExtractIP_RejectsInvalidXFF(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.42:12345"
+	req.Header.Set("X-Forwarded-For", "not-an-ip")
+	got := middleware.ExtractIP(req)
+	if got != "192.168.1.42" {
+		t.Errorf("invalid XFF should fall through to RemoteAddr, got %q", got)
+	}
+}
+
+func TestExtractIP_RejectsInvalidRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.42:12345"
+	req.Header.Set("X-Real-IP", "totally-bogus")
+	got := middleware.ExtractIP(req)
+	if got != "192.168.1.42" {
+		t.Errorf("invalid X-Real-IP should fall through to RemoteAddr, got %q", got)
+	}
+}
+
+func TestExtractIP_IPv6(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "[::1]:12345"
+	req.Header.Set("X-Forwarded-For", "2001:db8::1")
+	got := middleware.ExtractIP(req)
+	if got != "2001:db8::1" {
+		t.Errorf("expected IPv6 XFF, got %q", got)
+	}
+}
+}

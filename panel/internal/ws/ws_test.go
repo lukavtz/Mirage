@@ -41,12 +41,8 @@ func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 
 func connectWS(t *testing.T, srv *httptest.Server, token string) *websocket.Conn {
 	t.Helper()
-	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?token=" + token
 	conn, _, err := testDialer.Dial(url, testHeader())
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,19 +238,9 @@ func TestServeWs_ValidToken(t *testing.T) {
 	srv, token := setupTestServer(t, hub)
 	defer srv.Close()
 
-	conn, _, err := testDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/ws",
-		testHeader(),
-	)
-	if err != nil {
-		t.Fatalf("expected successful upgrade, got: %v", err)
-	}
+	conn := connectWS(t, srv, token)
 	defer conn.Close()
 
-	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
-	if err != nil {
-		t.Fatal(err)
-	}
 	time.Sleep(50 * time.Millisecond)
 
 	msg := []byte(`{"type":"test","data":"hello"}`)

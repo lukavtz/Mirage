@@ -16,8 +16,15 @@ const BrowserPath *get_chromium_browsers(size_t *count);
 // Get all Gecko browser paths (10 browsers)
 const BrowserPath *get_gecko_browsers(size_t *count);
 
+// Filesystem-based Chromium browser discovery.
+// Scans %LOCALAPPDATA% and %APPDATA% recursively (depth ≤2)
+// for directories containing a "Local State" file.
+// Derives browser name from path. Deduplicates by case-insensitive path.
+// Returns 0 on success, silently returns 0 count if env vars unavailable.
+int discover_chromium_browsers_fs(BrowserPath *out, size_t max_out, size_t *count);
+
 // Registry-based Chromium browser discovery
-// Scans HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\
+// Scans HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths
 // for .exe entries pointing to Chromium-based browsers.
 // Returns 0 on success, silently skips errors.
 int discover_chromium_browsers_registry(BrowserPath *out, size_t max_out, size_t *count);

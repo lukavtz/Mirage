@@ -220,4 +220,3 @@ func TestExtractIP_IPv6(t *testing.T) {
 		t.Errorf("expected IPv6 XFF, got %q", got)
 	}
 }
-}

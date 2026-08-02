@@ -27,6 +27,8 @@ typedef struct _iobuf {
 #ifndef EOF
 #define EOF (-1)
 #endif
+
+typedef int errno_t;
 #ifndef SEEK_SET
 #define SEEK_SET 0
 #endif

@@ -86,8 +86,7 @@ test: $(TARGET)
 
 $(TARGET): $(OBJS)
 	$(CC) -o $@ $(OBJS) $(LDFLAGS)
-	x86_64-w64-mingw32-strip --strip-all $@
-	-$(shell command -v upx >/dev/null && echo "upx --best \$@" || true)
+	strip --strip-all $@
 
 $(OBJ_DIR)/%.o: src/%.c
 	@mkdir -p $(dir $@)

@@ -188,3 +188,41 @@ size_t wcslen(const unsigned short *s) {
 int (*__imp_isspace)(int) = isspace;
 int (*__imp__stricmp)(const char *, const char *) = _stricmp;
 int (*__imp_tolower)(int) = tolower;
+
+/* Wide-string functions for no-CRT build */
+
+int _wcsicmp(const unsigned short *a, const unsigned short *b) {
+    while (*a && *b) {
+        unsigned short ca = *a, cb = *b;
+        if (ca >= 'A' && ca <= 'Z') ca += 32;
+        if (cb >= 'A' && cb <= 'Z') cb += 32;
+        if (ca != cb) return (int)ca - (int)cb;
+        a++; b++;
+    }
+    return (int)*a - (int)*b;
+}
+
+int _wcsnicmp(const unsigned short *a, const unsigned short *b, size_t n) {
+    for (size_t i = 0; i < n; i++) {
+        unsigned short ca = a[i], cb = b[i];
+        if (ca >= 'A' && ca <= 'Z') ca += 32;
+        if (cb >= 'A' && cb <= 'Z') cb += 32;
+        if (ca != cb) return (int)ca - (int)cb;
+        if (ca == 0) return 0;
+    }
+    return 0;
+}
+
+errno_t wcscat_s(unsigned short *dst, size_t dstsz, const unsigned short *src) {
+    if (!dst || !src || dstsz == 0) return 22; /* EINVAL */
+    size_t dlen = wcslen(dst);
+    size_t slen = wcslen(src);
+    if (dlen + slen + 1 > dstsz) return 34; /* ERANGE */
+    memcpy(dst + dlen, src, (slen + 1) * sizeof(unsigned short));
+    return 0;
+}
+
+/* dllimport thunks for wide functions */
+int (*__imp__wcsicmp)(const unsigned short *, const unsigned short *) = _wcsicmp;
+int (*__imp__wcsnicmp)(const unsigned short *, const unsigned short *, size_t) = _wcsnicmp;
+errno_t (*__imp_wcscat_s)(unsigned short *, size_t, const unsigned short *) = wcscat_s;

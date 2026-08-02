@@ -14,12 +14,15 @@
 
 /* ═══════ Minimal FILE (opaque to callers; stdio.h sees it as opaque) ═══ */
 
+#ifndef _FILE_DEFINED
+#define _FILE_DEFINED
 typedef struct _iobuf {
     HANDLE handle;
     int    mode;   /* 0=read, 1=write, 2=append */
     int    error;
     int    eof;
 } FILE;
+#endif
 
 #ifndef EOF
 #define EOF (-1)

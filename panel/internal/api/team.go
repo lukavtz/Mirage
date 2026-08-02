@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -55,6 +56,16 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.Status = "offline"
+		if m.LastLogin != nil {
+			var lastActive sql.NullString
+			err := h.db.QueryRow("SELECT MAX(last_active_at) FROM auth_sessions WHERE user_id = ?", m.ID).Scan(&lastActive)
+			if err == nil && lastActive.Valid {
+				parsed, err := time.Parse("2006-01-02 15:04:05", lastActive.String)
+				if err == nil && time.Since(parsed) < 5*time.Minute {
+					m.Status = "online"
+				}
+			}
+		}
 		members = append(members, m)
 	}
 	if err := rows.Err(); err != nil {

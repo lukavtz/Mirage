@@ -22,6 +22,8 @@ var csrfPublicPaths = []string{
 	"/api/auth/register",
 	"/api/auth/2fa/verify-login",
 	"/api/auth/2fa/required",
+	"/api/auth/forgot-password",
+	"/api/auth/reset-password",
 	"/api/public/stats",
 	"/api/pricing",
 	"/api/log",

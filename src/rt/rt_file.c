@@ -8,10 +8,8 @@ void *malloc(size_t n);
 void free(void *p);
 size_t strlen(const char *s);
 
-/* fopen/fread/fwrite are declared nonnull by the headers; guards are defensive. */
-#pragma GCC diagnostic ignored "-Wnonnull-compare"
-
 FILE *fopen(const char *path, const char *mode) {
+    if (!path || !mode) return NULL;
     DWORD access = 0, disposition = 0;
     int fmode = 0;
     /* Allow read/write/delete sharing so locked browser DBs still open. */

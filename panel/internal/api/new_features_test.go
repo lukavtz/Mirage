@@ -380,8 +380,8 @@ func TestSessionDetail_PasswordReveal(t *testing.T) {
 	passwords := resp["passwords"].([]any)
 	if len(passwords) > 0 {
 		p := passwords[0].(map[string]any)
-		if p["password_value"] != "***HIDDEN***" {
-			t.Errorf("expected hidden password, got %v", p["password_value"])
+		if p["password_value"] != nil && p["password_value"] != "" {
+			t.Errorf("expected hidden password to be empty, got %v", p["password_value"])
 		}
 	}
 

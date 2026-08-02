@@ -120,106 +120,103 @@ static int btree_offset(int page_num) {
  *   [4] sql      TEXT
  */
 
-/* Find root page for a table. Parses sqlite_master B-tree. */
-int sqlite_find_table(SqliteDb *db, const char *table_name) {
-    /* The schema is stored in table 1 (page 1 = sqlite_master) */
-    const unsigned char *page1 = page_ptr(db, 1);
-    if (!page1) return -1;
+/* ── Parse a sqlite_master cell for name + rootpage ──────── */
 
-    int page_type = page1[0];
+static int parse_master_cell(const unsigned char *cell, const char *table_name,
+                             int64_t *out_rootpage) {
+    size_t pos = 0;
+    int64_t payload_len;
+    pos += read_varint(cell + pos, 50, &payload_len);
+    pos += read_varint(cell + pos, 50, NULL); /* rowid */
+    pos += read_varint(cell + pos, 50, NULL); /* header size */
 
-    /* For a simple database, sqlite_master is a single leaf page.
-     * For larger ones it may have interior pages. We handle both. */
+    int64_t col_serials[5];
+    for (int c = 0; c < 5; c++)
+        pos += read_varint(cell + pos, 50, &col_serials[c]);
+
+    const unsigned char *p = cell + pos;
+    const char *name = NULL;
+    int name_len = 0;
+    int64_t rootpage = 0;
+
+    for (int c = 0; c < 5; c++) {
+        int stype = (int)col_serials[c];
+        int ssize = serial_type_size(stype);
+        if (c == 1 && stype >= 13 && stype % 2 == 1) {
+            name = (const char *)p;
+            name_len = (stype - 13) / 2;
+        }
+        if (c == 3) {
+            if (stype == 8) rootpage = 0;
+            else if (stype == 9) rootpage = 1;
+            else if (stype >= 1 && stype <= 6)
+                rootpage = read_int_be(p, ssize);
+        }
+        p += ssize;
+    }
+
+    if (name && name_len == (int)strlen(table_name) &&
+        memcmp(name, table_name, (size_t)name_len) == 0) {
+        if (out_rootpage) *out_rootpage = rootpage;
+        return 1; /* found */
+    }
+    return 0; /* not this cell */
+}
+
+/* ── Recursive helper: find table starting from any page ──── */
+
+static int sqlite_find_table_in_page(SqliteDb *db, int pg,
+                                     const char *table_name) {
+    const unsigned char *page = page_ptr(db, pg);
+    if (!page) return 0;
+
+    int page_type = page[0];
+    int hdr = btree_offset(pg);
+    const unsigned char *bt = page + hdr;
 
     if (page_type == PAGE_TYPE_LEAF_TABLE) {
-        /* Single leaf page — parse all cells */
-        int n_cells = (page1[3] << 8) | page1[4];
-        size_t cell_content_offset = (page1[5] << 8) | page1[6];
-        if (cell_content_offset == 0) cell_content_offset = 65536;
-
-        const unsigned char *cell_ptr_area = page1 + LEAF_TABLE_HEADER_SIZE;
-        /* Cell pointer array starts at offset 8 for leaf table pages */
+        int n_cells = (bt[3] << 8) | bt[4];
         for (int i = 0; i < n_cells; i++) {
-            size_t cell_offset = (cell_ptr_area[i * 2] << 8) | cell_ptr_area[i * 2 + 1];
-            const unsigned char *cell = page1 + cell_offset;
-
-            size_t pos = 0;
-            int64_t payload_len;
-            pos += read_varint(cell + pos, 50, &payload_len);
-            pos += read_varint(cell + pos, 50, NULL); /* rowid */
-            pos += read_varint(cell + pos, 50, NULL); /* header size */
-
-            /* Read 5 columns: type, name, tbl_name, rootpage, sql */
-            int64_t col_serials[5];
-            for (int c = 0; c < 5; c++) {
-                int64_t s;
-                pos += read_varint(cell + pos, 50, &s);
-                col_serials[c] = s;
-            }
-
-            /* Extract name (col 1) and rootpage (col 3) */
-            const unsigned char *p = cell + pos;
-            const char *name = NULL;
-            int name_len = 0;
-            int64_t rootpage = 0;
-
-            for (int c = 0; c < 5; c++) {
-                int stype = (int)col_serials[c];
-                int ssize = serial_type_size(stype);
-
-                if (c == 1 && stype >= 13 && stype % 2 == 1) {
-                    name = (const char *)p;
-                    name_len = (stype - 13) / 2;
-                }
-                if (c == 3) {
-                    if (stype == 8) rootpage = 0;
-                    else if (stype == 9) rootpage = 1;
-                    else if (stype >= 1 && stype <= 6)
-                        rootpage = read_int_be(p, ssize);
-                }
-
-                p += ssize;
-            }
-
-            if (name && name_len == (int)strlen(table_name) &&
-                memcmp(name, table_name, name_len) == 0) {
-                return (int)rootpage;
-            }
+            size_t cpo = (size_t)hdr + LEAF_TABLE_HEADER_SIZE + (size_t)i * 2;
+            size_t co = ((size_t)page[cpo] << 8) | (size_t)page[cpo + 1];
+            int64_t rp = 0;
+            if (parse_master_cell(page + co, table_name, &rp))
+                return (int)rp;
         }
     } else if (page_type == PAGE_TYPE_INTERIOR_TABLE) {
-        /* Interior page — traverse child pages */
-        int n_cells = (page1[3] << 8) | page1[4];
-        /* First right pointer */
-        int right_ptr_page = (page1[8] << 24) | (page1[9] << 16) |
-                             (page1[10] << 8) | page1[11];
+        int n_cells = (bt[3] << 8) | bt[4];
+        uint32_t right_child = ((uint32_t)bt[8] << 24) |
+                               ((uint32_t)bt[9] << 16) |
+                               ((uint32_t)bt[10] << 8) |
+                               (uint32_t)bt[11];
 
-        const unsigned char *cell_area = page1 + INTERIOR_TABLE_HEADER_SIZE;
-        for (int i = 0; i <= n_cells; i++) {
-            int child_page;
-            if (i < n_cells) {
-                child_page = (cell_area[i * 2] << 24) |
-                             (cell_area[i * 2 + 1] << 16) |
-                             (cell_area[i * 2 + 2] << 8) |
-                             cell_area[i * 2 + 3];
-                child_page = child_page >> 8; /* top 3 bytes are the page */
-                /* Actually: interior table cell has 4-byte page pointer */
-                child_page = (cell_area[i * 4] << 24) |
-                             (cell_area[i * 4 + 1] << 16) |
-                             (cell_area[i * 4 + 2] << 8) |
-                             cell_area[i * 4 + 3];
-            } else {
-                child_page = right_ptr_page;
-            }
-            int result = sqlite_find_table(db, table_name);
+        /* Cell pointer array: 2 bytes per entry at INTERIOR_TABLE_HEADER_SIZE */
+        for (int i = 0; i < n_cells; i++) {
+            /* Read cell offset from pointer array */
+            size_t cpo = (size_t)hdr + INTERIOR_TABLE_HEADER_SIZE + (size_t)i * 2;
+            size_t co = ((size_t)page[cpo] << 8) | (size_t)page[cpo + 1];
+            const unsigned char *cell = page + co;
+            /* First 4 bytes of interior table cell = left child page number (big-endian) */
+            uint32_t child_pg = ((uint32_t)cell[0] << 24) |
+                                ((uint32_t)cell[1] << 16) |
+                                ((uint32_t)cell[2] << 8) |
+                                (uint32_t)cell[3];
+            int result = sqlite_find_table_in_page(db, (int)child_pg, table_name);
             if (result > 0) return result;
-            /* Recurse into child — but sqlite_find_table doesn't know
-             * which page to start from. We need a different approach
-             * for interior pages. Simplify: always use page 1. */
-            (void)child_page;
+        }
+        /* Check right-most child pointer */
+        if (right_child > 0) {
+            int result = sqlite_find_table_in_page(db, (int)right_child, table_name);
+            if (result > 0) return result;
         }
     }
 
     return 0; /* not found */
+}
+
+/* Find root page for a table. Parses sqlite_master B-tree. */
+int sqlite_find_table(SqliteDb *db, const char *table_name) {
+    return sqlite_find_table_in_page(db, 1, table_name);
 }
 
 /* ── Read a single record from a leaf table cell ─────────────── */

@@ -61,12 +61,15 @@ int atoi(const char *s) {
     return (int)strtol(s, NULL, 10);
 }
 
-/* Single-threaded getenv via Win32 (returns static buffer). */
-static char g_env_buf[1024];
+/* getenv via Win32 — rotating double-buffer so two calls don't clobber. */
+static char g_env_bufs[2][1024];
+static int g_env_idx = 0;
 
 char *getenv(const char *name) {
-    DWORD n = GetEnvironmentVariableA(name, g_env_buf, sizeof(g_env_buf));
-    if (n == 0 || n >= sizeof(g_env_buf))
+    char *buf = g_env_bufs[g_env_idx & 1];
+    g_env_idx++;
+    DWORD n = GetEnvironmentVariableA(name, buf, 1024);
+    if (n == 0 || n >= 1024)
         return NULL;
-    return g_env_buf;
+    return buf;
 }

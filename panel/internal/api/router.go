@@ -59,8 +59,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 	publicStatsHandler := NewPublicStatsHandler(db)
 	pricingHandler := NewPricingHandler(db)
 	referralHandler := NewReferralHandler(db)
+	systemHealthHandler := NewSystemHealthHandler()
 
-	// Handlers that were implemented but not registered
 	telegramBotHandler := NewTelegramBotHandler(db)
 	teamHandler := NewTeamHandler(db)
 	auditHandler := NewAuditHandler(db)
@@ -70,6 +70,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
 		r.With(middleware.RateLimit(10, time.Minute)).Post("/api/auth/2fa/verify-login", authHandler.VerifyLogin)
+		r.With(middleware.RateLimit(3, 15*time.Minute)).Post("/api/auth/forgot-password", authHandler.ForgotPassword)
+		r.With(middleware.RateLimit(5, 15*time.Minute)).Post("/api/auth/reset-password", authHandler.ResetPassword)
 		r.Get("/api/auth/2fa/required", totpHandler.Required)
 		r.Get("/api/public/stats", publicStatsHandler.GetPublicStats)
 		r.Get("/api/pricing", pricingHandler.ListTiers)
@@ -105,6 +107,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Delete("/api/keys/{id}", apiKeyHandler.Delete)
 
 		r.Get("/api/stats", statsHandler.Dashboard)
+
+		r.Get("/api/system/health", systemHealthHandler.Health)
 
 		// Docs (auth required)
 		r.Get("/api/docs", docsHandler.List)

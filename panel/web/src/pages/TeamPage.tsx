@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Users as UsersIcon, Shield, Trash2, Loader2 } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -20,6 +21,7 @@ interface TeamMember {
 
 export default function TeamPage() {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
   const [roleFilter, setRoleFilter] = useState('')
   const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null)
   const [roleTarget, setRoleTarget] = useState<TeamMember | null>(null)
@@ -42,7 +44,7 @@ export default function TeamPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><UsersIcon className="h-5 w-5" />Team</h1>
+      <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><UsersIcon className="h-5 w-5" />{t('team.title')}</h1>
 
       <div className="flex items-center gap-2">
         <select
@@ -50,7 +52,7 @@ export default function TeamPage() {
           onChange={(e) => setRoleFilter(e.target.value)}
           className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
         >
-          <option value="">All roles</option>
+          <option value="">{t('team.all_roles')}</option>
           <option value="admin">Admin</option>
           <option value="worker">Worker</option>
           <option value="viewer">Viewer</option>
@@ -58,29 +60,29 @@ export default function TeamPage() {
       </div>
 
       <Card>
-        <CardHeader><CardTitle className="text-sm font-medium">Team Members</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-sm font-medium">{t('team.members')}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? <Skeleton className="h-64" /> : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Last Active</TableHead>
-                  <TableHead>Sessions</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead>{t('table.username')}</TableHead>
+                  <TableHead>{t('users.role')}</TableHead>
+                  <TableHead>{t('team.status')}</TableHead>
+                  <TableHead>{t('team.last_active')}</TableHead>
+                  <TableHead>{t('team.sessions')}</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {(members ?? []).length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">No members</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">{t('team.no_members')}</TableCell></TableRow>
                 ) : (members ?? []).map(m => (
                   <TableRow key={m.id}>
                     <TableCell className="font-mono text-xs">{m.username}</TableCell>
                     <TableCell><span className={`text-xs px-2 py-0.5 rounded-full ${m.role === 'admin' ? 'bg-brand-500/20 text-brand-400' : 'bg-brand-400/20 text-brand-400'}`}>{m.role}</span></TableCell>
                     <TableCell><span className={`inline-block w-2 h-2 rounded-full ${m.status === 'online' ? 'bg-success' : 'bg-muted-foreground'}`} /> {m.status}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{m.last_login ?? 'Never'}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{m.last_login ?? t('team.never')}</TableCell>
                     <TableCell>{m.sessions}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
@@ -103,13 +105,13 @@ export default function TeamPage() {
       <AlertDialog open={!!removeTarget} onOpenChange={() => setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove member</AlertDialogTitle>
+            <AlertDialogTitle>{t('team.remove_title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Remove {removeTarget?.username} from the team? This cannot be undone.
+              {t('team.remove_confirm', { name: removeTarget?.username ?? '' })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction onClick={() => removeTarget && removeMutation.mutate(removeTarget.id)}>
               {removeMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Remove
@@ -121,7 +123,7 @@ export default function TeamPage() {
       <Dialog open={!!roleTarget} onOpenChange={() => setRoleTarget(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change role — {roleTarget?.username}</DialogTitle>
+            <DialogTitle>{t('team.change_role', { name: roleTarget?.username ?? '' })}</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <select
@@ -135,10 +137,10 @@ export default function TeamPage() {
             </select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRoleTarget(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setRoleTarget(null)}>{t('common.cancel')}</Button>
             <Button onClick={() => roleTarget && roleMutation.mutate({ id: roleTarget.id, role: newRole })}>
               {roleMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Save
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

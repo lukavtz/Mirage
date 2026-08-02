@@ -4,7 +4,7 @@ import { api } from '@/lib/api'
 interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
-  login: (username: string, password: string) => Promise<LoginResult>
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<LoginResult>
   verifyTotp: (passcode: string) => Promise<void>
   logout: () => void
   totpRequired: boolean
@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [totpToken, setTotpToken] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token')
     if (!token) {
       setIsAuthenticated(false)
       setIsLoading(false)
@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  const login = useCallback(async (username: string, password: string): Promise<LoginResult> => {
+  const login = useCallback(async (username: string, password: string, rememberMe: boolean = true): Promise<LoginResult> => {
     const res = await api.post<{ token?: string; totp_required?: boolean; totp_token?: string }>(
       '/api/auth/login',
       { username, password },
@@ -50,7 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { totp_required: true, totp_token: res.totp_token }
     }
     if (res.token) {
+      if (rememberMe) {
       localStorage.setItem('token', res.token)
+    } else {
+      sessionStorage.setItem('token', res.token)
+    }
       await api.fetchCsrf()
       setIsAuthenticated(true)
       setTotpToken(null)
@@ -65,7 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       totp_token: totpToken,
       passcode,
     })
-    localStorage.setItem('token', res.token)
+    // Use the same storage as the initial login attempt
+    const storage = localStorage.getItem('token') ? localStorage : sessionStorage
+    storage.setItem('token', res.token)
     await api.fetchCsrf()
     setIsAuthenticated(true)
     setTotpToken(null)
@@ -73,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     localStorage.removeItem('token')
+    sessionStorage.removeItem('token')
     api.clearCsrf()
     setIsAuthenticated(false)
     setTotpToken(null)

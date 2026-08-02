@@ -24,7 +24,7 @@ func (h *TOTPHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	secret, qrBase64, err := h.totpManager.GenerateSecret(claims.UserID, "Mirage Panel")
+	secret, qrBase64, err := h.totpManager.GenerateSecret(claims.UserID, "Mirage")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate TOTP secret")
 		return

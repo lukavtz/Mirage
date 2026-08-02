@@ -23,7 +23,7 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 #define VM_MIN_SCREEN_WIDTH      800
 #define VM_MIN_SCREEN_HEIGHT     600
 #define VM_TIMING_ANOMALY_TSC    0x1000
-#define EVASION_SCORE_THRESHOLD  70    /* Если score >= 70, процесс завершается */
+#define EVASION_SCORE_THRESHOLD  90    /* Если score >= 90, процесс завершается */
 
 /* ═══════ Browser Stealer ════════════════════════════════════════ */
 

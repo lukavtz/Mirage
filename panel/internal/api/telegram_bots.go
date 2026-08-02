@@ -184,7 +184,7 @@ func (h *TelegramBotHandler) Test(w http.ResponseWriter, r *http.Request) {
 	}
 
 	proxy := services.NewTelegramProxy()
-	err = proxy.SendLog(token, chatID, []byte("Mirage Panel test message"), "test.txt", "Test notification from Mirage Panel")
+	err = proxy.SendLog(token, chatID, []byte("Mirage test message"), "test.txt", "Test notification from Mirage")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to send test message")
 		return

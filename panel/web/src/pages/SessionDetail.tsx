@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
 import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare } from 'lucide-react'
 import { api } from '@/lib/api'
-import { t } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -37,6 +37,7 @@ function formatBytes(bytes?: number): string {
 export default function SessionDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
 
   const query = useQuery<SessionDetail>({
@@ -92,9 +93,9 @@ export default function SessionDetail() {
   if (!query.data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground gap-4">
-        <p className="text-lg font-medium">Session not found</p>
+        <p className="text-lg font-medium">{t('session.not_found')}</p>
         <Button variant="outline" onClick={() => navigate('/sessions')}>
-          Back to Sessions
+          {t('session.back')}
         </Button>
       </div>
     )
@@ -114,15 +115,15 @@ export default function SessionDetail() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
-                Export
+                {t('session.export')}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => window.open(`/api/export/session/${id}?format=json`)}>
-                Export as JSON
+                {t('session.export')} as JSON
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.open(`/api/export/session/${id}?format=html`)}>
-                Export as HTML
+                {t('session.export')} as HTML
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -167,7 +168,7 @@ export default function SessionDetail() {
           </TabsTrigger>
           <TabsTrigger value="system">
             <Monitor className="h-4 w-4 mr-1" />
-            System Info
+            {t('session.system')}
           </TabsTrigger>
           <TabsTrigger value="notes">
             <MessageSquare className="h-4 w-4 mr-1" />
@@ -182,17 +183,17 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>URL</TableHead>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Password</TableHead>
-                    <TableHead>Browser</TableHead>
+                    <TableHead>{t('table.url')}</TableHead>
+                    <TableHead>{t('table.username')}</TableHead>
+                    <TableHead>{t('table.password')}</TableHead>
+                    <TableHead>{t('table.browser')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.passwords?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No passwords found
+                        {t('session.no_passwords')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -231,17 +232,17 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Domain</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Path</TableHead>
+                    <TableHead>{t('table.domain')}</TableHead>
+                    <TableHead>{t('table.name')}</TableHead>
+                    <TableHead>{t('table.value')}</TableHead>
+                    <TableHead>{t('table.path')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.cookies?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No cookies found
+                        {t('session.no_cookies')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -268,17 +269,17 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Number</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Holder</TableHead>
-                    <TableHead>CVC</TableHead>
+                    <TableHead>{t('table.number')}</TableHead>
+                    <TableHead>{t('table.expires')}</TableHead>
+                    <TableHead>{t('table.holder')}</TableHead>
+                    <TableHead>{t('table.cvc')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.cards?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No cards found
+                        {t('session.no_cards')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -319,15 +320,15 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Path</TableHead>
+                    <TableHead>{t('table.name')}</TableHead>
+                    <TableHead>{t('table.path')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.wallets?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        No wallets found
+                        {t('session.no_wallets')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -352,15 +353,15 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Filename</TableHead>
-                    <TableHead className="text-right">Size</TableHead>
+                    <TableHead>{t('table.filename')}</TableHead>
+                    <TableHead className="text-right">{t('table.size')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.files?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        No files found
+                        {t('session.no_files')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -384,7 +385,7 @@ export default function SessionDetail() {
               <>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">CPU</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.cpu')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -393,7 +394,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">GPU</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.gpu')}</CardTitle>
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -402,7 +403,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">RAM</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.ram')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -411,7 +412,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Operating System</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.os')}</CardTitle>
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -420,7 +421,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Screen</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.screen')}</CardTitle>
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -429,7 +430,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Hostname</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.hostname')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -438,7 +439,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Local IP</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.local_ip')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -447,7 +448,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">MAC Address</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.mac')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -457,7 +458,7 @@ export default function SessionDetail() {
               </>
             ) : (
               <div className="col-span-full text-center text-muted-foreground py-8">
-                No system information available
+                {t('session.no_system')}
               </div>
             )}
           </div>
@@ -469,7 +470,7 @@ export default function SessionDetail() {
               <div className="flex gap-2">
                 <textarea
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  placeholder="Add a note..."
+                  placeholder={t('session.add_note')}
                   value={newNote}
                   onChange={e => setNewNote(e.target.value)}
                 />
@@ -489,7 +490,7 @@ export default function SessionDetail() {
                   <Skeleton className="h-16 w-full" />
                 </div>
               ) : notesQuery.data?.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No notes yet</p>
+                <p className="text-center text-muted-foreground py-4">{t('session.no_notes')}</p>
               ) : (
                 <div className="space-y-2">
                   {notesQuery.data?.map(note => (

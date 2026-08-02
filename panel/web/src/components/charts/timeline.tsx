@@ -1,6 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useChartGradientId } from '@/lib/chart-tokens'
+import { useI18n } from '@/lib/i18n'
 
 interface TimelineProps {
   data: Array<{ date: string; count: number }>
@@ -9,6 +10,7 @@ interface TimelineProps {
 
 export function Timeline({ data, isLoading }: TimelineProps) {
   const gradientId = useChartGradientId('timeline')
+  const { t } = useI18n()
 
   if (isLoading) {
     return <Skeleton className="h-[300px] w-full" />
@@ -17,7 +19,7 @@ export function Timeline({ data, isLoading }: TimelineProps) {
   if (data.length === 0) {
     return (
       <div className="flex items-center justify-center h-[300px] text-muted-foreground text-sm">
-        No data yet — waiting for first log
+        {t('chart.no_timeline')}
       </div>
     )
   }
@@ -55,10 +57,10 @@ export function Timeline({ data, isLoading }: TimelineProps) {
             borderRadius: 'var(--radius)',
             fontSize: 13,
           }}
-          labelFormatter={(label) => `Date: ${label ?? ''}`}
+          labelFormatter={(label) => label ?? ''}
           formatter={(value) => Number(value ?? 0).toLocaleString()}
         />
-        <Area type="monotone" dataKey="count" name="Sessions" stroke="hsl(var(--primary))" fill={`url(#${gradientId})`} strokeWidth={2.5} />
+        <Area type="monotone" dataKey="count" name={t('chart.sessions')} stroke="hsl(var(--primary))" fill={`url(#${gradientId})`} strokeWidth={2.5} />
       </AreaChart>
     </ResponsiveContainer>
   )

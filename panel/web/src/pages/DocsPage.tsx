@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 interface DocFile {
   path: string
@@ -82,6 +83,7 @@ function renderMarkdown(md: string): string {
 export default function DocsPage() {
   const { path: docPath } = useParams()
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [search, setSearch] = useState('')
 
   const docListQuery = useQuery({
@@ -114,12 +116,12 @@ export default function DocsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Book className="h-4 w-4" />
-            Documentation
+            {t('docs.title')}
           </CardTitle>
           <div className="relative mt-2">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search docs..."
+              placeholder={t('docs.search')}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-7 h-8 text-xs"
@@ -148,7 +150,7 @@ export default function DocsPage() {
             ))}
           </nav>
           {filtered.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center mt-4">No docs found</p>
+            <p className="text-xs text-muted-foreground text-center mt-4">{t('docs.no_results')}</p>
           )}
         </CardContent>
       </Card>
@@ -172,7 +174,7 @@ export default function DocsPage() {
             <div dangerouslySetInnerHTML={{ __html: renderMarkdown(docContent.content) }} />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Select a document from the sidebar
+              {t('docs.select')}
             </div>
           )}
         </CardContent>

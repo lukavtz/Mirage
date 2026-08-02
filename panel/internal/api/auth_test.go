@@ -282,3 +282,256 @@ func TestLogin_MissingFields(t *testing.T) {
 		})
 	}
 }
+
+func TestForgotPassword_ValidUser(t *testing.T) {
+	d := openTestDB(t)
+	createTestUser(t, d, "testuser", "secret123")
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	body := `{"username":"testuser"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ForgotPassword(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["token"] == "" {
+		t.Error("expected non-empty token")
+	}
+	if resp["message"] == "" {
+		t.Error("expected message")
+	}
+}
+
+func TestForgotPassword_InvalidUser(t *testing.T) {
+	d := openTestDB(t)
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	body := `{"username":"nobody"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(body)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler.ForgotPassword(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200 (no enumeration), got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["token"] != nil {
+		t.Error("should not return token for nonexistent user")
+	}
+	if resp["message"] == "" {
+		t.Error("expected message")
+	}
+}
+
+func TestForgotPassword_EnumerationPrevention(t *testing.T) {
+	d := openTestDB(t)
+	createTestUser(t, d, "realuser", "secret123")
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	// Call with valid user
+	w1 := httptest.NewRecorder()
+	req1 := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
+		bytes.NewReader([]byte(`{"username":"realuser"}`)))
+	req1.Header.Set("Content-Type", "application/json")
+	handler.ForgotPassword(w1, req1)
+
+	// Call with invalid user
+	w2 := httptest.NewRecorder()
+	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
+		bytes.NewReader([]byte(`{"username":"fakeuser"}`)))
+	req2.Header.Set("Content-Type", "application/json")
+	handler.ForgotPassword(w2, req2)
+
+	// Both must return 200 with the same message
+	if w1.Code != w2.Code {
+		t.Fatalf("status codes differ: %d vs %d", w1.Code, w2.Code)
+	}
+
+	var r1, r2 map[string]any
+	json.Unmarshal(w1.Body.Bytes(), &r1)
+	json.Unmarshal(w2.Body.Bytes(), &r2)
+
+	if r1["message"] != r2["message"] {
+		t.Fatalf("messages differ — enables enumeration: %q vs %q", r1["message"], r2["message"])
+	}
+}
+
+func TestResetPassword_ValidToken(t *testing.T) {
+	d := openTestDB(t)
+	userID := createTestUser(t, d, "testuser", "secret123")
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	// First, get a reset token
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
+		bytes.NewReader([]byte(`{"username":"testuser"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	handler.ForgotPassword(w, req)
+
+	var forgotResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &forgotResp)
+	token, _ := forgotResp["token"].(string)
+	if token == "" {
+		t.Fatal("expected token from forgot-password")
+	}
+
+	// Now reset the password
+	w2 := httptest.NewRecorder()
+	resetBody := fmt.Sprintf(`{"token":"%s","new_password":"newpass12345"}`, token)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password",
+		bytes.NewReader([]byte(resetBody)))
+	req2.Header.Set("Content-Type", "application/json")
+	handler.ResetPassword(w2, req2)
+
+	if w2.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w2.Code, w2.Body.String())
+	}
+
+	var resp map[string]string
+	json.Unmarshal(w2.Body.Bytes(), &resp)
+	if resp["message"] != "Password reset successfully" {
+		t.Errorf("unexpected message: %s", resp["message"])
+	}
+
+	// Verify auth_sessions were cleared (check before any new logins)
+	var count int
+	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = ?", userID).Scan(&count)
+	if count != 0 {
+		t.Errorf("expected 0 auth_sessions after reset, got %d", count)
+	}
+
+	// Verify old password no longer works
+	w3 := httptest.NewRecorder()
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login",
+		bytes.NewReader([]byte(`{"username":"testuser","password":"secret123"}`)))
+	loginReq.Header.Set("Content-Type", "application/json")
+	handler.Login(w3, loginReq)
+	if w3.Code != http.StatusUnauthorized {
+		t.Errorf("old password should fail: got %d", w3.Code)
+	}
+
+	// Verify new password works
+	w4 := httptest.NewRecorder()
+	loginReq2 := httptest.NewRequest(http.MethodPost, "/api/auth/login",
+		bytes.NewReader([]byte(`{"username":"testuser","password":"newpass12345"}`)))
+	loginReq2.Header.Set("Content-Type", "application/json")
+	handler.Login(w4, loginReq2)
+	if w4.Code != http.StatusOK {
+		t.Errorf("new password should work: got %d: %s", w4.Code, w4.Body.String())
+	}
+}
+
+func TestResetPassword_UsedToken(t *testing.T) {
+	d := openTestDB(t)
+	createTestUser(t, d, "testuser", "secret123")
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	// Get a reset token
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
+		bytes.NewReader([]byte(`{"username":"testuser"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	handler.ForgotPassword(w, req)
+
+	var forgotResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &forgotResp)
+	token, _ := forgotResp["token"].(string)
+
+	// Use the token once
+	resetBody := fmt.Sprintf(`{"token":"%s","new_password":"newpass12345"}`, token)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password",
+		bytes.NewReader([]byte(resetBody)))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	handler.ResetPassword(w2, req2)
+	if w2.Code != http.StatusOK {
+		t.Fatalf("first reset should succeed: %d", w2.Code)
+	}
+
+	// Try using the same token again
+	req3 := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password",
+		bytes.NewReader([]byte(resetBody)))
+	req3.Header.Set("Content-Type", "application/json")
+	w3 := httptest.NewRecorder()
+	handler.ResetPassword(w3, req3)
+
+	if w3.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for reused token, got %d: %s", w3.Code, w3.Body.String())
+	}
+}
+
+func TestResetPassword_ExpiredToken(t *testing.T) {
+	d := openTestDB(t)
+	userID := createTestUser(t, d, "testuser", "secret123")
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	// Insert an already-expired reset token directly
+	resetID := uuid.New().String()
+	tokenBytes := []byte("0123456789abcdef0123456789abcdef") // 32 bytes
+	tokenHash := fmt.Sprintf("%x", sha256.Sum256(tokenBytes))
+	d.Exec("INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+		resetID, userID, tokenHash, "2020-01-01T00:00:00Z")
+
+	// Try resetting with the expired token
+	resetBody := fmt.Sprintf(`{"token":"%x","new_password":"newpass12345"}`, tokenBytes)
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password",
+		bytes.NewReader([]byte(resetBody)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.ResetPassword(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for expired token, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestResetPassword_ShortPassword(t *testing.T) {
+	d := openTestDB(t)
+	createTestUser(t, d, "testuser", "secret123")
+
+	handler := api.NewAuthHandler(d, "test-secret")
+
+	// Get a reset token
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
+		bytes.NewReader([]byte(`{"username":"testuser"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	handler.ForgotPassword(w, req)
+
+	var forgotResp map[string]any
+	json.Unmarshal(w.Body.Bytes(), &forgotResp)
+	token, _ := forgotResp["token"].(string)
+
+	// Try resetting with a short password
+	resetBody := fmt.Sprintf(`{"token":"%s","new_password":"short"}`, token)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password",
+		bytes.NewReader([]byte(resetBody)))
+	req2.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	handler.ResetPassword(w2, req2)
+
+	if w2.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for short password, got %d: %s", w2.Code, w2.Body.String())
+	}
+}

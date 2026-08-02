@@ -6,9 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, ShieldCheck, ShieldOff } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 export function TotpSetupCard() {
   const queryClient = useQueryClient()
+  const { t } = useI18n()
 
   const totpStatusQuery = useQuery({
     queryKey: ['totp-status'],
@@ -54,7 +56,7 @@ export function TotpSetupCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <ShieldCheck className="h-5 w-5" />
-          Two-Factor Authentication
+          {t('totp.title')}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -62,7 +64,7 @@ export function TotpSetupCard() {
           <>
             <div className="flex items-center gap-2 text-sm text-success">
               <ShieldCheck className="h-4 w-4" />
-              <span>2FA is enabled</span>
+              <span>{t('totp.enabled')}</span>
             </div>
             <Button
               variant="destructive"
@@ -72,15 +74,15 @@ export function TotpSetupCard() {
             >
               {totpDisableMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               <ShieldOff className="h-4 w-4 mr-2" />
-              Disable 2FA
+              {t('totp.disable')}
             </Button>
-            {totpDisableMutation.isSuccess && <p className="text-sm text-success">2FA disabled</p>}
-            {totpDisableMutation.isError && <p className="text-sm text-destructive">Failed to disable 2FA</p>}
+            {totpDisableMutation.isSuccess && <p className="text-sm text-success">{t('totp.disabled')}</p>}
+            {totpDisableMutation.isError && <p className="text-sm text-destructive">{t('totp.disable_failed')}</p>}
           </>
         ) : showTotpSetup && qrCode ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Scan this QR code with your authenticator app, then enter the 6-digit code below.
+              {t('totp.scan_qr')}, then enter the 6-digit code below.
             </p>
             <div className="flex justify-center py-2">
               <img
@@ -93,12 +95,12 @@ export function TotpSetupCard() {
             </div>
             {totpSecret && (
               <div className="text-center">
-                <p className="text-xs text-muted-foreground mb-1">Or enter this secret manually:</p>
+                <p className="text-xs text-muted-foreground mb-1">{t('totp.secret_manual')}</p>
                 <code className="text-xs bg-muted px-2 py-1 rounded font-mono select-all">{totpSecret}</code>
               </div>
             )}
             <div className="space-y-2">
-              <Label htmlFor="totp-verify">Verification Code</Label>
+              <Label htmlFor="totp-verify">{t('totp.verification_code')}</Label>
               <Input
                 id="totp-verify"
                 type="text"
@@ -117,7 +119,7 @@ export function TotpSetupCard() {
                 disabled={totpVerifyMutation.isPending || verifyPasscode.length < 6}
               >
                 {totpVerifyMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                Enable 2FA
+                {t('totp.enable')}
               </Button>
               <Button
                 variant="outline"
@@ -130,13 +132,13 @@ export function TotpSetupCard() {
                 Cancel
               </Button>
             </div>
-            {totpVerifyMutation.isSuccess && <p className="text-sm text-success">2FA enabled!</p>}
-            {totpVerifyMutation.isError && <p className="text-sm text-destructive">Invalid code, try again</p>}
+            {totpVerifyMutation.isSuccess && <p className="text-sm text-success">{t('totp.enabled_success')}</p>}
+            {totpVerifyMutation.isError && <p className="text-sm text-destructive">{t('totp.invalid_code')}</p>}
           </>
         ) : (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Protect your account with a TOTP authenticator app (Google Authenticator, Authy, etc).
+              {t('totp.description')}
             </p>
             <Button
               onClick={() => totpSetupMutation.mutate()}
@@ -144,9 +146,9 @@ export function TotpSetupCard() {
             >
               {totpSetupMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               <ShieldCheck className="h-4 w-4 mr-2" />
-              Set up 2FA
+              {t('totp.setup')}
             </Button>
-            {totpSetupMutation.isError && <p className="text-sm text-destructive">Failed to initialize 2FA setup</p>}
+            {totpSetupMutation.isError && <p className="text-sm text-destructive">{t('totp.setup_failed')}</p>}
           </div>
         )}
       </CardContent>

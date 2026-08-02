@@ -1,9 +1,15 @@
 package api
 
 import (
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"fmt"
+	"log/slog"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -49,25 +55,28 @@ type tempTokenEntry struct {
 }
 
 type AuthHandler struct {
-	db             *sql.DB
-	jwtSecret      string
-	rateLimiter    *ipRateLimiter
-	failedAttempts map[string]int
-	failedMu       sync.Mutex
-	tempTokens     map[string]tempTokenEntry
-	tempMu         sync.Mutex
+	db              *sql.DB
+	jwtSecret       string
+	rateLimiter     *ipRateLimiter
+	forgotPwLimiter *ipRateLimiter
+	failedAttempts  map[string]int
+	failedMu        sync.Mutex
+	tempTokens      map[string]tempTokenEntry
+	tempMu          sync.Mutex
 }
 
 func NewAuthHandler(db *sql.DB, jwtSecret string) *AuthHandler {
 	h := &AuthHandler{
-		db:             db,
-		jwtSecret:      jwtSecret,
-		rateLimiter:    newIPRateLimiter(),
-		failedAttempts: make(map[string]int),
-		tempTokens:     make(map[string]tempTokenEntry),
+		db:              db,
+		jwtSecret:       jwtSecret,
+		rateLimiter:     newIPRateLimiter(),
+		forgotPwLimiter: newIPRateLimiter(),
+		failedAttempts:  make(map[string]int),
+		tempTokens:      make(map[string]tempTokenEntry),
 	}
 	go h.cleanupFailedAttempts()
 	go h.cleanupTempTokens()
+	go h.cleanupPasswordResets()
 	return h
 }
 
@@ -93,6 +102,14 @@ func (h *AuthHandler) cleanupFailedAttempts() {
 		h.failedMu.Lock()
 		h.failedAttempts = make(map[string]int)
 		h.failedMu.Unlock()
+	}
+}
+
+func (h *AuthHandler) cleanupPasswordResets() {
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		h.db.Exec("DELETE FROM password_resets WHERE expires_at < datetime('now') OR used = 1")
 	}
 }
 
@@ -259,6 +276,152 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		"role":         claims.Role,
 		"totp_enabled": totpEnabled,
 	})
+}
+
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	ip := extractIP(r)
+
+	if !h.forgotPwLimiter.Allow(ip) {
+		writeError(w, http.StatusTooManyRequests, "rate limit exceeded")
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Username == "" {
+		writeError(w, http.StatusBadRequest, "username is required")
+		return
+	}
+
+	const genericMsg = "If the account exists, a reset token has been generated."
+
+	var userID string
+	err := h.db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"message": genericMsg})
+		return
+	}
+
+	// Generate random 32-byte token
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	token := hex.EncodeToString(tokenBytes)
+
+	// Hash with SHA256 for storage
+	hash := sha256.Sum256(tokenBytes)
+	tokenHash := hex.EncodeToString(hash[:])
+
+	id := uuid.New().String()
+	expiresAt := time.Now().Add(15 * time.Minute)
+	_, err = h.db.Exec(
+		"INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+		id, userID, tokenHash, expiresAt.UTC().Format(time.RFC3339),
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Send token via Telegram if configured, otherwise log to console
+	var tgToken, tgChatID string
+	h.db.QueryRow("SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&tgToken)
+	h.db.QueryRow("SELECT value FROM settings WHERE key = 'telegram_chat_id'").Scan(&tgChatID)
+
+	if tgToken != "" && tgChatID != "" {
+		text := fmt.Sprintf("🔐 Password reset requested\n\nUser: %s\nCode: %s\nExpires: 15 minutes", req.Username, token)
+		go func() {
+			apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", tgToken)
+			form := url.Values{}
+			form.Set("chat_id", tgChatID)
+			form.Set("text", text)
+			http.PostForm(apiURL, form)
+		}()
+	} else {
+		slog.Warn("password reset code (no Telegram configured)", "user", req.Username, "code", token)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"message": genericMsg,
+	})
+}
+
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Token == "" {
+		writeError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		writeError(w, http.StatusBadRequest, "password must be at least 8 characters")
+		return
+	}
+
+	// Hash the provided token to look up in DB
+	tokenBytes, err := hex.DecodeString(req.Token)
+	if err != nil || len(tokenBytes) != 32 {
+		writeError(w, http.StatusBadRequest, "invalid token format")
+		return
+	}
+	hash := sha256.Sum256(tokenBytes)
+	tokenHash := hex.EncodeToString(hash[:])
+
+	var resetID, userID string
+	var expiresAt string
+	var used int
+	err = h.db.QueryRow(
+		"SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?",
+		tokenHash,
+	).Scan(&resetID, &userID, &expiresAt, &used)
+	if err == sql.ErrNoRows {
+		writeError(w, http.StatusBadRequest, "invalid or expired reset token")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if used != 0 {
+		writeError(w, http.StatusBadRequest, "reset token already used")
+		return
+	}
+	expiry, err := time.Parse(time.RFC3339, expiresAt)
+	if err != nil || time.Now().After(expiry) {
+		writeError(w, http.StatusBadRequest, "reset token has expired")
+		return
+	}
+
+	// Hash new password with bcrypt (cost 12)
+	passwordHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Update password, mark token used, revoke all sessions
+	_, err = h.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	h.db.Exec("UPDATE password_resets SET used = 1 WHERE id = ?", resetID)
+	h.db.Exec("DELETE FROM auth_sessions WHERE user_id = ?", userID)
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
 }
 
 func (h *AuthHandler) recordFailedAttempt(ip string) {

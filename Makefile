@@ -22,6 +22,7 @@ SRCS = src/main.c \
        src/wallets/wallet_desktop.c \
        src/messengers/messengers.c \
        src/messengers/telegram_tdata.c \
+       src/messengers/telegram_web.c \
        src/parsers/sqlite.c \
        src/network/socks5.c \
        src/network/panel_http.c \

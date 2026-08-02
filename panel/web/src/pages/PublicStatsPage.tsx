@@ -7,6 +7,7 @@ import { FlagIcon } from '@/components/charts/flag-icon'
 import { api } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { PIE_COLORS, useChartGradientId } from '@/lib/chart-tokens'
+import { COUNTRY_NAMES } from '@/lib/countries'
 
 interface PublicStats {
   total_sessions: number
@@ -141,7 +142,7 @@ export default function PublicStatsPage() {
                       <FlagIcon country={c.country} width={18} height={18} />
                       <div className="flex-1">
                         <div className="flex justify-between text-xs mb-0.5">
-                          <span className="text-muted-foreground">{c.country}</span>
+                          <span className="text-muted-foreground">{COUNTRY_NAMES[c.country] || c.country}</span>
                           <span className="font-medium tabular-nums">{c.count.toLocaleString()}</span>
                         </div>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">

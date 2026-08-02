@@ -60,21 +60,24 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
     }
     const fc = feature(worldTopo as never, objects.countries) as unknown as FeatureCollection<Geometry, CountryProps>
     const landFeatures: LandFeature[] = fc.features.map(f => {
-      const iso2 = ISO3_TO_ISO2[(f.properties as { name?: string }).name ?? ''] || ''
-      const count = map.get(iso2) ?? 0
       const props = f.properties
       const iso2 = props && 'name' in props && typeof props.name === 'string'
         ? (ISO3_TO_ISO2[props.name] || '')
         : ''
-      if (c && Number.isFinite(c[0]) && Number.isFinite(c[1]) && count > 0) {
-        mkrs.push({ code: iso2, count, cx: c[0], cy: c[1], ratio: count / m })
+      const count = map.get(iso2) ?? 0
+      const c = path.centroid(f as never)
+      const cPair: [number, number] | null = c && Number.isFinite(c[0]) && Number.isFinite(c[1])
+        ? [c[0], c[1]]
+        : null
+      if (cPair && count > 0) {
+        mkrs.push({ code: iso2, count, cx: cPair[0], cy: cPair[1], ratio: count / m })
       }
       return {
         d: path(f) || '',
         iso2,
         hasData: count > 0,
         ratio: count / m,
-        centroid: c ?? [NaN, NaN],
+        centroid: cPair ?? [NaN, NaN],
       }
     }).filter(s => s.d)
     const sphere = path({ type: 'Sphere' } as never) || ''

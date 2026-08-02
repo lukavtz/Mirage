@@ -33,5 +33,6 @@
 #define HASH_DeleteFile  0x1E74A9BBu  // NtDeleteFile
 #define HASH_SetInformationFile  0x4D2A2C80u  // NtSetInformationFile
 #define HASH_CreateFile  0xB62F9B6Bu  // NtCreateFile
+#define HASH_EnumerateKey  0x98DDE94Du  // NtEnumerateKey
 
 #endif

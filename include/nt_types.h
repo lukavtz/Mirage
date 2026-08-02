@@ -218,6 +218,28 @@ typedef struct _KEY_VALUE_PARTIAL_INFORMATION {
     BYTE  Data[1];
 } KEY_VALUE_PARTIAL_INFORMATION, *PKEY_VALUE_PARTIAL_INFORMATION;
 
+typedef struct _KEY_BASIC_INFORMATION {
+    int64_t  LastWriteTime;    /* LARGE_INTEGER as raw 64-bit */
+    ULONG    TitleIndex;
+    ULONG    NameLength;
+    WCHAR    Name[1];
+} KEY_BASIC_INFORMATION, *PKEY_BASIC_INFORMATION;
+
+enum KEY_INFORMATION_CLASS {
+    KeyBasicInformation = 0
+};
+
+#define KEY_QUERY_VALUE       0x0001
+#define KEY_ENUMERATE_SUB_KEYS 0x0008
+#define KEY_READ              0x20019
+#define KEY_WOW64_64KEY       0x0100
+#define KEY_WOW64_32KEY       0x0200
+
+#define STATUS_SUCCESS          ((NTSTATUS)0x00000000)
+#define STATUS_NO_MORE_ENTRIES  ((NTSTATUS)0x8000001A)
+#define STATUS_BUFFER_OVERFLOW  ((NTSTATUS)0x80000005)
+#define STATUS_BUFFER_TOO_SMALL ((NTSTATUS)0xC0000023)
+
 enum KEY_VALUE_INFORMATION_CLASS {
     KeyValuePartialInformation = 2
 };

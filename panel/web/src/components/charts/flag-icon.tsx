@@ -1,37 +1,30 @@
 import type { SVGProps } from 'react'
+import { hasFlag } from 'country-flag-icons'
+import * as Flags from 'country-flag-icons/react/3x2'
+import { cn } from '@/lib/utils'
 
-import { COUNTRY_COLORS } from '@/lib/countries'
-
-interface FlagIconProps extends SVGProps<SVGSVGElement> {
+interface FlagIconProps extends Omit<SVGProps<SVGSVGElement>, 'children'> {
   country: string
+  width?: number | string
+  height?: number | string
+  className?: string
 }
 
-// Using shared COUNTRY_COLORS from lib/countries.ts
+// Named exports from country-flag-icons/react/3x2: US, DE, RU, …, uppercase only.
+// hasFlag() is case-insensitive; we normalize to uppercase before lookup.
+const FlagMap = Flags as unknown as Record<string, (props: { className?: string; title?: string; width?: number | string; height?: number | string }) => React.JSX.Element>
 
-export function FlagIcon({ country, width = 20, height = 20, ...props }: FlagIconProps) {
-  const bg = COUNTRY_COLORS[country] ?? '#52525B'
-
+export function FlagIcon({ country, width = 20, height = 15, className }: FlagIconProps) {
+  const code = (country || '').toUpperCase()
+  if (!code || !hasFlag(code)) return null
+  const Flag = FlagMap[code]
+  if (!Flag) return null
   return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 20 20"
+    <Flag
+      className={cn('shrink-0 rounded-[2px]', className)}
       width={width}
       height={height}
-      {...props}
-    >
-      <circle cx="10" cy="10" r="10" fill={bg} />
-      <text
-        x="10"
-        y="10"
-        textAnchor="middle"
-        dominantBaseline="central"
-        fill="white"
-        fontSize="7"
-        fontWeight="600"
-        fontFamily="system-ui, sans-serif"
-      >
-        {country}
-      </text>
-    </svg>
+      title={code}
+    />
   )
 }

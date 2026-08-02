@@ -252,21 +252,15 @@ export default function Dashboard() {
             />
           </CardContent>
         </Card>
-        <Card className="flex flex-col">
-          <CardHeader>
-            <CardTitle>{t('dashboard.top_os')}</CardTitle>
-          </CardHeader>
-          <CardContent className="flex-1 min-h-0 overflow-auto">
-            <OSChart
-              data={data.os_distribution}
-              isLoading={isLoading}
-              selectedOs={os}
-              onSelect={(next) => { setOs(next); setPage(1) }}
-            />
-          </CardContent>
-        </Card>
+      </div>
 
-          {/* Toolbar */}
+        {/* Latest logs with full table controls */}
+        <Card>
+          <CardHeader className="flex flex-col items-stretch gap-3 space-y-0">
+            <div className="flex flex-row items-center justify-between">
+              <CardTitle>{t('dashboard.latest_logs')}</CardTitle>
+              <span className="text-[10px] mono text-muted-foreground/70">{fmtNum(total)} total</span>
+            </div>
           <div className="flex flex-col md:flex-row gap-2 md:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -433,6 +427,10 @@ export default function Dashboard() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 px-3 py-2 border-t border-border">
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
               <span className="mono">{t('dashboard.showing', { a: start, b: end, t: fmtNum(total) })}</span>
               <span>·</span>
               <select

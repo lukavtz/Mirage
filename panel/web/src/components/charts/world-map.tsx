@@ -58,7 +58,7 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
     if (!('countries' in objects)) {
       return { total: tot, markers: mkrs, lands: [] as LandFeature[], spherePath: '', graticulePath: '' }
     }
-    const fc = feature(worldTopo as never, objects.countries) as unknown as FeatureCollection<Geometry, CountryProps>
+    const fc = feature(worldTopo as never, objects.countries as Parameters<typeof feature>[1]) as unknown as FeatureCollection<Geometry, CountryProps>
     const landFeatures: LandFeature[] = fc.features.map(f => {
       const props = f.properties
       const iso2 = props && 'name' in props && typeof props.name === 'string'

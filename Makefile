@@ -79,7 +79,7 @@ TARGET = mirage.exe
 all: polymorph $(TARGET)
 
 polymorph:
-	python3 tools/make_polymorphic.py
+	python tools/make_polymorphic.py
 
 test: $(TARGET)
 	./$(TARGET) --test

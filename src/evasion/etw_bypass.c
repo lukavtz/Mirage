@@ -33,8 +33,8 @@
 
 /* ── Function pointer types ───────────────────────────────── */
 
-typedef LONG (WINAPI *pRtlAddVectoredExceptionHandler)(ULONG, void *);
-typedef LONG (WINAPI *pRtlRemoveVectoredExceptionHandler)(void *);
+typedef void* (WINAPI *pRtlAddVectoredExceptionHandler)(ULONG, void *);
+typedef ULONG (WINAPI *pRtlRemoveVectoredExceptionHandler)(void *);
 
 /* ── State ────────────────────────────────────────────────── */
 

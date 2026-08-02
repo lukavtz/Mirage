@@ -170,7 +170,7 @@ static int sqlite_find_table_in_page(SqliteDb *db, int pg,
     const unsigned char *page = page_ptr(db, pg);
     if (!page) return 0;
 
-    int page_type = page[0];
+    int page_type = page[btree_offset(pg)];
     int hdr = btree_offset(pg);
     const unsigned char *bt = page + hdr;
 
@@ -190,13 +190,10 @@ static int sqlite_find_table_in_page(SqliteDb *db, int pg,
                                ((uint32_t)bt[10] << 8) |
                                (uint32_t)bt[11];
 
-        /* Cell pointer array: 2 bytes per entry at INTERIOR_TABLE_HEADER_SIZE */
         for (int i = 0; i < n_cells; i++) {
-            /* Read cell offset from pointer array */
             size_t cpo = (size_t)hdr + INTERIOR_TABLE_HEADER_SIZE + (size_t)i * 2;
             size_t co = ((size_t)page[cpo] << 8) | (size_t)page[cpo + 1];
             const unsigned char *cell = page + co;
-            /* First 4 bytes of interior table cell = left child page number (big-endian) */
             uint32_t child_pg = ((uint32_t)cell[0] << 24) |
                                 ((uint32_t)cell[1] << 16) |
                                 ((uint32_t)cell[2] << 8) |
@@ -204,7 +201,6 @@ static int sqlite_find_table_in_page(SqliteDb *db, int pg,
             int result = sqlite_find_table_in_page(db, (int)child_pg, table_name);
             if (result > 0) return result;
         }
-        /* Check right-most child pointer */
         if (right_child > 0) {
             int result = sqlite_find_table_in_page(db, (int)right_child, table_name);
             if (result > 0) return result;

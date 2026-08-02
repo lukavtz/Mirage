@@ -11,6 +11,9 @@
 #include <stdlib.h>
 #include <windows.h>
 
+static int bp_strieq(const char *a, const char *b);
+static int bp_is_dup(const BrowserPath *out, size_t n, const char *path, int roaming);
+
 /* ── Process name mapping ─────────────────────────────────────── */
 /* Each entry maps to the browser's actual executable stem (no .exe).
  * Browsers sharing an exe (e.g. Chrome variants → "chrome") map

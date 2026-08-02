@@ -6,9 +6,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
-
-/* Forward declaration — defined in appbound.h */
-typedef enum { APPBOUND_CHROME=0, APPBOUND_EDGE=1, APPBOUND_BRAVE=2, APPBOUND_AVAST=3 } AppBoundBrowser;
+#include "appbound.h" /* for AppBoundBrowser enum */
 
 /*
  * Impersonate winlogon.exe (SYSTEM) to call COM IElevator,

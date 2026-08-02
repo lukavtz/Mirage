@@ -123,6 +123,11 @@
   --warning-foreground: #FAFAFA;
 }
 
+/* World map ocean theme swap. The ocean gradient stops use currentColor; in
+   dark the wrapper's inline `color: var(--background)` renders a dark disc.
+   In light we shift to `--muted` so the sphere stays visible against the
+   pale page background. */
+.light .text-ocean-base { color: var(--muted) !important; }
 @theme {
   /* Soft elevation — hairline shadow + ring */
   --shadow-glow: 0 0 24px -4px color-mix(in srgb, var(--status-online) 35%, transparent);

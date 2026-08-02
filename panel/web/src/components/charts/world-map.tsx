@@ -122,10 +122,11 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
     <div ref={containerRef} className="relative w-full h-full" onMouseMove={onMove} onMouseLeave={() => setHovered(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full block">
         <defs>
-          {/* Ocean radial gradient — center brighter, edge darker */}
+          {/* Ocean radial gradient — color drives off currentColor so a wrapper
+              <g className="text-ocean-base"> can swap it per theme. */}
           <radialGradient id="ocean-grad" cx="50%" cy="50%" r="65%">
-            <stop offset="0%"   stopColor="var(--background)" stopOpacity="0" />
-            <stop offset="100%" stopColor="var(--background)" stopOpacity="0.9" />
+            <stop offset="0%"   stopColor="currentColor" stopOpacity="0" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0.9" />
           </radialGradient>
           {/* Marker core glow */}
           <radialGradient id="marker-core" cx="50%" cy="50%" r="50%">
@@ -134,23 +135,26 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
           </radialGradient>
         </defs>
 
-        {/* 1) Ocean (sphere) — silhouettes the map */}
-        <path
-          d={spherePath}
-          fill="url(#ocean-grad)"
-          stroke="rgba(255, 255, 255, 0.06)"
-          strokeWidth={0.6}
-        />
-
-        {/* 2) Real graticule via d3-geo */}
-        {graticulePath && (
+        {/* 1) Ocean (sphere) — silhouettes the map. `text-ocean-base` flips color per theme. */}
+        <g className="text-ocean-base" style={{ color: 'var(--background)' }}>
           <path
-            d={graticulePath}
-            fill="none"
-            stroke="rgba(255, 255, 255, 0.05)"
-            strokeWidth={0.35}
+            d={spherePath}
+            fill="url(#ocean-grad)"
+            stroke="var(--border)"
+            strokeWidth={0.6}
           />
-        )}
+
+          {/* 2) Real graticule via d3-geo */}
+          {graticulePath && (
+            <path
+              d={graticulePath}
+              fill="none"
+              stroke="var(--border)"
+              strokeOpacity={0.6}
+              strokeWidth={0.35}
+            />
+          )}
+        </g>
 
         {/* 3) Land glow halos (behind countries) — give "watermark" of data presence */}
         <g opacity="0.55">
@@ -177,7 +181,7 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
                 fill={s.hasData
                   ? `color-mix(in srgb, var(--status-online) ${Math.round(intensity * 100)}%, transparent)`
                   : 'transparent'}
-                stroke={s.hasData ? 'var(--status-online)' : 'rgba(255, 255, 255, 0.10)'}
+                stroke={s.hasData ? 'var(--status-online)' : 'var(--border)'}
                 strokeOpacity={s.hasData ? 0.95 : 1}
                 strokeWidth={isActive ? 1.4 : (s.hasData ? 0.7 : 0.5)}
                 strokeLinejoin="round"

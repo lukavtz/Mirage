@@ -57,10 +57,16 @@ static void open_test_db(SqliteDb *sdb, unsigned char **out_db, size_t *out_len)
     unsigned char *db = calloc(1, total);
     assert(db);
 
-    /* Page 1 at db+0: leaf table page for sqlite_master */
+    /* Page 1 at db+0: SQLite header (0-99) + leaf table page for sqlite_master (100+) */
     unsigned char *p1 = db;
-    p1[0] = 0x0d; /* leaf table */
-    p1[3] = 0; p1[4] = 1; /* 1 cell */
+    /* Write SQLite magic header so sqlite_open works */
+    memcpy(p1, "SQLite format 3\0", 16);
+    p1[16] = (page_size >> 8) & 0xFF; p1[17] = page_size & 0xFF; /* page size */
+
+    /* B-tree header starts at offset 100 for page 1 */
+    unsigned char *bt1 = p1 + 100;
+    bt1[0] = 0x0d; /* leaf table */
+    bt1[3] = 0; bt1[4] = 1; /* 1 cell */
 
     /* Build sqlite_master cell */
     const char *type_str = "table";
@@ -98,17 +104,17 @@ static void open_test_db(SqliteDb *sdb, unsigned char **out_db, size_t *out_len)
     cell[cpos++] = 2; /* rootpage */
     memcpy(cell + cpos, sql_str, sql_len); cpos += sql_len;
 
-    /* Place cell near end of page */
-    int cell_off = page_size - cpos;
+    /* Place cell near end of page 1 (btree space: 100 to page_size) */
+    int cell_off = page_size - cpos; /* offset within page */
     memcpy(p1 + cell_off, cell, cpos);
 
-    /* Cell pointer */
-    p1[8] = (cell_off >> 8) & 0xFF;
-    p1[9] = cell_off & 0xFF;
+    /* Cell pointer (relative to btree header at offset 100) */
+    bt1[8] = (cell_off >> 8) & 0xFF;
+    bt1[9] = cell_off & 0xFF;
 
     /* Cell content area */
-    p1[5] = (cell_off >> 8) & 0xFF;
-    p1[6] = cell_off & 0xFF;
+    bt1[5] = (cell_off >> 8) & 0xFF;
+    bt1[6] = cell_off & 0xFF;
 
     /* Page 2 at db+page_size: logins data, 2 rows */
     unsigned char *p2 = db + page_size;
@@ -184,7 +190,8 @@ static void test_page_type_at_offset_zero(void) {
     SqliteDb sdb;
     open_test_db(&sdb, &db, &len);
 
-    assert(sdb.data[0] == 0x0d); /* page type = leaf table */
+    /* Page 1 btree header starts at offset 100 */
+    assert(sdb.data[100] == 0x0d); /* page type = leaf table */
     assert(sdb.page_size == 1024);
 
     free(db);

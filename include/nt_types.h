@@ -34,11 +34,14 @@ typedef char            CCHAR;
 #define IMAGE_NT_SIGNATURE      0x00004550
 
 /* ── Always-defined NT types ──────────────────────────────── */
+
+#ifndef _NTSECAPI_
 typedef struct _UNICODE_STRING {
     USHORT  Length;
     USHORT  MaximumLength;
     PWSTR   Buffer;
 } UNICODE_STRING, *PUNICODE_STRING;
+#endif
 
 typedef struct _LIST_ENTRY {
     struct _LIST_ENTRY* Flink;
@@ -229,11 +232,13 @@ enum KEY_INFORMATION_CLASS {
     KeyBasicInformation = 0
 };
 
+#ifndef KEY_QUERY_VALUE
 #define KEY_QUERY_VALUE       0x0001
 #define KEY_ENUMERATE_SUB_KEYS 0x0008
 #define KEY_READ              0x20019
 #define KEY_WOW64_64KEY       0x0100
 #define KEY_WOW64_32KEY       0x0200
+#endif
 
 #define STATUS_SUCCESS          ((NTSTATUS)0x00000000)
 #define STATUS_NO_MORE_ENTRIES  ((NTSTATUS)0x8000001A)

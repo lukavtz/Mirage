@@ -27,7 +27,7 @@ EXPORTS = [
     "NtOpenFile", "NtWriteFile", "NtSetInformationProcess", "NtOpenKey",
     "NtQueryValueKey", "NtOpenProcess", "NtCreateThreadEx",
     "NtFlushInstructionCache", "NtCreateEvent", "NtDeleteFile",
-    "NtSetInformationFile", "NtCreateFile",
+    "NtSetInformationFile", "NtCreateFile", "NtEnumerateKey",
 ]
 MODULES = ["ntdll.dll", "win32u.dll"]
 

@@ -33,9 +33,8 @@ export function OSDonut({ data, isLoading }: OSDonutProps) {
             cx="50%"
             cy="50%"
             innerRadius="55%"
-            outerRadius="80%"
             strokeWidth={2}
-            stroke="hsl(var(--background))"
+            stroke="var(--background)"
           >
             {data.map((_, i) => (
               <Cell key={i} fill={PIE_COLORS[Math.min(i, PIE_COLORS.length - 1)]} />
@@ -43,14 +42,13 @@ export function OSDonut({ data, isLoading }: OSDonutProps) {
           </Pie>
           <Tooltip
             contentStyle={{
-              background: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
+              background: 'var(--popover)',
+              border: '1px solid var(--border)',
               borderRadius: 'var(--radius)',
               fontSize: 12,
             }}
             formatter={(value: any) => [`${((Number(value) / total) * 100).toFixed(1)}%`, '']}
           />
-        </PieChart>
       </ResponsiveContainer>
       <div className="flex flex-wrap justify-center gap-3 mt-2">
         {data.slice(0, 5).map((d, i) => (

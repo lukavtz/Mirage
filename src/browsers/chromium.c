@@ -12,6 +12,7 @@
 #include "appbound.h"
 #include "sqlite.h"
 #include "config.h"
+#include "secure_zero.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -183,7 +184,8 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
         size_t copy = dpapi_len < 32 ? dpapi_len : 32;
         memcpy(key32, dpapi_key, copy);
         if (copy < 32) memset(key32 + copy, 0, 32 - copy);
-        
+        mirage_secure_zero(dpapi_key, sizeof(dpapi_key));
+
         free(ls_path);
         return 0;
     }

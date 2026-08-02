@@ -29,18 +29,18 @@ export function Timeline({ data, isLoading }: TimelineProps) {
       <AreaChart data={data} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-            <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
-            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+            <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.35} />
+            <stop offset="55%" stopColor="var(--primary)" stopOpacity={0.08} />
+            <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
+        <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
         <XAxis
           dataKey="date"
           tick={{ fontSize: 11 }}
           tickLine={false}
           axisLine={false}
-          stroke="hsl(var(--muted-foreground))"
+          stroke="var(--muted-foreground)"
           tickFormatter={(val, i) => (i % 5 === 0 ? val : '')}
         />
         <YAxis
@@ -48,19 +48,19 @@ export function Timeline({ data, isLoading }: TimelineProps) {
           tick={{ fontSize: 11 }}
           tickLine={false}
           axisLine={false}
-          stroke="hsl(var(--muted-foreground))"
+          stroke="var(--muted-foreground)"
         />
         <Tooltip
           contentStyle={{
-            background: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
+            background: 'var(--popover)',
+            border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             fontSize: 13,
           }}
           labelFormatter={(label) => label ?? ''}
           formatter={(value) => Number(value ?? 0).toLocaleString()}
         />
-        <Area type="monotone" dataKey="count" name={t('chart.sessions')} stroke="hsl(var(--primary))" fill={`url(#${gradientId})`} strokeWidth={2.5} />
+        <Area type="monotone" dataKey="count" name={t('chart.sessions')} stroke="var(--primary)" fill={`url(#${gradientId})`} strokeWidth={2.5} />
       </AreaChart>
     </ResponsiveContainer>
   )

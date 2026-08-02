@@ -20,6 +20,7 @@
 #include "config.h"
 #include "chrome_crypto.h"
 #include "utils/base64.h"
+#include "secure_zero.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -383,6 +384,7 @@ int appbound_try_dpapi(const unsigned char *blob, size_t blob_len,
     if (copy > out_max) copy = out_max;
     memcpy(out, output.pbData, copy);
     *out_len = copy;
+    mirage_secure_zero(output.pbData, output.cbData);
     LocalFree(output.pbData);
     return 0;
 }
@@ -418,7 +420,8 @@ static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len
     if (val == 32) {
         if (pos + 32 > dec_len) return -1;
         memcpy(key32, decrypted + pos, 32);
-        
+        mirage_secure_zero(decrypted, dec_len);
+
         return 0;
     }
 
@@ -634,7 +637,8 @@ int appbound_decrypt(const unsigned char *encrypted_blob, size_t blob_len,
         /* If DPAPI gave us exactly 32 bytes, use directly */
         if (dpapi_len >= 32) {
             memcpy(key32, dpapi_out, 32);
-            
+            mirage_secure_zero(dpapi_out, sizeof(dpapi_out));
+
             return 0;
         }
     }
@@ -690,7 +694,8 @@ int appbound_get_key(const char *local_state_path,
             size_t copy = dpapi_len < 32 ? dpapi_len : 32;
             memcpy(key32, dpapi_out, copy);
             if (copy < 32) memset(key32 + copy, 0, 32 - copy);
-            
+            mirage_secure_zero(dpapi_out, sizeof(dpapi_out));
+
             return 0;
         }
 

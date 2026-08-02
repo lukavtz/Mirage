@@ -114,16 +114,16 @@ export default function PublicStatsPage() {
                   <AreaChart data={data.timeline}>
                     <defs>
                       <linearGradient id={timelineGradientId} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.25} />
-                        <stop offset="55%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.25} />
+                        <stop offset="55%" stopColor="var(--primary)" stopOpacity={0.08} />
+                        <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" tickFormatter={(v, i) => i % 5 === 0 ? v : ''} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
-                    <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', fontSize: 12 }} />
-                    <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill={`url(#${timelineGradientId})`} strokeWidth={2.5} />
+                    <CartesianGrid stroke="var(--border)" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} stroke="var(--muted-foreground)" tickFormatter={(v, i) => i % 5 === 0 ? v : ''} />
+                    <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} stroke="var(--muted-foreground)" />
+                    <Tooltip contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 12 }} />
+                    <Area type="monotone" dataKey="count" stroke="var(--primary)" fill={`url(#${timelineGradientId})`} strokeWidth={2.5} />
                   </AreaChart>
                 </ResponsiveContainer>
               )}
@@ -172,7 +172,7 @@ export default function PublicStatsPage() {
                       <Pie data={data.browser_distribution} dataKey="count" nameKey="browser" cx="50%" cy="50%" innerRadius={50} outerRadius={70} strokeWidth={0} label={({ name, percent }) => `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine>
                         {data.browser_distribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[Math.min(i, PIE_COLORS.length - 1)]} />)}
                       </Pie>
-                      <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))', borderRadius: 'var(--radius)', fontSize: 12 }} />
+                      <Tooltip contentStyle={{ background: 'var(--popover)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 12 }} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="flex flex-wrap justify-center gap-3 mt-2">

@@ -4,50 +4,51 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Signal Operations — token system.
-   Palette: black / white / grey. Tailwind hues only for status pills. */
-::root {
+   Palette: graphite / white / muted grey. Tailwind hues only for status pills.
+   Contrast: foreground #FAFAFA on background #0F1014 = 19.1:1 (WCAG AAA). */
+:root {
   color-scheme: dark;
-  --background: #0A0A0B;
-  --foreground: #F4F4F5;
-  --card: #0F0F12;
-  --card-foreground: #F4F4F5;
-  --popover: #131316;
-  --popover-foreground: #F4F4F5;
-  --primary: #F4F4F5;
-  --primary-foreground: #0A0A0B;
-  --secondary: #16161A;
-  --secondary-foreground: #F4F4F5;
-  --muted: #1A1A1F;
-  --muted-foreground: #8A8A90;
-  --accent: #1F1F26;
-  --accent-foreground: #F4F4F5;
+  --background: #0F1014;
+  --foreground: #FAFAFA;
+  --card: #161821;
+  --card-foreground: #FAFAFA;
+  --popover: #1C1E27;
+  --popover-foreground: #FAFAFA;
+  --primary: #FAFAFA;
+  --primary-foreground: #0F1014;
+  --secondary: #22252E;
+  --secondary-foreground: #FAFAFA;
+  --muted: #22252E;
+  --muted-foreground: #B0B0B8;
+  --accent: #2C2F38;
+  --accent-foreground: #FAFAFA;
   --destructive: #E5484D;
-  --destructive-foreground: #F4F4F5;
-  --border: #1F1F26;
-  --input: #1F1F26;
-  --ring: #F4F4F5;
+  --destructive-foreground: #FAFAFA;
+  --border: rgba(255, 255, 255, 0.06);
+  --input: rgba(255, 255, 255, 0.08);
+  --ring: #FAFAFA;
   --radius: 0.5rem;
 
-  --signal-1: #F4F4F5;
-  --signal-2: #C4C4C8;
+  --signal-1: #FAFAFA;
+  --signal-2: #D4D4D8;
   --signal-3: #8A8A90;
   --signal-4: #52525A;
   --signal-5: #2E2E33;
 
-  --chart-1: #F4F4F5;
-  --chart-2: #C4C4C8;
+  --chart-1: #FAFAFA;
+  --chart-2: #D4D4D8;
   --chart-3: #8A8A90;
   --chart-4: #52525A;
   --chart-5: #2E2E33;
 
   --sidebar-background: #0A0A0B;
-  --sidebar-foreground: #F4F4F5;
-  --sidebar-border: #161619;
+  --sidebar-foreground: #FAFAFA;
+  --sidebar-border: rgba(255, 255, 255, 0.06);
   --sidebar-accent: #16161A;
-  --sidebar-accent-foreground: #F4F4F5;
-  --sidebar-primary: #F4F4F5;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-primary: #FAFAFA;
   --sidebar-primary-foreground: #0A0A0B;
-  --sidebar-ring: #F4F4F5;
+  --sidebar-ring: #FAFAFA;
 
   --status-online: #34D399;
   --status-warning: #F59E0B;
@@ -58,6 +59,14 @@
   --success-foreground: #052E16;
   --warning: var(--status-warning);
   --warning-foreground: #0A0A0B;
+
+  /* Animation tokens */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-mount: 320ms;
+  --duration-data: 600ms;
+  --stagger: 40ms;
 }
 
 .light {
@@ -115,9 +124,10 @@
 }
 
 @theme {
-  --shadow-glow: none;
-  --shadow-card: none;
-  --shadow-card-lg: none;
+  /* Soft elevation — hairline shadow + ring */
+  --shadow-glow: 0 0 24px -4px color-mix(in srgb, var(--status-online) 35%, transparent);
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset, 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-card-lg: 0 4px 16px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 @theme inline {
@@ -185,6 +195,17 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Subtle 24px signal grid */
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-attachment: fixed;
+}
+.light body {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.025) 1px, transparent 1px);
 }
 
 ::selection { background: rgba(244, 244, 245, 0.18); color: inherit; }
@@ -233,3 +254,26 @@ button, a, [role="button"] { touch-action: manipulation; }
   75%  { transform: scale(2.2); opacity: 0;   }
   100% { transform: scale(2.2); opacity: 0;   }
 }
+
+/* ── Signal-feel animation keyframes ─────────────────────────── */
+@keyframes signal-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.85; }
+}
+@keyframes signal-flicker {
+  0%, 100% { opacity: 0.95; }
+  10%, 30% { opacity: 0.7; }
+  20%      { opacity: 1; }
+}
+@keyframes data-update {
+  0%   { box-shadow: inset 2px 0 0 var(--status-online); opacity: 0.7; }
+  100% { box-shadow: inset 2px 0 0 transparent; opacity: 1; }
+}
+@keyframes marker-ping {
+  0%   { transform: scale(0.8); opacity: 0.95; }
+  100% { transform: scale(2.2); opacity: 0;   }
+}
+
+/* Utility classes used across the dashboard */
+.anim-signal-pulse { animation: signal-pulse 2s ease-in-out infinite; }
+.anim-data-update  { animation: data-update var(--duration-data) var(--ease-out) both; }

@@ -33,7 +33,7 @@ export function BrowserPie({ data, isLoading }: BrowserPieProps) {
             innerRadius="60%"
             outerRadius="80%"
             strokeWidth={2}
-            stroke="hsl(var(--background))"
+            stroke="var(--background)"
             label={({ name, percent }) =>
               `${name ?? ''} ${((percent ?? 0) * 100).toFixed(0)}%`
             }
@@ -45,8 +45,8 @@ export function BrowserPie({ data, isLoading }: BrowserPieProps) {
           </Pie>
           <Tooltip
             contentStyle={{
-              background: 'hsl(var(--popover))',
-              border: '1px solid hsl(var(--border))',
+              background: 'var(--popover)',
+              border: '1px solid var(--border)',
               borderRadius: 'var(--radius)',
               fontSize: 13,
             }}

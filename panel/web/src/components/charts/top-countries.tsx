@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { ChevronRight } from 'lucide-react'
 import { useI18n } from '@/lib/i18n'
-import { COUNTRY_NAMES } from '@/lib/countries'
+import { countryName } from '@/lib/countries'
 import { useNavigate } from 'react-router-dom'
 
 interface TopCountriesProps {
@@ -11,9 +11,8 @@ interface TopCountriesProps {
   isLoading: boolean
   onViewAll?: () => void
 }
-
 export function TopCountries({ data, isLoading, onViewAll }: TopCountriesProps) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const navigate = useNavigate()
 
   if (isLoading) {
@@ -42,7 +41,7 @@ export function TopCountries({ data, isLoading, onViewAll }: TopCountriesProps) 
       {data.slice(0, 7).map((d, i) => {
         const pct = ((d.count / total) * 100).toFixed(1)
         const ratio = d.count / max
-        const name = COUNTRY_NAMES[d.country_code] || d.country_code
+        const name = countryName(d.country_code, lang)
         return (
           <button
             key={d.country_code}

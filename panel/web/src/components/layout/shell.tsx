@@ -17,7 +17,7 @@ export function Shell() {
   return (
     <div className="flex h-dvh bg-background overflow-hidden">
       {/* Desktop sidebar — always visible */}
-      <div className="hidden lg:block h-full shrink-0">
+      <div className="hidden lg:block h-full shrink-0 border-r border-border">
         <Sidebar />
       </div>
 

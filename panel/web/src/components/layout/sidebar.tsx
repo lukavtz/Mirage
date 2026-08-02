@@ -50,7 +50,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   }, [open, onClose])
 
   const sidebarContent = (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-sidebar">
       {/* Logo */}
       <div className={cn(
         'flex items-center shrink-0 h-16 transition-[padding] duration-200',

@@ -48,7 +48,7 @@ export function LatestLogs({ data, isLoading }: LatestLogsProps) {
           </tr>
         </thead>
         <tbody>
-          {data.map((s) => (
+          {data.slice(0, 5).map((s) => (
             <tr
               key={s.id}
               className={cn(

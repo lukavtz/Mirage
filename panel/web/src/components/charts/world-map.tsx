@@ -1,12 +1,12 @@
 import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FlagIcon } from '@/components/charts/flag-icon'
-import { COUNTRY_NAMES } from '@/lib/countries'
 import { useI18n } from '@/lib/i18n'
 import { feature } from 'topojson-client'
 import { geoNaturalEarth1, geoPath, geoGraticule10 } from 'd3-geo'
 import type { FeatureCollection, Geometry } from 'geojson'
 import worldTopo from 'world-atlas/countries-110m.json'
+import { countryName } from '@/lib/countries'
 
 interface WorldMapProps {
   data: Array<{ country_code: string; count: number }>
@@ -35,7 +35,7 @@ interface Marker { code: string; count: number; cx: number; cy: number; ratio: n
 interface LandFeature { d: string; iso2: string; hasData: boolean; ratio: number; centroid: [number, number] }
 
 export function WorldMap({ data, isLoading }: WorldMapProps) {
-  const { t } = useI18n()
+  const { t, lang } = useI18n()
   const [hovered, setHovered] = useState<{ code: string; x: number; y: number; d: number } | null>(null)
   const [activeCountry, setActiveCountry] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -236,11 +236,11 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
         )}
       </svg>
 
-      {/* Tooltip — clamped to viewport */}
+      {/* Tooltip */}
       {hovered && (() => {
         const entry = markers.find(p => p.code === hovered.code)
         if (!entry) return null
-        const name = COUNTRY_NAMES[entry.code] || entry.code
+        const name = countryName(entry.code, lang)
         const pct = total > 0 ? ((entry.count / total) * 100).toFixed(1) : '0'
         const containerRect = containerRef.current?.getBoundingClientRect()
         const viewW = window.innerWidth

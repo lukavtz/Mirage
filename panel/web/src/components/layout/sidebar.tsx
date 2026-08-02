@@ -54,16 +54,19 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       {/* Logo */}
       <div className={cn(
         'flex items-center shrink-0 h-16 transition-[padding] duration-200',
-        collapsed ? 'justify-center px-0' : 'gap-3.5 px-5'
+        collapsed ? 'justify-center px-0' : 'gap-3 px-5'
       )}>
-        <img src={logo} alt="Mirage" className={cn('object-contain shrink-0', collapsed ? 'h-9 w-9' : 'h-10 w-10')} />
+        <img
+          src={logo}
+          alt="Mirage"
+          className={cn('object-contain shrink-0 rounded-md', collapsed ? 'h-12 w-12' : 'h-11 w-11')}
+        />
         {!collapsed && (
-          <span className="font-display text-[16px] tracking-[-0.01em] text-foreground">
+          <span className="font-display text-[15px] font-medium tracking-[-0.01em] text-foreground">
             Mirage
           </span>
         )}
       </div>
-
       <nav className="flex-1 py-4 overflow-y-auto">
         <div className="px-3 space-y-1">
           {navItems.map((item) => {

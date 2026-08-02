@@ -220,7 +220,7 @@ export default function Login() {
       {/* ── Left Panel: Brand ──────────────────────────────────── */}
       <div className="hidden lg:flex lg:w-[42%] relative flex-col justify-between p-10 overflow-hidden rounded-l-2xl">
         <img
-          src={theme === 'dark' ? '/auth-dark.webp' : '/auth-light.webp'}
+          src={theme === 'dark' ? '/assets/auth-dark.webp' : '/assets/auth-light.webp'}
           alt=""
           aria-hidden="true"
           className="absolute inset-0 size-full object-cover"

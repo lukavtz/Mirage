@@ -15,19 +15,57 @@ interface WorldMapProps {
 
 interface CountryProps { name: string }
 
-const ISO3_TO_ISO2: Record<string, string> = {
-  USA: 'US', CAN: 'CA', MEX: 'MX',
-  BRA: 'BR', ARG: 'AR', CHL: 'CL', COL: 'CO', PER: 'PE', VEN: 'VE',
-  GBR: 'GB', IRL: 'IE', FRA: 'FR', DEU: 'DE', NLD: 'NL', BEL: 'BE', ESP: 'ES', ITA: 'IT',
-  PRT: 'PT', CHE: 'CH', AUT: 'AT', POL: 'PL', CZE: 'CZ', SVK: 'SK', HUN: 'HU',
-  ROU: 'RO', BGR: 'BG', GRC: 'GR', SWE: 'SE', NOR: 'NO', FIN: 'FI', DNK: 'DK',
-  UKR: 'UA', RUS: 'RU', BLR: 'BY', LTU: 'LT', LVA: 'LV', EST: 'EE',
-  TUR: 'TR', ISR: 'IL', SAU: 'SA', ARE: 'AE', EGY: 'EG', NGA: 'NG', ZAF: 'ZA', KEN: 'KE', MAR: 'MA',
-  IND: 'IN', PAK: 'PK', BGD: 'BD', CHN: 'CN', JPN: 'JP', KOR: 'KR', TWN: 'TW',
-  THA: 'TH', VNM: 'VN', IDN: 'ID', MYS: 'MY', PHL: 'PH', SGP: 'SG',
-  AUS: 'AU', NZL: 'NZ',
+// TopoJSON countries-110m uses country NAMES in properties.name (not ISO3
+// codes — the id field is a numeric M49 code, which we don't need). Map
+// each name to ISO 3166-1 alpha-2 so the panel data (already in ISO2) can
+// match the choropleth.
+const NAME_TO_ISO2: Record<string, string> = {
+  Afghanistan: 'AF', Albania: 'AL', Algeria: 'DZ', Angola: 'AO',
+  Antarctica: 'AQ', Argentina: 'AR', Armenia: 'AM', Australia: 'AU',
+  Austria: 'AT', Azerbaijan: 'AZ', Bahamas: 'BS', Bangladesh: 'BD',
+  Belarus: 'BY', Belgium: 'BE', Belize: 'BZ', Benin: 'BJ',
+  Bhutan: 'BT', Bolivia: 'BO', 'Bosnia and Herz.': 'BA', Botswana: 'BW',
+  Brazil: 'BR', Brunei: 'BN', Bulgaria: 'BG', 'Burkina Faso': 'BF',
+  Burundi: 'BI', Cambodia: 'KH', Cameroon: 'CM', Canada: 'CA',
+  'Central African Rep.': 'CF', Chad: 'TD', Chile: 'CL', China: 'CN',
+  Colombia: 'CO', Congo: 'CG', 'Costa Rica': 'CR', Croatia: 'HR',
+  Cuba: 'CU', Cyprus: 'CY', Czechia: 'CZ', "Côte d'Ivoire": 'CI',
+  'Dem. Rep. Congo': 'CD', Denmark: 'DK', Djibouti: 'DJ', 'Dominican Rep.': 'DO',
+  Ecuador: 'EC', Egypt: 'EG', 'El Salvador': 'SV', 'Eq. Guinea': 'GQ',
+  Eritrea: 'ER', Estonia: 'EE', Ethiopia: 'ET', 'Falkland Is.': 'FK',
+  Fiji: 'FJ', Finland: 'FI', 'Fr. S. Antarctic Lands': 'TF', France: 'FR',
+  Gabon: 'GA', Gambia: 'GM', Georgia: 'GE', Germany: 'DE',
+  Ghana: 'GH', Greece: 'GR', Greenland: 'GL', Guatemala: 'GT',
+  Guinea: 'GN', 'Guinea-Bissau': 'GW', Guyana: 'GY', Haiti: 'HT',
+  Honduras: 'HN', Hungary: 'HU', Iceland: 'IS', India: 'IN',
+  Indonesia: 'ID', Iran: 'IR', Iraq: 'IQ', Ireland: 'IE',
+  Israel: 'IL', Italy: 'IT', Jamaica: 'JM', Japan: 'JP',
+  Jordan: 'JO', Kazakhstan: 'KZ', Kenya: 'KE', Kosovo: 'XK',
+  Kuwait: 'KW', Kyrgyzstan: 'KG', Laos: 'LA', Latvia: 'LV',
+  Lebanon: 'LB', Lesotho: 'LS', Liberia: 'LR', Libya: 'LY',
+  Lithuania: 'LT', Luxembourg: 'LU', Macedonia: 'MK', Madagascar: 'MG',
+  Malawi: 'MW', Malaysia: 'MY', Mali: 'ML', Mauritania: 'MR',
+  Mexico: 'MX', Moldova: 'MD', Mongolia: 'MN', Montenegro: 'ME',
+  Morocco: 'MA', Mozambique: 'MZ', Myanmar: 'MM', 'N. Cyprus': 'CY',
+  Namibia: 'NA', Nepal: 'NP', Netherlands: 'NL', 'New Caledonia': 'NC',
+  'New Zealand': 'NZ', Nicaragua: 'NI', Niger: 'NE', Nigeria: 'NG',
+  'North Korea': 'KP', Norway: 'NO', Oman: 'OM', Pakistan: 'PK',
+  Palestine: 'PS', Panama: 'PA', 'Papua New Guinea': 'PG', Paraguay: 'PY',
+  Peru: 'PE', Philippines: 'PH', Poland: 'PL', Portugal: 'PT',
+  'Puerto Rico': 'PR', Qatar: 'QA', Romania: 'RO', Russia: 'RU',
+  Rwanda: 'RW', 'S. Sudan': 'SS', 'Saudi Arabia': 'SA', Senegal: 'SN',
+  Serbia: 'RS', 'Sierra Leone': 'SL', Slovakia: 'SK', Slovenia: 'SI',
+  'Solomon Is.': 'SB', Somalia: 'SO', Somaliland: 'SO', 'South Africa': 'ZA',
+  'South Korea': 'KR', Spain: 'ES', 'Sri Lanka': 'LK', Sudan: 'SD',
+  Suriname: 'SR', Sweden: 'SE', Switzerland: 'CH', Syria: 'SY',
+  Taiwan: 'TW', Tajikistan: 'TJ', Tanzania: 'TZ', Thailand: 'TH',
+  'Timor-Leste': 'TL', Togo: 'TG', 'Trinidad and Tobago': 'TT', Tunisia: 'TN',
+  Turkey: 'TR', Turkmenistan: 'TM', Uganda: 'UG', Ukraine: 'UA',
+  'United Arab Emirates': 'AE', 'United Kingdom': 'GB', 'United States of America': 'US',
+  Uruguay: 'UY', Uzbekistan: 'UZ', Vanuatu: 'VU', Venezuela: 'VE',
+  Vietnam: 'VN', 'W. Sahara': 'EH', Yemen: 'YE', Zambia: 'ZM',
+  Zimbabwe: 'ZW', eSwatini: 'SZ',
 }
-
 const W = 720
 const H = 360
 
@@ -63,7 +101,7 @@ export function WorldMap({ data, isLoading }: WorldMapProps) {
     const landFeatures: LandFeature[] = fc.features.map(f => {
       const props = f.properties
       const iso2 = props && 'name' in props && typeof props.name === 'string'
-        ? (ISO3_TO_ISO2[props.name] || '')
+        ? (NAME_TO_ISO2[props.name] || '')
         : ''
       const count = map.get(iso2) ?? 0
       return {

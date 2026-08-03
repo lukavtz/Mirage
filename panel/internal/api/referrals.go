@@ -6,16 +6,17 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"net/http"
-
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 )
 
 type ReferralHandler struct {
-	db *sql.DB
+	db       *sql.DB
+	provider db.ProviderType
 }
 
-func NewReferralHandler(db *sql.DB) *ReferralHandler {
-	return &ReferralHandler{db: db}
+func NewReferralHandler(dbConn *sql.DB, provider db.ProviderType) *ReferralHandler {
+	return &ReferralHandler{db: dbConn, provider: provider}
 }
 
 func generateReferralCode() string {
@@ -77,11 +78,9 @@ func (h *ReferralHandler) Apply(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "already applied a referral code")
 		return
 	}
-
-	_, err = h.db.Exec(
-		"INSERT INTO referrals (referrer_id, referred_user_id, code, applied_at) VALUES (?, ?, ?, datetime('now'))",
-		referrerID, claims.UserID, req.Code,
-	)
+	insertReferral := db.Placeholders(h.provider,
+		"INSERT INTO referrals (referrer_id, referred_user_id, code, applied_at) VALUES (?, ?, ?, "+db.Now(h.provider)+")")
+	_, err = h.db.Exec(insertReferral, referrerID, claims.UserID, req.Code)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to apply referral code")
 		return

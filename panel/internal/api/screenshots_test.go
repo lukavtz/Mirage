@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -141,7 +142,7 @@ func TestScreenshot_HappyPath(t *testing.T) {
 func TestScreenshot_TenantIsolation(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
 
 	userA := createTestUserWithRole(t, d, "tenanta", "pw", "user")
 	sessionID := uuid.New().String()

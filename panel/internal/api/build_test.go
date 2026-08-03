@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/services"
 )
 
@@ -356,7 +357,7 @@ func insertBuildWithUser(t *testing.T, d *sql.DB, userID string) string {
 func TestBuildList_OwnerIsolation(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
 
 	tokenA, userA := workerToken(t, d, "builda")
 	tokenB, userB := workerToken(t, d, "buildb")
@@ -395,7 +396,7 @@ func TestBuildList_OwnerIsolation(t *testing.T) {
 func TestBuildDownload_OwnerForbidden(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
 
 	_, userA := workerToken(t, d, "builda")
 	tokenB, _ := workerToken(t, d, "buildb")

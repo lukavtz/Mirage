@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 	mw "zialfi-panel/internal/middleware"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -53,10 +54,10 @@ type tempTokenEntry struct {
 	role      string
 	expiresAt time.Time
 }
-
 type AuthHandler struct {
 	db              *sql.DB
 	jwtSecret       string
+	provider        db.ProviderType
 	rateLimiter     *ipRateLimiter
 	forgotPwLimiter *ipRateLimiter
 	failedAttempts  map[string]int
@@ -65,10 +66,11 @@ type AuthHandler struct {
 	tempMu          sync.Mutex
 }
 
-func NewAuthHandler(db *sql.DB, jwtSecret string) *AuthHandler {
+func NewAuthHandler(dbConn *sql.DB, jwtSecret string, provider db.ProviderType) *AuthHandler {
 	h := &AuthHandler{
-		db:              db,
+		db:              dbConn,
 		jwtSecret:       jwtSecret,
+		provider:        provider,
 		rateLimiter:     newIPRateLimiter(),
 		forgotPwLimiter: newIPRateLimiter(),
 		failedAttempts:  make(map[string]int),
@@ -109,7 +111,7 @@ func (h *AuthHandler) cleanupPasswordResets() {
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
-		h.db.Exec("DELETE FROM password_resets WHERE expires_at < datetime('now') OR used = 1")
+		h.db.Exec(db.Placeholders(h.provider, "DELETE FROM password_resets WHERE expires_at < "+db.Now(h.provider)+" OR used = 1"))
 	}
 }
 

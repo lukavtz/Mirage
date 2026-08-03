@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/auth"
 )
 
@@ -26,7 +27,7 @@ func setupExportTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
 	return r, token
 }
 

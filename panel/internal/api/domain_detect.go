@@ -13,13 +13,13 @@ import (
 )
 
 type DomainDetectHandler struct {
-	d *sql.DB
+	d        *sql.DB
+	provider db.ProviderType
 }
 
-func NewDomainDetectHandler(d *sql.DB) *DomainDetectHandler {
-	return &DomainDetectHandler{d: d}
+func NewDomainDetectHandler(d *sql.DB, provider db.ProviderType) *DomainDetectHandler {
+	return &DomainDetectHandler{d: d, provider: provider}
 }
-
 func (h *DomainDetectHandler) List(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.d.Query("SELECT id, domain, tag, color, created_at FROM domain_detect ORDER BY domain")
 	if err != nil {
@@ -155,10 +155,12 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 
 	for tag, color := range tagged {
 		tagID := uuid.New().String()
-		h.d.Exec(
-			"INSERT OR IGNORE INTO session_tags (id, session_id, tag, color) VALUES (?, ?, ?, ?)",
-			tagID, sessionID, tag, color,
-		)
+		// session_tags unique key is (session_id, tag) per migration 015.
+		// PG has no INSERT OR IGNORE; ON CONFLICT (session_id, tag) DO NOTHING
+		// is the dialect-correct equivalent.
+		q := db.Placeholders(h.provider,
+			"INSERT INTO session_tags (id, session_id, tag, color) VALUES (?, ?, ?, ?) ON CONFLICT (session_id, tag) DO NOTHING")
+		h.d.Exec(q, tagID, sessionID, tag, color)
 	}
 
 	var result []db.SessionTag

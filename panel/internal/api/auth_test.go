@@ -81,7 +81,7 @@ func setupLogsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "logsuser", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
 	key := createTestAPIKey(t, d, userID)
 	return r, key
 }
@@ -93,7 +93,7 @@ func setupE2ETestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, strin
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "testuser", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite)
 	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)
@@ -106,7 +106,7 @@ func TestLogin_Success(t *testing.T) {
 	d := openTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"testuser","password":"secret123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -135,7 +135,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 	d := openTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"testuser","password":"wrongpass"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -160,7 +160,7 @@ func TestLogin_WrongPassword(t *testing.T) {
 func TestLogin_NonexistentUser(t *testing.T) {
 	d := openTestDB(t)
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"nobody","password":"secret123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -184,7 +184,7 @@ func TestLogin_NonexistentUser(t *testing.T) {
 
 func TestLogin_RateLimit(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"admin","password":"wrong"}`
 	for i := 0; i < 5; i++ {
@@ -224,7 +224,7 @@ func TestLogin_BannedIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"admin","password":"admin"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -249,7 +249,7 @@ func TestLogin_BannedIP(t *testing.T) {
 
 func TestLogin_MissingFields(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	tests := []struct {
 		name string
@@ -287,7 +287,7 @@ func TestForgotPassword_ValidUser(t *testing.T) {
 	d := openTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"testuser"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(body)))
@@ -315,7 +315,7 @@ func TestForgotPassword_ValidUser(t *testing.T) {
 func TestForgotPassword_InvalidUser(t *testing.T) {
 	d := openTestDB(t)
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	body := `{"username":"nobody"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(body)))
@@ -344,7 +344,7 @@ func TestForgotPassword_EnumerationPrevention(t *testing.T) {
 	d := openTestDB(t)
 	createTestUser(t, d, "realuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	// Call with valid user
 	w1 := httptest.NewRecorder()
@@ -378,7 +378,7 @@ func TestResetPassword_ValidToken(t *testing.T) {
 	d := openTestDB(t)
 	userID := createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	// First, get a reset token
 	w := httptest.NewRecorder()
@@ -444,7 +444,7 @@ func TestResetPassword_UsedToken(t *testing.T) {
 	d := openTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	// Get a reset token
 	w := httptest.NewRecorder()
@@ -484,7 +484,7 @@ func TestResetPassword_ExpiredToken(t *testing.T) {
 	d := openTestDB(t)
 	userID := createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	// Insert an already-expired reset token directly
 	resetID := uuid.New().String()
@@ -510,7 +510,7 @@ func TestResetPassword_ShortPassword(t *testing.T) {
 	d := openTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret")
+	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
 	// Get a reset token
 	w := httptest.NewRecorder()

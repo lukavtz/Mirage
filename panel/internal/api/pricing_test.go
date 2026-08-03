@@ -10,12 +10,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/auth"
 )
 
 func TestPricing_ListTiers_Public(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewPricingHandler(d)
+	handler := api.NewPricingHandler(d, db.ProviderSQLite)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/pricing", nil)
 	w := httptest.NewRecorder()
@@ -39,7 +40,7 @@ func TestPricing_ListTiers_Public(t *testing.T) {
 
 func TestPricing_MyFeatures_Unauthenticated(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewPricingHandler(d)
+	handler := api.NewPricingHandler(d, db.ProviderSQLite)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/features", nil)
 	w := httptest.NewRecorder()
@@ -144,6 +145,6 @@ func setupPricingTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
 	return r, token
 }

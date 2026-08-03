@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/auth"
 )
 
@@ -22,7 +23,7 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 	r := chi.NewRouter()
 
 	adminID := createTestUser(t, d, "adminuser", "adminpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
 
 	adminToken, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "")
 	if err != nil {

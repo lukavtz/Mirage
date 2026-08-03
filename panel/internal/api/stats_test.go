@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/ws"
 )
@@ -23,7 +24,7 @@ func setupTestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string) 
 
 	userID := createTestUser(t, d, "testuser", "testpass")
 
-	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite)
 
 	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {

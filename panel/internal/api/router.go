@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
 	"zialfi-panel/internal/ws"
@@ -36,11 +37,11 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte) {
-	authHandler := NewAuthHandler(db, jwtSecret)
+func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, provider db.ProviderType) {
+	authHandler := NewAuthHandler(db, jwtSecret, provider)
 	usersHandler := NewUsersHandler(db, jwtSecret)
 	statsHandler := NewStatsHandler(db, hub)
-	logProc := services.NewLogProcessor(db, hub)
+	logProc := services.NewLogProcessor(db, hub, provider)
 	logsHandler := NewLogsHandler(logProc)
 	sessionsHandler := NewSessionsHandler(db)
 	searchHandler := NewSearchHandler(db)
@@ -57,15 +58,14 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 	apiKeyHandler := NewAPIKeyHandler(db)
 	docsHandler := NewDocsHandler()
 	publicStatsHandler := NewPublicStatsHandler(db)
-	pricingHandler := NewPricingHandler(db)
-	referralHandler := NewReferralHandler(db)
+	pricingHandler := NewPricingHandler(db, provider)
+	referralHandler := NewReferralHandler(db, provider)
 	systemHealthHandler := NewSystemHealthHandler()
 
 	telegramBotHandler := NewTelegramBotHandler(db)
 	teamHandler := NewTeamHandler(db)
 	auditHandler := NewAuditHandler(db)
 	banAPIHandler := NewBanHandler(db)
-
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
@@ -126,7 +126,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		detectHandler := NewDuplicateDetectHandler(db)
 		r.Get("/api/detect/duplicates", detectHandler.Detect)
 
-		domainDetectHandler := NewDomainDetectHandler(db)
+		domainDetectHandler := NewDomainDetectHandler(db, provider)
 		r.Get("/api/domain-detect", domainDetectHandler.List)
 		r.Post("/api/domain-detect", domainDetectHandler.Create)
 		r.Delete("/api/domain-detect/{id}", domainDetectHandler.Delete)

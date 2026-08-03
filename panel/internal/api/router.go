@@ -134,7 +134,9 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 
 		r.Get("/api/filter-presets", NewFilterPresetsHandler(db).List)
 
-		r.Patch("/api/sessions/{id}/viewed", sessionsHandler.MarkViewed)
+		screenshotsHandler := NewScreenshotsHandler(db)
+		r.Get("/api/sessions/{id}/screenshot", screenshotsHandler.Get)
+		r.With(middleware.RequireRole("admin")).Delete("/api/sessions/{id}/screenshot", screenshotsHandler.Delete)
 
 		sspHandler := NewSSPHandler(logProc)
 		r.Post("/api/log/ssp", sspHandler.ProcessSSP)

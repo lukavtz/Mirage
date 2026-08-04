@@ -1,2 +1,4 @@
 # test fixtures produced by the screenshot tests
 internal/api/data/
+.env
+coverage.out

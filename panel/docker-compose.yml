@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mirage
+      POSTGRES_USER: mirage
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mirage -d mirage"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    # ponytail: no host port mapping — the panel is the only client; keep PG
+    # off the LAN. Expose 5432 explicitly when you need psql from the host.
+
+  panel:
+    build:
+      context: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_PROVIDER: postgres
+      DATABASE_URL: postgres://mirage:${DB_PASSWORD}@postgres:5432/mirage?sslmode=disable
+      JWT_SECRET: ${JWT_SECRET:?set in .env}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
+      LICENSE_SECRET: ${LICENSE_SECRET:-}
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
+    volumes:
+      - panel-data:/app/data
+
+volumes:
+  pgdata:
+  panel-data:

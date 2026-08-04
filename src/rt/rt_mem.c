@@ -3,24 +3,60 @@
  * No CRT. Uses process heap.
  */
 #include "rt.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+
+typedef HANDLE (WINAPI *pGetProcessHeap)(void);
+typedef LPVOID (WINAPI *pHeapAlloc)(HANDLE, DWORD, SIZE_T);
+typedef LPVOID (WINAPI *pHeapReAlloc)(HANDLE, DWORD, LPVOID, SIZE_T);
+typedef BOOL   (WINAPI *pHeapFree)(HANDLE, DWORD, LPVOID);
+
+static struct {
+    pGetProcessHeap pGPH;
+    pHeapAlloc      pHA;
+    pHeapReAlloc    pHR;
+    pHeapFree       pHF;
+    int             ready;
+} g_heap_api;
+
+static int ensure_heap(void) {
+    if (g_heap_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_GetProcessHeap, ENC_GETPROCESSHEAP_LEN, fn);
+    g_heap_api.pGPH = (pGetProcessHeap)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_HeapAlloc, ENC_HEAPALLOC_LEN, fn);
+    g_heap_api.pHA = (pHeapAlloc)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_HeapReAlloc, ENC_HEAPREALLOC_LEN, fn);
+    g_heap_api.pHR = (pHeapReAlloc)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_HeapFree, ENC_HEAPFREE_LEN, fn);
+    g_heap_api.pHF = (pHeapFree)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_heap_api.pGPH || !g_heap_api.pHA || !g_heap_api.pHF) return 0;
+    g_heap_api.ready = 1;
+    return 1;
+}
 
 static HANDLE g_heap = NULL;
 
 static HANDLE heap(void) {
-    if (!g_heap)
-        g_heap = GetProcessHeap();
+    if (!g_heap && ensure_heap())
+        g_heap = g_heap_api.pGPH();
     return g_heap;
 }
 
 void *malloc(size_t n) {
     if (n == 0)
         n = 1;
-    return HeapAlloc(heap(), 0, n);
+    return g_heap_api.pHA(heap(), 0, n);
 }
 
 void free(void *p) {
     if (p)
-        HeapFree(heap(), 0, p);
+        g_heap_api.pHF(heap(), 0, p);
 }
 
 void *calloc(size_t nmemb, size_t size) {
@@ -35,6 +71,8 @@ void *calloc(size_t nmemb, size_t size) {
     return p;
 }
 
+/* NOTE: On failure returns NULL; original block at p remains valid.
+ * Caller must not overwrite old pointer until checking return. */
 void *realloc(void *p, size_t n) {
     if (!p)
         return malloc(n);
@@ -42,7 +80,7 @@ void *realloc(void *p, size_t n) {
         free(p);
         return NULL;
     }
-    return HeapReAlloc(heap(), 0, p, n);
+    return g_heap_api.pHR(heap(), 0, p, n);
 }
 
 void *memcpy(void *dst, const void *src, size_t n) {

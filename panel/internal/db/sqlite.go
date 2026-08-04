@@ -426,6 +426,9 @@ func rewriteInsertOrReplace(sql string) string {
 }
 
 // splitStatements splits on top-level semicolons, ignoring empty parts.
+// Each returned statement ends with a ";" so that drivers using the
+// simple query protocol (e.g. pgx via database/sql) see a single
+// terminator and the multi-statement input is preserved verbatim.
 func splitStatements(sql string) []string {
 	var out []string
 	depth := 0
@@ -438,13 +441,16 @@ func splitStatements(sql string) []string {
 			depth--
 		case ';':
 			if depth == 0 {
-				out = append(out, sql[start:i])
+				out = append(out, strings.TrimSpace(sql[start:i+1]))
 				start = i + 1
 			}
 		}
 	}
 	if start < len(sql) {
-		out = append(out, sql[start:])
+		rest := strings.TrimSpace(sql[start:])
+		if rest != "" {
+			out = append(out, rest)
+		}
 	}
 	return out
 }

@@ -14,7 +14,8 @@ import (
 
 type ScreenshotsHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
+	provider     db.ProviderType
+
 }
 
 func NewScreenshotsHandler(db *sql.DB, provider db.ProviderType) *ScreenshotsHandler {
@@ -31,7 +32,7 @@ func (h *ScreenshotsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, r, sessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
 		http.NotFound(w, r)
 		return
 	}

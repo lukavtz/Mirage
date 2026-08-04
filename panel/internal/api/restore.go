@@ -15,7 +15,8 @@ import (
 
 type RestoreHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
+	provider     db.ProviderType
+
 }
 
 func NewRestoreHandler(db *sql.DB, provider db.ProviderType) *RestoreHandler {
@@ -89,7 +90,7 @@ func (h *RestoreHandler) Restore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, r, req.SessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, req.SessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -146,7 +147,7 @@ func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, r, req.SessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, req.SessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}

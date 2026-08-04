@@ -1,4 +1,5 @@
 #include "sqlite.h"
+#include "config.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -49,6 +50,7 @@ static size_t read_varint(const unsigned char *buf, size_t buf_size, int64_t *va
     int64_t v = 0;
     size_t i;
     for (i = 0; i < 9 && i < buf_size; i++) {
+        if (i >= buf_size) return i; /* H6: boundary check */
         unsigned char b = buf[i];
         if (i < 8) {
             v = (v << 7) | (b & 0x7F);
@@ -263,6 +265,7 @@ static size_t read_record(const unsigned char *cell, size_t cell_max,
     for (size_t i = 0; i < n_cols && i < max_values; i++) {
         int st = (int)serials[i];
         int sz = serial_type_size(st);
+        if (pos + (size_t)sz > cell_max) break; /* C7: bounds check before value read */
         const unsigned char *p = cell + pos;
 
         if (st == 0) {
@@ -378,7 +381,7 @@ int sqlite_read_table(SqliteDb *db, const char *table_name,
 
     /* Read sqlite_master to find root page of the target table */
     const unsigned char *page1 = page_ptr(db, 1);
-    if (!page1) { printf("[!] sqlite_read_table: page1 NULL\n"); return -1; }
+    if (!page1) { dbg_printf("[!] sqlite_read_table: page1 NULL\n"); return -1; }
 
     int root_page = 0;
     int pt = page1[0 + btree_offset(1)];

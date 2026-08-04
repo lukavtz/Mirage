@@ -17,7 +17,8 @@ import (
 
 type MarketplaceHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
+	provider     db.ProviderType
+
 }
 
 func NewMarketplaceHandler(db *sql.DB, provider db.ProviderType) *MarketplaceHandler {
@@ -552,7 +553,7 @@ func (h *MarketplaceHandler) StartTrial(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
+func LicenseMiddleware(d *sql.DB, provider db.ProviderType) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := middleware.ClaimsFromContext(r.Context())
@@ -569,7 +570,8 @@ func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 			var hasLicense bool
 			var expiresAt *string
 			var licenseCount int
-			err := db.QueryRow(
+			var trialCount int
+			err := db.QueryRow(d, provider,
 				"SELECT COUNT(*), MAX(expires_at) FROM purchases WHERE user_id = ?",
 				claims.UserID,
 			).Scan(&licenseCount, &expiresAt)
@@ -579,8 +581,7 @@ func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 			}
 
 			if !hasLicense {
-				var trialCount int
-				db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialCount)
+				db.QueryRow(d, provider, "SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialCount)
 				if trialCount == 0 {
 					writeJSON(w, http.StatusPaymentRequired, map[string]string{
 						"error": "no active license",
@@ -590,7 +591,8 @@ func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 				}
 
 				var trialExpiresAt string
-				db.QueryRow("SELECT expires_at FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialExpiresAt)
+				db.QueryRow(d, provider, "SELECT expires_at FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialExpiresAt)
+
 				if trialExpiresAt != "" {
 					if t, err := time.Parse(time.RFC3339, trialExpiresAt); err == nil && time.Now().UTC().After(t) {
 						writeJSON(w, http.StatusPaymentRequired, map[string]string{

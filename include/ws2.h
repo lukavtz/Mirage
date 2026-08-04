@@ -27,7 +27,7 @@ typedef enum {
 } ws2_result_t;
 
 typedef struct {
-    int initialized;
+    HANDLE handle;
 } ws2_socket_t;
 
 ws2_result_t ws2_init(void);

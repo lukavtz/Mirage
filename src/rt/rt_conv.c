@@ -4,6 +4,30 @@
 #include <windows.h>
 #include <stddef.h>
 #include <ctype.h>
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+
+typedef DWORD (WINAPI *pGetEnvironmentVariableA)(const char *, char *, DWORD);
+
+static struct {
+    pGetEnvironmentVariableA pGEVA;
+    int                      ready;
+} g_conv_api;
+
+static int ensure_conv(void) {
+    if (g_conv_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_GetEnvironmentVariableA, ENC_GETENVIRONMENTVARIABLEA_LEN, fn);
+    g_conv_api.pGEVA = (pGetEnvironmentVariableA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_conv_api.pGEVA) return 0;
+    g_conv_api.ready = 1;
+    return 1;
+}
 
 static unsigned long g_rng_state = 0x61472f96;
 
@@ -54,7 +78,7 @@ long strtol(const char *s, char **endptr, int base) {
     }
     if (endptr)
         *endptr = (char *)s;
-    return neg ? -val : val;
+    return neg ? -(long)(unsigned long)val : val;
 }
 
 int atoi(const char *s) {
@@ -108,7 +132,7 @@ static int g_env_idx = 0;
 char *getenv(const char *name) {
     char *buf = g_env_bufs[g_env_idx & 1];
     g_env_idx++;
-    DWORD n = GetEnvironmentVariableA(name, buf, 1024);
+    DWORD n = ensure_conv() ? g_conv_api.pGEVA(name, buf, 1024) : 0;
     if (n == 0 || n >= 1024)
         return NULL;
     return buf;

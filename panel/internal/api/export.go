@@ -13,7 +13,8 @@ import (
 
 type ExportHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
+	provider     db.ProviderType
+
 }
 
 func NewExportHandler(db *sql.DB, provider db.ProviderType) *ExportHandler {
@@ -74,7 +75,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, r, id) {
+	if !sessionOwnedBy(h.db, h.provider, r, id) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -129,7 +130,7 @@ func (h *ExportHandler) exportNetscape(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, r, sessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -188,7 +189,7 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 	zw := zip.NewWriter(&buf)
 
 	for _, id := range req.IDs {
-		if !sessionOwnedBy(h.db, r, id) {
+		if !sessionOwnedBy(h.db, h.provider, r, id) {
 			continue
 		}
 

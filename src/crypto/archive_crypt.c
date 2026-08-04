@@ -16,27 +16,32 @@
 #ifdef _WIN32
 #include <windows.h>
 
-/* MinGW BCrypt compatibility */
+/* PEB-walk includes */
+#include "bcrypt_peb.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+
+/* File-local PEB-walk for SystemFunction036 (advapi32.dll) */
+typedef BOOL (WINAPI *pSystemFunction036)(PVOID, ULONG);
+static struct { pSystemFunction036 pRtlGenRandom; int ready; } g_advapi_rnd;
+static int ensure_advapi_rnd(void) {
+    if (g_advapi_rnd.ready) return 1;
+    char dll[32]; enc_decrypt(enc_advapi32, ENC_ADVAPI32_LEN, dll);
+    void *mod = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!mod) return 0;
+    char fn[32];
+    enc_decrypt(enc_SystemFunction036, ENC_SYSTEMFUNCTION036_LEN, fn);
+    g_advapi_rnd.pRtlGenRandom = (pSystemFunction036)mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(fn));
+    if (!g_advapi_rnd.pRtlGenRandom) return 0;
+    g_advapi_rnd.ready = 1;
+    return 1;
+}
+
 #ifndef BCRYPT_SHA256_ALGORITHM
 #define BCRYPT_SHA256_ALGORITHM L"SHA256"
 #endif
-
-#ifndef __BCRYPT_H__
-typedef void *BCRYPT_ALG_HANDLE;
-typedef long NTSTATUS;
-
-NTSTATUS BCryptOpenAlgorithmProvider(BCRYPT_ALG_HANDLE *, const wchar_t *,
-                                     const wchar_t *, unsigned long);
-NTSTATUS BCryptCloseAlgorithmProvider(BCRYPT_ALG_HANDLE, unsigned long);
-NTSTATUS BCryptGenRandom(BCRYPT_ALG_HANDLE, unsigned char *, unsigned long,
-                         unsigned long);
-NTSTATUS BCryptDeriveKeyPBKDF2(BCRYPT_ALG_HANDLE, unsigned char *, unsigned long,
-                               unsigned char *, unsigned long, unsigned long,
-                               unsigned char *, unsigned long, unsigned long);
-#endif
-
-/* SystemFunction036 — RtlGenRandom / CryptGenRandom */
-extern BOOL WINAPI SystemFunction036(PVOID RandomBuffer, ULONG RandomBufferLength);
 
 #else
 #include <openssl/evp.h>
@@ -50,7 +55,8 @@ extern BOOL WINAPI SystemFunction036(PVOID RandomBuffer, ULONG RandomBufferLengt
 
 static int fill_random(unsigned char *buf, size_t len) {
 #ifdef _WIN32
-    if (!SystemFunction036(buf, (ULONG)len))
+    if (!ensure_advapi_rnd()) return -1;
+    if (!g_advapi_rnd.pRtlGenRandom(buf, (ULONG)len))
         return -1;
     return 0;
 #else
@@ -68,20 +74,22 @@ int archive_derive_key(const unsigned char *password, size_t password_len,
                        const unsigned char *salt, size_t salt_len,
                        unsigned char out_key[32]) {
 #ifdef _WIN32
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     NTSTATUS status;
 
-    status = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_SHA256_ALGORITHM,
-                                         NULL, 0);
+    status = bc->pOpen(&hAlgo, BCRYPT_SHA256_ALGORITHM,
+                       NULL, 0);
     if (status < 0) return -1;
 
-    status = BCryptDeriveKeyPBKDF2(hAlgo,
-                                   (PUCHAR)password, (ULONG)password_len,
-                                   (PUCHAR)salt, (ULONG)salt_len,
-                                   210000,  /* iterations */
-                                   out_key, 32,
-                                   0);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    status = bc->pDerive(hAlgo,
+                         (PUCHAR)password, (ULONG)password_len,
+                         (PUCHAR)salt, (ULONG)salt_len,
+                         210000,  /* iterations */
+                         out_key, 32,
+                         0);
+    bc->pClose(hAlgo, 0);
     return (status >= 0) ? 0 : -1;
 #else
     int rc = PKCS5_PBKDF2_HMAC((const char *)password, (int)password_len,

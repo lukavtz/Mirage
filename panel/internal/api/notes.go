@@ -12,7 +12,8 @@ import (
 
 type NotesHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
+	provider     db.ProviderType
+
 }
 
 func NewNotesHandler(db *sql.DB, provider db.ProviderType) *NotesHandler {
@@ -30,7 +31,7 @@ type Note struct {
 func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
-	if !sessionOwnedBy(h.db, r, sessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -60,7 +61,7 @@ func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
-	if !sessionOwnedBy(h.db, r, sessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -108,7 +109,7 @@ func (h *NotesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "note not found")
 		return
 	}
-	if !sessionOwnedBy(h.db, r, sessionID) {
+	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}

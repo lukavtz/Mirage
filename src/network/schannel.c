@@ -155,7 +155,7 @@ static int sec_ensure_loaded(void) {
 
 static void copy_to_wide(char *dst, size_t dst_cap, const char *src) {
     size_t i;
-    for (i = 0; src[i] && i + 1 < dst_cap; ++i) {
+    for (i = 0; src[i] && (i * 2 + 2) < dst_cap; ++i) {
         dst[i * 2]     = src[i];
         dst[i * 2 + 1] = 0;
     }

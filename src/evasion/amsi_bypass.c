@@ -35,8 +35,12 @@
 #define CTX_DR0   0x048
 #define CTX_DR7   0x070
 
+#ifndef EXCEPTION_SINGLE_STEP
 #define EXCEPTION_SINGLE_STEP  0x80000004
+#endif
+#ifndef EXCEPTION_CONTINUE_EXECUTION
 #define EXCEPTION_CONTINUE_EXECUTION (-1)
+#endif
 
 /* DR7: enable DR0 local break on execute */
 #define DR7_ENABLE_DR0_EXE  0x0000000000000001ULL

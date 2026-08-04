@@ -1,4 +1,5 @@
 #include "wifi.h"
+#include "config.h"
 #include "nt_types.h"
 #include <string.h>
 #include <stdio.h>
@@ -7,7 +8,7 @@
 int mirage_collect_wifi_passwords(char *output, size_t outlen) {
     (void)output;
     (void)outlen;
-    /* TODO: implement WiFi profile enumeration via netsh */
+    dbg_printf("[!] WiFi enumeration not implemented\n");
     return 0;
 }
 
@@ -15,6 +16,6 @@ int mirage_collect_wifi_passwords(char *output, size_t outlen) {
 int mirage_get_wifi_profiles(char *buf, size_t buflen) {
     (void)buf;
     (void)buflen;
-    /* TODO: implement via WlanEnumInterfaces + WlanGetProfile */
+    dbg_printf("[!] WiFi enumeration not implemented\n");
     return 0;
 }

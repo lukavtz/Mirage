@@ -54,6 +54,9 @@ int base64_decode(const char *input, size_t input_len,
         if (c < 0 && input[i + 2] != '=') return -1;
         if (d < 0 && input[i + 3] != '=') return -1;
 
+        /* Reject '=' at position 0 or 1 in a 4-char group */
+        if (input[i] == '=' || input[i + 1] == '=') return -1;
+
         out[out_pos++] = (unsigned char)((a << 2) | (b >> 4));
         if (out_pos >= out_len) break;
 

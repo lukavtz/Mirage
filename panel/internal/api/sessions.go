@@ -586,5 +586,5 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SessionsHandler) ownsSession(r *http.Request, sessionID string) bool {
-	return sessionOwnedBy(h.db, r, sessionID)
+	return sessionOwnedBy(h.db, h.provider, r, sessionID)
 }

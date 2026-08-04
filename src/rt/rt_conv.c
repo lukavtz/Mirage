@@ -29,7 +29,7 @@ static int ensure_conv(void) {
     return 1;
 }
 
-static unsigned long g_rng_state = 0x61472f96;
+static unsigned long g_rng_state = 0xDEADBEEF;  // non-zero initial state
 
 void srand(unsigned int seed) {
     g_rng_state = seed ? seed : 1;

@@ -2,7 +2,7 @@
  * hash.c — Hash functions for Mirage-C
  *
  * Exact translation of Zig src/types/hash.zig
- * Seed: 0x61472f96, multiply: 0x1B873593, add: 0x85EBCA6B
+ * Seed: polymorphic (per-build), multiply: 0x1B873593, add: 0x85EBCA6B
  */
 
 #include "hash.h"

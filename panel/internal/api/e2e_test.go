@@ -108,7 +108,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 		var resp map[string]any
 		json.Unmarshal(w.Body.Bytes(), &resp)
 
-		sessions, ok := resp["items"].([]any)
+		sessions, ok := resp["sessions"].([]any)
 		if !ok || sessions == nil {
 			t.Logf("sessions response: %s", w.Body.String())
 			t.Skip("sessions format unclear — skipping detailed check")
@@ -155,7 +155,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 
 		var listResp map[string]any
 		json.Unmarshal(w.Body.Bytes(), &listResp)
-		items, ok := listResp["items"].([]any)
+		items, ok := listResp["sessions"].([]any)
 		if !ok || len(items) == 0 {
 			t.Skip("no sessions to export")
 			return

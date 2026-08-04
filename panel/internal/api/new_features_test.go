@@ -507,7 +507,7 @@ func TestSessionList_UnviewedFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 1 {
 		t.Errorf("expected 1 unviewed session, got %d", len(items))
 	}
@@ -608,7 +608,7 @@ func TestSessionList_DuplicateCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	for _, item := range items {
 		it := item.(map[string]any)
 		if it["hwid"] == hwid {

@@ -7,32 +7,32 @@
 #include <stdint.h>
 
 // Module hashes (28 iters, case-insensitive)
-#define HASH_NTDLL_DLL  0x15F0EAEEu
-#define HASH_WIN32U_DLL  0xA0F9AABFu
+#define HASH_NTDLL_DLL  0x9DDE74D5u
+#define HASH_WIN32U_DLL  0x2BA392F2u
 
 // Function hashes (27 iters, exact case)
-#define HASH_LdrGetProcedureAddress  0xDF2EBB12u  // LdrGetProcedureAddress
-#define HASH_AllocateVirtualMemory  0xFE817DC7u  // NtAllocateVirtualMemory
-#define HASH_ProtectVirtualMemory  0xB27D16BFu  // NtProtectVirtualMemory
-#define HASH_FreeVirtualMemory  0x2731EEB1u  // NtFreeVirtualMemory
-#define HASH_WriteVirtualMemory  0xEB5BEC79u  // NtWriteVirtualMemory
-#define HASH_ReadVirtualMemory  0x56042825u  // NtReadVirtualMemory
-#define HASH_Close  0xEFD5FE52u  // NtClose
-#define HASH_QuerySystemInformation  0x58DF8814u  // NtQuerySystemInformation
-#define HASH_QueryInformationProcess  0xB9338A7Au  // NtQueryInformationProcess
-#define HASH_DelayExecution  0x8F2C5ED8u  // NtDelayExecution
-#define HASH_OpenFile  0xF6DB2CB4u  // NtOpenFile
-#define HASH_WriteFile  0xA0AC1E98u  // NtWriteFile
-#define HASH_SetInformationProcess  0x97F9ABA9u  // NtSetInformationProcess
-#define HASH_OpenKey  0x148BF09Fu  // NtOpenKey
-#define HASH_QueryValueKey  0x8845471Du  // NtQueryValueKey
-#define HASH_OpenProcess  0x37245C98u  // NtOpenProcess
-#define HASH_CreateThreadEx  0xC8715163u  // NtCreateThreadEx
-#define HASH_FlushInstructionCache  0xE3548E0Au  // NtFlushInstructionCache
-#define HASH_CreateEvent  0xC0CB475Fu  // NtCreateEvent
-#define HASH_DeleteFile  0xE26F707Du  // NtDeleteFile
-#define HASH_SetInformationFile  0xB02A2A98u  // NtSetInformationFile
-#define HASH_CreateFile  0x7C33B18Au  // NtCreateFile
-#define HASH_EnumerateKey  0x6E28E6EAu  // NtEnumerateKey
+#define HASH_LdrGetProcedureAddress  0x796D8884u  // LdrGetProcedureAddress
+#define HASH_AllocateVirtualMemory  0x6E42CFFBu  // NtAllocateVirtualMemory
+#define HASH_ProtectVirtualMemory  0x0EC87EAAu  // NtProtectVirtualMemory
+#define HASH_FreeVirtualMemory  0x3FDCB07Eu  // NtFreeVirtualMemory
+#define HASH_WriteVirtualMemory  0x2A096207u  // NtWriteVirtualMemory
+#define HASH_ReadVirtualMemory  0x6E4438C0u  // NtReadVirtualMemory
+#define HASH_Close  0x03349F81u  // NtClose
+#define HASH_QuerySystemInformation  0x719E4836u  // NtQuerySystemInformation
+#define HASH_QueryInformationProcess  0x7E5E2DD2u  // NtQueryInformationProcess
+#define HASH_DelayExecution  0xDE4406C6u  // NtDelayExecution
+#define HASH_OpenFile  0xA7774B96u  // NtOpenFile
+#define HASH_WriteFile  0xBDE99C28u  // NtWriteFile
+#define HASH_SetInformationProcess  0x493D3E32u  // NtSetInformationProcess
+#define HASH_OpenKey  0x1AD4EE51u  // NtOpenKey
+#define HASH_QueryValueKey  0xAC1F0D58u  // NtQueryValueKey
+#define HASH_OpenProcess  0x59577700u  // NtOpenProcess
+#define HASH_CreateThreadEx  0x516311B1u  // NtCreateThreadEx
+#define HASH_FlushInstructionCache  0x9407A31Bu  // NtFlushInstructionCache
+#define HASH_CreateEvent  0x440E0A77u  // NtCreateEvent
+#define HASH_DeleteFile  0x52946D95u  // NtDeleteFile
+#define HASH_SetInformationFile  0x32DEAE00u  // NtSetInformationFile
+#define HASH_CreateFile  0xDDD05C1Cu  // NtCreateFile
+#define HASH_EnumerateKey  0x681361EFu  // NtEnumerateKey
 
 #endif

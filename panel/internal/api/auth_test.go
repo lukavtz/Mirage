@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"log/slog"
+	"regexp"
 	"bytes"
 	"crypto/sha256"
 	"database/sql"
@@ -374,25 +376,41 @@ func TestForgotPassword_EnumerationPrevention(t *testing.T) {
 	}
 }
 
+
+// requestResetCode calls ForgotPassword and extracts the one-time code from
+// the slog warning the handler logs when Telegram is not configured. The
+// endpoint deliberately does NOT return the code in the response body
+// (anti-enumeration), so tests must capture it from the log line.
+func requestResetCode(t *testing.T, handler *api.AuthHandler, username string) string {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, nil)))
+	defer slog.SetDefault(prev)
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
+		bytes.NewReader([]byte(`{"username":"`+username+`"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	handler.ForgotPassword(w, req)
+
+	// log line: ... msg="password reset code (no Telegram configured)" user=... code=<hex>
+	m := regexp.MustCompile(`code=([0-9a-f]{64})`).FindStringSubmatch(buf.String())
+	if m == nil {
+		t.Fatalf("no reset code in handler log; body=%s log=%q", w.Body.String(), buf.String())
+	}
+	return m[1]
+}
+
 func TestResetPassword_ValidToken(t *testing.T) {
 	d := openTestDB(t)
 	userID := createTestUser(t, d, "testuser", "secret123")
 
 	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
-	// First, get a reset token
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
-		bytes.NewReader([]byte(`{"username":"testuser"}`)))
-	req.Header.Set("Content-Type", "application/json")
-	handler.ForgotPassword(w, req)
-
-	var forgotResp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &forgotResp)
-	token, _ := forgotResp["token"].(string)
-	if token == "" {
-		t.Fatal("expected token from forgot-password")
-	}
+	// First, get a reset token (captured from the log — the endpoint
+	// deliberately does not return it, see requestResetCode)
+	token := requestResetCode(t, handler, "testuser")
 
 	// Now reset the password
 	w2 := httptest.NewRecorder()
@@ -446,16 +464,8 @@ func TestResetPassword_UsedToken(t *testing.T) {
 
 	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
-	// Get a reset token
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
-		bytes.NewReader([]byte(`{"username":"testuser"}`)))
-	req.Header.Set("Content-Type", "application/json")
-	handler.ForgotPassword(w, req)
-
-	var forgotResp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &forgotResp)
-	token, _ := forgotResp["token"].(string)
+	// Get a reset token (captured from the log)
+	token := requestResetCode(t, handler, "testuser")
 
 	// Use the token once
 	resetBody := fmt.Sprintf(`{"token":"%s","new_password":"newpass12345"}`, token)
@@ -512,16 +522,8 @@ func TestResetPassword_ShortPassword(t *testing.T) {
 
 	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
 
-	// Get a reset token
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password",
-		bytes.NewReader([]byte(`{"username":"testuser"}`)))
-	req.Header.Set("Content-Type", "application/json")
-	handler.ForgotPassword(w, req)
-
-	var forgotResp map[string]any
-	json.Unmarshal(w.Body.Bytes(), &forgotResp)
-	token, _ := forgotResp["token"].(string)
+	// Get a reset token (captured from the log)
+	token := requestResetCode(t, handler, "testuser")
 
 	// Try resetting with a short password
 	resetBody := fmt.Sprintf(`{"token":"%s","new_password":"short"}`, token)

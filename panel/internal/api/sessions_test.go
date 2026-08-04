@@ -48,7 +48,7 @@ func TestSessionsList_Empty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 0 {
 		t.Errorf("expected 0 items, got %d", len(items))
 	}
@@ -91,7 +91,7 @@ func TestSessionsList_WithData(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 5 {
 		t.Errorf("expected 5 items, got %d", len(items))
 	}
@@ -138,7 +138,7 @@ func TestSessionsList_Pagination(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 2 {
 		t.Errorf("expected 2 items, got %d", len(items))
 	}
@@ -191,7 +191,7 @@ func TestSessionsList_FilterByCountry(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 2 {
 		t.Errorf("expected 2 items for RU, got %d", len(items))
 	}
@@ -242,7 +242,7 @@ func TestSessionsList_FilterBySearch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 1 {
 		t.Errorf("expected 1 item matching DESKTOP, got %d", len(items))
 	}
@@ -280,7 +280,7 @@ func TestSessionsList_SortAsc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 5 {
 		t.Fatalf("expected 5 items, got %d", len(items))
 	}
@@ -321,7 +321,7 @@ func TestSessionsList_SortDesc(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 5 {
 		t.Fatalf("expected 5 items, got %d", len(items))
 	}
@@ -592,7 +592,7 @@ func TestSessionsList_SearchByIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 3 {
 		t.Errorf("expected 3 items matching 192.168, got %d", len(items))
 	}
@@ -630,7 +630,7 @@ func TestSessionsList_SearchByHWID(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 2 {
 		t.Errorf("expected 2 items matching HWID, got %d", len(items))
 	}
@@ -692,7 +692,7 @@ func TestSessionsList_OwnerIsolation(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 			t.Fatal(err)
 		}
-		items := resp["items"].([]any)
+		items := resp["sessions"].([]any)
 		if len(items) != tc.wantCount {
 			t.Fatalf("expected %d items, got %d", tc.wantCount, len(items))
 		}

@@ -263,16 +263,14 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	defer srv.Close()
 
 	dialer := &websocket.Dialer{HandshakeTimeout: 45 * time.Second}
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	// ServeWs requires the JWT at upgrade time (query, subprotocol or
+	// Authorization header) — it does not accept an in-band auth frame.
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?token=" + token
 	conn, _, err := dialer.Dial(wsURL, http.Header{"Origin": {"http://test"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
-	if err != nil {
-		t.Fatal(err)
-	}
 	time.Sleep(50 * time.Millisecond)
 
 	req, err := http.NewRequest(http.MethodGet, srv.URL+"/api/stats", nil)

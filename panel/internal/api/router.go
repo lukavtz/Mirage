@@ -126,6 +126,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
 		r.Post("/api/sessions/{id}/lock", sessionsHandler.Lock)
 		r.Post("/api/sessions/{id}/unlock", sessionsHandler.Unlock)
+		r.Patch("/api/sessions/{id}/viewed", sessionsHandler.MarkViewed)
 
 		r.Get("/api/search", searchHandler.Search)
 		r.Get("/api/search/advanced", searchHandler.AdvancedSearch)

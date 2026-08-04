@@ -81,7 +81,7 @@ func setupLogsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "logsuser", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
 	key := createTestAPIKey(t, d, userID)
 	return r, key
 }
@@ -93,7 +93,7 @@ func setupE2ETestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, strin
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "testuser", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite, nil)
 	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {
 		t.Fatal(err)

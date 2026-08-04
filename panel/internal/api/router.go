@@ -37,11 +37,18 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 	}
 }
 
-func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, provider db.ProviderType) {
+func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, provider db.ProviderType, broadcaster services.Broadcaster) {
 	authHandler := NewAuthHandler(sqlDB, jwtSecret, provider)
 	usersHandler := NewUsersHandler(sqlDB, jwtSecret, provider)
 	statsHandler := NewStatsHandler(sqlDB, hub, provider)
-	logProc := services.NewLogProcessor(sqlDB, hub, provider)
+	if broadcaster == nil && hub != nil {
+		// *ws.Hub already implements services.Broadcaster; default to the
+		// in-process fan-out when the caller passed a hub but no
+		// broadcaster. If both are nil (unit tests), leave it nil so
+		// LogProcessor skips broadcasting entirely.
+		broadcaster = hub
+	}
+	logProc := services.NewLogProcessor(sqlDB, broadcaster, provider)
 	logsHandler := NewLogsHandler(logProc, provider)
 	sessionsHandler := NewSessionsHandler(sqlDB, provider)
 	searchHandler := NewSearchHandler(sqlDB, provider)

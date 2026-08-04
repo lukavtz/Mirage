@@ -357,7 +357,7 @@ func insertBuildWithUser(t *testing.T, d *sql.DB, userID string) string {
 func TestBuildList_OwnerIsolation(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	tokenA, userA := workerToken(t, d, "builda")
 	tokenB, userB := workerToken(t, d, "buildb")
@@ -396,7 +396,7 @@ func TestBuildList_OwnerIsolation(t *testing.T) {
 func TestBuildDownload_OwnerForbidden(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	_, userA := workerToken(t, d, "builda")
 	tokenB, _ := workerToken(t, d, "buildb")

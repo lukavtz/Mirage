@@ -145,6 +145,6 @@ func setupPricingTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
 	return r, token
 }

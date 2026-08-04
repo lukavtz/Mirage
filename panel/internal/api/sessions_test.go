@@ -26,7 +26,7 @@ func setupSessionsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 		t.Fatal(err)
 	}
 
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
 	return r, token
 }
 
@@ -662,7 +662,7 @@ func insertSessionWithOwner(t *testing.T, d *sql.DB, id, ownerID string) {
 func TestSessionsList_OwnerIsolation(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	tokenA, userA := workerToken(t, d, "ownera")
 	tokenB, userB := workerToken(t, d, "ownerb")
@@ -709,7 +709,7 @@ func TestSessionsList_OwnerIsolation(t *testing.T) {
 func TestSessionsDetail_OwnerForbidden(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	_, userA := workerToken(t, d, "ownera")
 	tokenB, _ := workerToken(t, d, "ownerb")
@@ -730,7 +730,7 @@ func TestSessionsDetail_OwnerForbidden(t *testing.T) {
 func TestSessionsDelete_OwnerForbidden(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	_, userA := workerToken(t, d, "ownera")
 	tokenB, _ := workerToken(t, d, "ownerb")

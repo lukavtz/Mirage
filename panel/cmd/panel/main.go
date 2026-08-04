@@ -27,6 +27,7 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/db"
 	mw "zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/services"
 	"zialfi-panel/internal/services/bot"
 	"zialfi-panel/internal/ws"
 )
@@ -207,6 +208,27 @@ func main() {
 	wsHub := ws.NewHub()
 	go wsHub.Run()
 
+	// Session-event fan-out: SQLite keeps the in-process hub; PostgreSQL
+	// additionally publishes via LISTEN/NOTIFY so multiple panel workers
+	// stay in sync (the LISTEN goroutine forwards into the same hub).
+	var broadcaster services.Broadcaster = wsHub
+	if providerType == db.ProviderPostgres {
+		pgCtx, pgCancel := context.WithCancel(context.Background())
+		defer pgCancel()
+		notifier, err := services.NewPGNotifier(pgCtx, connString, wsHub)
+		if err != nil {
+			slog.Error("failed to create PG notifier", "err", err)
+			os.Exit(1)
+		}
+		broadcaster = notifier
+		go func() {
+			if err := notifier.Listen(pgCtx); err != nil {
+				slog.Error("pg listener stopped", "err", err)
+			}
+		}()
+		slog.Info("postgres LISTEN/NOTIFY broadcaster enabled")
+	}
+
 	// Start Telegram sales bot
 	tgBot := bot.New(sqlDB)
 	go tgBot.Start()
@@ -236,7 +258,7 @@ func main() {
 		slog.Info("loaded decryptor DLL", "path", decryptorPath, "size", len(decryptorDll))
 	}
 
-	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll, providerType)
+	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll, providerType, broadcaster)
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		slog.Error("failed to resolve frontend filesystem", "err", err)

@@ -18,11 +18,11 @@ import (
 
 type LogProcessor struct {
 	db       *sql.DB
-	hub      *ws.Hub
+	hub      Broadcaster
 	provider db.ProviderType
 }
 
-func NewLogProcessor(dbConn *sql.DB, hub *ws.Hub, provider db.ProviderType) *LogProcessor {
+func NewLogProcessor(dbConn *sql.DB, hub Broadcaster, provider db.ProviderType) *LogProcessor {
 	return &LogProcessor{db: dbConn, hub: hub, provider: provider}
 }
 

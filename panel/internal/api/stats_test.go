@@ -24,7 +24,7 @@ func setupTestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string) 
 
 	userID := createTestUser(t, d, "testuser", "testpass")
 
-	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite, nil)
 
 	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
 	if err != nil {

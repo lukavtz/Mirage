@@ -142,7 +142,7 @@ func TestScreenshot_HappyPath(t *testing.T) {
 func TestScreenshot_TenantIsolation(t *testing.T) {
 	d := openTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	userA := createTestUserWithRole(t, d, "tenanta", "pw", "user")
 	sessionID := uuid.New().String()

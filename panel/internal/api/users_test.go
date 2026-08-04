@@ -23,7 +23,7 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 	r := chi.NewRouter()
 
 	adminID := createTestUser(t, d, "adminuser", "adminpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
 
 	adminToken, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "")
 	if err != nil {

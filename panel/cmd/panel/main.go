@@ -173,6 +173,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := db.VerifySchema(sqlDB, db.MigrationsFS, providerType); err != nil {
+		slog.Error("schema verification failed — refusing to start", "err", err)
+		os.Exit(1)
+	}
+
 	if set, err := db.IsDefaultAdminPassword(sqlDB); err == nil && set {
 		slog.Warn("default admin password is still the migration placeholder — run 'go run cmd/hashpw/main.go <password>' and UPDATE users SET password_hash = '<hash>' WHERE id = 'u_admin'")
 	}

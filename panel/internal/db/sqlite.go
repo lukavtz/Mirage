@@ -134,9 +134,17 @@ func RunPGMigrations(db *sql.DB, migrationsFS embed.FS) error {
 		return fmt.Errorf("list migrations: %w", err2)
 	}
 
+	// Build a set of pg_* overrides. A pg_NNN_x.sql file entirely replaces
+	// the corresponding NNN_x.sql — the base file is skipped so PG-optimised
+	// features (partial indexes, column types) take effect without duplicating
+	// every CREATE TABLE in an override file.
 	seen := make(map[string]bool)
+	overrideOf := make(map[string]bool) // base name -> true
 	for _, e := range entries {
 		seen[e] = true
+		// pg_027_sessions_owner.sql -> 027_sessions_owner.sql
+		base := strings.TrimPrefix(e, "migrations/pg_")
+		overrideOf[base] = true
 	}
 	for _, e := range entries2 {
 		if !seen[e] {
@@ -156,7 +164,14 @@ func RunPGMigrations(db *sql.DB, migrationsFS embed.FS) error {
 		}
 
 		sql := string(content)
-		if !strings.HasPrefix(name, "pg_") {
+		// If a pg_ override exists for this base file, skip the base file.
+		if overrideOf[strings.TrimPrefix(name, "migrations/")] {
+			continue
+		}
+		// pg_* files (paths like migrations/pg_000_init.sql) are already
+		// PG-native — never run them through the SQLite translator, which
+		// would trim newlines and corrupt their stored hash.
+		if !strings.HasPrefix(name, "migrations/pg_") {
 			sql = translateSQLiteToPG(sql)
 		}
 
@@ -477,4 +492,86 @@ func firstLine(s string) string {
 		return s[:i]
 	}
 	return s
+}
+
+// migrationEntries returns the ordered migration file names for the given
+// provider, in the same <name> form each runner writes into _migrations:
+// plain *.sql without the "migrations/" prefix for SQLite (pg_* skipped),
+// and pg_*.sql overrides + base files (minus overridden bases) with the
+// "migrations/" prefix for PostgreSQL. Shared by RunMigrations,
+// RunPGMigrations and VerifySchema.
+func migrationEntries(migrationsFS embed.FS, provider ProviderType) ([]string, error) {
+	all, err := fs.Glob(migrationsFS, "migrations/*.sql")
+	if err != nil {
+		return nil, fmt.Errorf("list migrations: %w", err)
+	}
+	if provider == ProviderSQLite {
+		var out []string
+		for _, e := range all {
+			if strings.HasPrefix(e, "migrations/pg_") {
+				continue
+			}
+			out = append(out, strings.TrimPrefix(e, "migrations/"))
+		}
+		sort.Strings(out)
+		return out, nil
+	}
+
+	overrides, err := fs.Glob(migrationsFS, "migrations/pg_*.sql")
+	if err != nil {
+		overrides = nil
+	}
+	overrideOf := make(map[string]bool)
+	for _, e := range overrides {
+		overrideOf[strings.TrimPrefix(e, "migrations/pg_")] = true
+	}
+	var out []string
+	out = append(out, overrides...)
+	for _, e := range all {
+		if overrideOf[strings.TrimPrefix(e, "migrations/")] {
+			continue
+		}
+		out = append(out, e)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+// VerifySchema confirms every applied migration's hash matches the
+// embedded content, for the given provider. Call it once at startup right
+// after migrations run: a schema drifted from the code (hand-edited DB,
+// deleted migration, hash mismatch) aborts startup instead of corrupting
+// rows later.
+func VerifySchema(db *sql.DB, migrationsFS embed.FS, provider ProviderType) error {
+	entries, err := migrationEntries(migrationsFS, provider)
+	if err != nil {
+		return err
+	}
+	for _, name := range entries {
+		path := name
+		if provider == ProviderSQLite {
+			path = "migrations/" + name
+		}
+		content, err := fs.ReadFile(migrationsFS, path)
+		if err != nil {
+			return fmt.Errorf("read %s: %w", name, err)
+		}
+		sql := string(content)
+		if provider == ProviderPostgres && !strings.HasPrefix(name, "migrations/pg_") {
+			sql = translateSQLiteToPG(sql)
+		}
+		want := fmt.Sprintf("%x", sha256.Sum256([]byte(sql)))
+		ph := "?"
+		if provider == ProviderPostgres {
+			ph = "$1"
+		}
+		var got string
+		if err := db.QueryRow("SELECT hash FROM _migrations WHERE name = "+ph, name).Scan(&got); err != nil {
+			return fmt.Errorf("verify %s: not applied: %w", name, err)
+		}
+		if got != want {
+			return fmt.Errorf("verify %s: hash mismatch (applied %s, want %s) — schema drifted from code", name, got, want)
+		}
+	}
+	return nil
 }

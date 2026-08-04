@@ -12,11 +12,12 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/db"
 )
 
 func TestMarketplace_ListProducts(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	_, err := d.Exec(
 		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
@@ -54,7 +55,7 @@ func TestMarketplace_ListProducts(t *testing.T) {
 
 func TestMarketplace_ListProductsEmpty(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Get("/api/marketplace/products", handler.ListProducts)
@@ -78,7 +79,7 @@ func TestMarketplace_ListProductsEmpty(t *testing.T) {
 
 func TestMarketplace_Purchase(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "buyer", "pass")
 	pid := uuid.New().String()
@@ -125,7 +126,7 @@ func TestMarketplace_Purchase(t *testing.T) {
 
 func TestMarketplace_PurchaseProductNotFound(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "buyer2", "pass")
 
@@ -147,7 +148,7 @@ func TestMarketplace_PurchaseProductNotFound(t *testing.T) {
 
 func TestMarketplace_Activate(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "activator", "pass")
 	pid := uuid.New().String()
@@ -192,7 +193,7 @@ func TestMarketplace_Activate(t *testing.T) {
 
 func TestMarketplace_ActivateAlreadyActivated(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "activator2", "pass")
 	pid := uuid.New().String()
@@ -230,7 +231,7 @@ func TestMarketplace_ActivateAlreadyActivated(t *testing.T) {
 
 func TestMarketplace_MyPurchases(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "purchaser", "pass")
 	pid := uuid.New().String()
@@ -277,7 +278,7 @@ func TestMarketplace_MyPurchases(t *testing.T) {
 
 func TestMarketplace_CreateProduct(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/products", handler.CreateProduct)
@@ -306,7 +307,7 @@ func TestMarketplace_CreateProduct(t *testing.T) {
 
 func TestMarketplace_CreateProductValidation(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/products", handler.CreateProduct)
@@ -324,7 +325,7 @@ func TestMarketplace_CreateProductValidation(t *testing.T) {
 
 func TestMarketplace_DeleteProduct(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	pid := uuid.New().String()
 	_, err := d.Exec(
@@ -355,7 +356,7 @@ func TestMarketplace_DeleteProduct(t *testing.T) {
 
 func TestMarketplace_DeleteProductNotFound(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Delete("/api/marketplace/products/{id}", handler.DeleteProduct)
@@ -371,7 +372,7 @@ func TestMarketplace_DeleteProductNotFound(t *testing.T) {
 
 func TestMarketplace_ActivateNotFound(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d)
+	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "activator3", "pass")
 

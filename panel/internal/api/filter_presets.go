@@ -4,14 +4,17 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+
+	"zialfi-panel/internal/db"
 )
 
 type FilterPresetsHandler struct {
 	db *sql.DB
+	provider     db.ProviderType
 }
 
-func NewFilterPresetsHandler(db *sql.DB) *FilterPresetsHandler {
-	return &FilterPresetsHandler{db: db}
+func NewFilterPresetsHandler(db *sql.DB, provider db.ProviderType) *FilterPresetsHandler {
+	return &FilterPresetsHandler{db: db, provider: provider}
 }
 
 type FilterPreset struct {
@@ -20,7 +23,7 @@ type FilterPreset struct {
 }
 
 func (h *FilterPresetsHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT name, domains FROM filter_presets ORDER BY created_at")
+	rows, err := db.Query(h.db, h.provider, "SELECT name, domains FROM filter_presets ORDER BY created_at")
 	if err == nil {
 		defer rows.Close()
 		presets := make([]FilterPreset, 0)

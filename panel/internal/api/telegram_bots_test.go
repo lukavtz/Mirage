@@ -11,12 +11,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 )
 
 func setupBotHandler(t *testing.T) (*api.TelegramBotHandler, *sql.DB) {
 	t.Helper()
 	d := openTestDB(t)
-	return api.NewTelegramBotHandler(d), d
+	return api.NewTelegramBotHandler(d, db.ProviderSQLite), d
 }
 
 func insertTestBot(t *testing.T, db *sql.DB) string {

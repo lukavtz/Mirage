@@ -5,14 +5,17 @@ import (
 	"net/http"
 
 	"zialfi-panel/internal/middleware"
+
+	"zialfi-panel/internal/db"
 )
 
 type DuplicateDetectHandler struct {
 	db *sql.DB
+	provider     db.ProviderType
 }
 
-func NewDuplicateDetectHandler(db *sql.DB) *DuplicateDetectHandler {
-	return &DuplicateDetectHandler{db: db}
+func NewDuplicateDetectHandler(db *sql.DB, provider db.ProviderType) *DuplicateDetectHandler {
+	return &DuplicateDetectHandler{db: db, provider: provider}
 }
 
 type DuplicateInfo struct {
@@ -45,11 +48,11 @@ func (h *DuplicateDetectHandler) Detect(w http.ResponseWriter, r *http.Request) 
 
 	if hwid != "" {
 		var count int
-		err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE hwid = ?"+ownerClause, append([]any{hwid}, ownerArg)...).Scan(&count)
+		err := db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE hwid = ?"+ownerClause, append([]any{hwid}, ownerArg)...).Scan(&count)
 		if err == nil {
 			resp.Hwid.Count = count
 			if count > 1 {
-				rows, err := h.db.Query("SELECT id FROM sessions WHERE hwid = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{hwid}, ownerArg)...)
+				rows, err := db.Query(h.db, h.provider, "SELECT id FROM sessions WHERE hwid = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{hwid}, ownerArg)...)
 				if err == nil {
 					defer rows.Close()
 					for rows.Next() {
@@ -65,11 +68,11 @@ func (h *DuplicateDetectHandler) Detect(w http.ResponseWriter, r *http.Request) 
 
 	if ip != "" {
 		var count int
-		err := h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE ip = ?"+ownerClause, append([]any{ip}, ownerArg)...).Scan(&count)
+		err := db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE ip = ?"+ownerClause, append([]any{ip}, ownerArg)...).Scan(&count)
 		if err == nil {
 			resp.Ip.Count = count
 			if count > 1 {
-				rows, err := h.db.Query("SELECT id FROM sessions WHERE ip = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{ip}, ownerArg)...)
+				rows, err := db.Query(h.db, h.provider, "SELECT id FROM sessions WHERE ip = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{ip}, ownerArg)...)
 				if err == nil {
 					defer rows.Close()
 					for rows.Next() {

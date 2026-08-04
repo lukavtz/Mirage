@@ -11,14 +11,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/middleware"
+
+	"zialfi-panel/internal/db"
 )
 
 type MarketplaceHandler struct {
 	db *sql.DB
+	provider     db.ProviderType
 }
 
-func NewMarketplaceHandler(db *sql.DB) *MarketplaceHandler {
-	return &MarketplaceHandler{db: db}
+func NewMarketplaceHandler(db *sql.DB, provider db.ProviderType) *MarketplaceHandler {
+	return &MarketplaceHandler{db: db, provider: provider}
 }
 
 type Product struct {
@@ -56,7 +59,7 @@ func generateLicenseKey() string {
 }
 
 func (h *MarketplaceHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT id, name, description, price_cents, product_type, created_at FROM products ORDER BY created_at DESC")
+	rows, err := db.Query(h.db, h.provider, "SELECT id, name, description, price_cents, product_type, created_at FROM products ORDER BY created_at DESC")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query products")
 		return
@@ -99,7 +102,7 @@ func (h *MarketplaceHandler) Purchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var product Product
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, name, description, price_cents, product_type, created_at FROM products WHERE id = ?", req.ProductID,
 	).Scan(&product.ID, &product.Name, &product.Description, &product.PriceCents, &product.ProductType, &product.CreatedAt)
 	if err != nil {
@@ -139,7 +142,7 @@ func (h *MarketplaceHandler) Purchase(w http.ResponseWriter, r *http.Request) {
 	}
 	featuresJSON, _ := json.Marshal(features)
 
-	_, err = h.db.Exec(
+	_, err = db.Exec(h.db, h.provider, 
 		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 		id, claims.UserID, req.ProductID, licenseKey, req.Tier, string(featuresJSON), expiresAt, now,
 	)
@@ -177,7 +180,7 @@ func (h *MarketplaceHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 	var purchaseID, userID string
 	var activatedAt *string
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, activated_at FROM purchases WHERE license_key = ?", req.LicenseKey,
 	).Scan(&purchaseID, &userID, &activatedAt)
 	if err != nil {
@@ -196,7 +199,7 @@ func (h *MarketplaceHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = h.db.Exec("UPDATE purchases SET activated_at = ? WHERE id = ?", now, purchaseID)
+	_, err = db.Exec(h.db, h.provider, "UPDATE purchases SET activated_at = ? WHERE id = ?", now, purchaseID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to activate license")
 		return
@@ -212,7 +215,7 @@ func (h *MarketplaceHandler) MyPurchases(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rows, err := h.db.Query(
+	rows, err := db.Query(h.db, h.provider, 
 		"SELECT id, user_id, product_id, license_key, tier, COALESCE(features,'{}'), activated_at, expires_at, created_at FROM purchases WHERE user_id = ? ORDER BY created_at DESC",
 		claims.UserID,
 	)
@@ -255,7 +258,7 @@ func (h *MarketplaceHandler) CreateProduct(w http.ResponseWriter, r *http.Reques
 	}
 
 	id := uuid.New().String()
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
 		id, req.Name, req.Description, req.PriceCents, req.ProductType,
 	)
@@ -265,7 +268,7 @@ func (h *MarketplaceHandler) CreateProduct(w http.ResponseWriter, r *http.Reques
 	}
 
 	var p Product
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, name, description, price_cents, product_type, created_at FROM products WHERE id = ?", id,
 	).Scan(&p.ID, &p.Name, &p.Description, &p.PriceCents, &p.ProductType, &p.CreatedAt)
 	if err != nil {
@@ -279,7 +282,7 @@ func (h *MarketplaceHandler) CreateProduct(w http.ResponseWriter, r *http.Reques
 func (h *MarketplaceHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM products WHERE id = ?", id)
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM products WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete product")
 		return
@@ -318,7 +321,7 @@ func (h *MarketplaceHandler) RenewLicense(w http.ResponseWriter, r *http.Request
 	}
 
 	var purchaseID, userID, tier, expiresAt string
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, tier, COALESCE(expires_at, '') FROM purchases WHERE license_key = ?",
 		req.LicenseKey,
 	).Scan(&purchaseID, &userID, &tier, &expiresAt)
@@ -350,7 +353,7 @@ func (h *MarketplaceHandler) RenewLicense(w http.ResponseWriter, r *http.Request
 	}
 	newExpires := baseTime.Add(duration).Format(time.RFC3339)
 
-	_, err = h.db.Exec("UPDATE purchases SET expires_at = ? WHERE id = ?", newExpires, purchaseID)
+	_, err = db.Exec(h.db, h.provider, "UPDATE purchases SET expires_at = ? WHERE id = ?", newExpires, purchaseID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to renew license")
 		return
@@ -385,7 +388,7 @@ func (h *MarketplaceHandler) UpgradeLicense(w http.ResponseWriter, r *http.Reque
 	}
 
 	var purchaseID, userID, currentTier string
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, tier FROM purchases WHERE license_key = ?",
 		req.LicenseKey,
 	).Scan(&purchaseID, &userID, &currentTier)
@@ -421,7 +424,7 @@ func (h *MarketplaceHandler) UpgradeLicense(w http.ResponseWriter, r *http.Reque
 		newExpires = time.Now().UTC().Add(100 * 365 * 24 * time.Hour).Format(time.RFC3339)
 	}
 
-	_, err = h.db.Exec(
+	_, err = db.Exec(h.db, h.provider, 
 		"UPDATE purchases SET tier = ?, features = ?, expires_at = ? WHERE id = ?",
 		req.NewTier, string(featuresJSON), newExpires, purchaseID,
 	)
@@ -453,7 +456,7 @@ func (h *MarketplaceHandler) LicenseStatus(w http.ResponseWriter, r *http.Reques
 
 	if licenseKey != "" {
 		var tier, expiresAt, features string
-		err := h.db.QueryRow(
+		err := db.QueryRow(h.db, h.provider, 
 			"SELECT tier, COALESCE(expires_at, ''), COALESCE(features, '{}') FROM purchases WHERE license_key = ? AND user_id = ?",
 			licenseKey, claims.UserID,
 		).Scan(&tier, &expiresAt, &features)
@@ -475,7 +478,7 @@ func (h *MarketplaceHandler) LicenseStatus(w http.ResponseWriter, r *http.Reques
 	}
 
 	if licenseKey == "" {
-		rows, err := h.db.Query(
+		rows, err := db.Query(h.db, h.provider, 
 			"SELECT tier, COALESCE(expires_at, ''), COALESCE(features, '{}') FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
 			claims.UserID,
 		)
@@ -506,21 +509,21 @@ func (h *MarketplaceHandler) StartTrial(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var existing int
-	h.db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&existing)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&existing)
 	if existing > 0 {
 		writeError(w, http.StatusBadRequest, "trial already used")
 		return
 	}
 
 	ip := extractIP(r)
-	h.db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE ip = ?", ip).Scan(&existing)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM license_trials WHERE ip = ?", ip).Scan(&existing)
 	if existing > 0 {
 		var machineID string
 		if q := r.URL.Query().Get("machine_id"); q != "" {
 			machineID = q
 		}
 		if machineID != "" {
-			h.db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE machine_id = ?", machineID).Scan(&existing)
+			db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM license_trials WHERE machine_id = ?", machineID).Scan(&existing)
 			if existing > 0 {
 				writeError(w, http.StatusBadRequest, "trial already used on this machine")
 				return
@@ -532,7 +535,7 @@ func (h *MarketplaceHandler) StartTrial(w http.ResponseWriter, r *http.Request) 
 	trialExpiry := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
 	machineID := r.URL.Query().Get("machine_id")
 
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		`INSERT INTO license_trials (id, user_id, ip, machine_id, tier, max_sessions, expires_at) VALUES (?, ?, ?, ?, 'starter', 50, ?)`,
 		id, claims.UserID, ip, machineID, trialExpiry,
 	)

@@ -21,7 +21,7 @@ func NewDomainDetectHandler(d *sql.DB, provider db.ProviderType) *DomainDetectHa
 	return &DomainDetectHandler{d: d, provider: provider}
 }
 func (h *DomainDetectHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.d.Query("SELECT id, domain, tag, color, created_at FROM domain_detect ORDER BY domain")
+	rows, err := db.Query(h.d, h.provider, "SELECT id, domain, tag, color, created_at FROM domain_detect ORDER BY domain")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query domain detections")
 		return
@@ -60,7 +60,7 @@ func (h *DomainDetectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New().String()
-	_, err := h.d.Exec(
+	_, err := db.Exec(h.d, h.provider, 
 		"INSERT INTO domain_detect (id, domain, tag, color) VALUES (?, ?, ?, ?)",
 		id, req.Domain, req.Tag, req.Color,
 	)
@@ -70,7 +70,7 @@ func (h *DomainDetectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var item db.DomainDetect
-	h.d.QueryRow(
+	db.QueryRow(h.d, h.provider, 
 		"SELECT id, domain, tag, color, created_at FROM domain_detect WHERE id = ?", id,
 	).Scan(&item.ID, &item.Domain, &item.Tag, &item.Color, &item.CreatedAt)
 
@@ -80,7 +80,7 @@ func (h *DomainDetectHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *DomainDetectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.d.Exec("DELETE FROM domain_detect WHERE id = ?", id)
+	result, err := db.Exec(h.d, h.provider, "DELETE FROM domain_detect WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete")
 		return
@@ -103,7 +103,7 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rules, err := h.d.Query("SELECT id, domain, tag, color FROM domain_detect")
+	rules, err := db.Query(h.d, h.provider, "SELECT id, domain, tag, color FROM domain_detect")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query rules")
 		return
@@ -124,7 +124,7 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	passwords, err := h.d.Query(
+	passwords, err := db.Query(h.d, h.provider, 
 		"SELECT url FROM passwords WHERE session_id = ?", sessionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query passwords")
@@ -160,11 +160,11 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 		// is the dialect-correct equivalent.
 		q := db.Placeholders(h.provider,
 			"INSERT INTO session_tags (id, session_id, tag, color) VALUES (?, ?, ?, ?) ON CONFLICT (session_id, tag) DO NOTHING")
-		h.d.Exec(q, tagID, sessionID, tag, color)
+		db.Exec(h.d, h.provider, q, tagID, sessionID, tag, color)
 	}
 
 	var result []db.SessionTag
-	rows, err := h.d.Query(
+	rows, err := db.Query(h.d, h.provider, 
 		"SELECT id, session_id, tag, color, created_at FROM session_tags WHERE session_id = ? ORDER BY created_at",
 		sessionID)
 	if err == nil {

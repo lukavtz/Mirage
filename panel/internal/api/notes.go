@@ -7,14 +7,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 )
 
 type NotesHandler struct {
 	db *sql.DB
+	provider     db.ProviderType
 }
 
-func NewNotesHandler(db *sql.DB) *NotesHandler {
-	return &NotesHandler{db: db}
+func NewNotesHandler(db *sql.DB, provider db.ProviderType) *NotesHandler {
+	return &NotesHandler{db: db, provider: provider}
 }
 
 type Note struct {
@@ -33,7 +35,7 @@ func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Query(
+	rows, err := db.Query(h.db, h.provider, 
 		"SELECT id, session_id, content, created_by, created_at FROM notes WHERE session_id = ? ORDER BY created_at DESC",
 		sessionID,
 	)
@@ -76,7 +78,7 @@ func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New().String()
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		"INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)",
 		id, sessionID, req.Content,
 	)
@@ -86,7 +88,7 @@ func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var n Note
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, session_id, content, created_by, created_at FROM notes WHERE id = ?", id,
 	).Scan(&n.ID, &n.SessionID, &n.Content, &n.CreatedBy, &n.CreatedAt)
 	if err != nil {
@@ -101,7 +103,7 @@ func (h *NotesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var sessionID string
-	err := h.db.QueryRow("SELECT session_id FROM notes WHERE id = ?", id).Scan(&sessionID)
+	err := db.QueryRow(h.db, h.provider, "SELECT session_id FROM notes WHERE id = ?", id).Scan(&sessionID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "note not found")
 		return
@@ -111,7 +113,7 @@ func (h *NotesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.db.Exec("DELETE FROM notes WHERE id = ?", id)
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM notes WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete note")
 		return

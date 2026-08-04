@@ -50,7 +50,7 @@ func createTestZip(t *testing.T, files map[string]string) []byte {
 
 func TestProcess_ValidZip(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{
 		"Browser Data/Chrome_passwords.txt": "https://example.com\tuser1\tpass1\nhttps://google.com\tuser2\tpass2",
@@ -104,7 +104,7 @@ func TestProcess_ValidZip(t *testing.T) {
 
 func TestProcess_PathTraversal(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{
 		"../../etc/passwd": "root:x:0:0:root:/root:/bin/bash",
@@ -127,7 +127,7 @@ func TestProcess_PathTraversal(t *testing.T) {
 
 func TestProcess_AbsolutePath(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{
 		"/etc/passwd": "root:x:0:0:root:/root:/bin/bash",
@@ -147,7 +147,7 @@ func TestProcess_AbsolutePath(t *testing.T) {
 
 func TestProcess_EmptyZip(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{})
 	sessionID, err := processor.Process(archive, "{}", "test-user-id")
@@ -170,7 +170,7 @@ func TestProcess_EmptyZip(t *testing.T) {
 
 func TestProcess_MalformedMetadata(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{
 		"passwords.txt": "https://x.com\tu\tp",
@@ -196,7 +196,7 @@ func TestProcess_MalformedMetadata(t *testing.T) {
 
 func TestProcess_MultipleBrowsers(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{
 		"Browser Data/Chrome_passwords.txt":  "https://a.com\tu1\tp1",
@@ -238,7 +238,7 @@ func TestProcess_MultipleBrowsers(t *testing.T) {
 
 func TestProcess_MultiplePasswordLines(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	var lines []string
 	for i := 0; i < 10; i++ {
@@ -263,7 +263,7 @@ func TestProcess_MultiplePasswordLines(t *testing.T) {
 
 func TestProcess_MalformedLine(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	content := "https://good.com\tuser\tpass\nmalformed\nhttps://another.com\tu2\tp2"
 	archive := createTestZip(t, map[string]string{
@@ -285,7 +285,7 @@ func TestProcess_MalformedLine(t *testing.T) {
 
 func TestProcess_SetsOwnerID(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil)
+	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
 
 	archive := createTestZip(t, map[string]string{
 		"passwords.txt": "https://example.com\tuser\tpass",

@@ -10,15 +10,17 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/ws"
+	"zialfi-panel/internal/db"
 )
 
 type ChatHandler struct {
-	db  *sql.DB
-	hub *ws.Hub
+	db       *sql.DB
+	hub      *ws.Hub
+	provider     db.ProviderType
 }
 
-func NewChatHandler(db *sql.DB, hub *ws.Hub) *ChatHandler {
-	return &ChatHandler{db: db, hub: hub}
+func NewChatHandler(db *sql.DB, hub *ws.Hub, provider db.ProviderType) *ChatHandler {
+	return &ChatHandler{db: db, hub: hub, provider: provider}
 }
 
 func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -48,12 +50,12 @@ func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.ClaimsFromContext(r.Context())
 	var rows *sql.Rows
 	if claims != nil && claims.Role != "admin" {
-		rows, err = h.db.Query(
+		rows, err = db.Query(h.db, h.provider, 
 			"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE (user_id = ? OR user_id IN (SELECT id FROM users WHERE role = 'admin')) AND created_at > ? ORDER BY created_at DESC LIMIT ?",
 			claims.UserID, sinceFormatted, limit,
 		)
 	} else {
-		rows, err = h.db.Query(
+		rows, err = db.Query(h.db, h.provider, 
 			"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
 			sinceFormatted, limit,
 		)
@@ -97,14 +99,14 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var username string
-	err := h.db.QueryRow("SELECT username FROM users WHERE id = ?", claims.UserID).Scan(&username)
+	err := db.QueryRow(h.db, h.provider, "SELECT username FROM users WHERE id = ?", claims.UserID).Scan(&username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lookup user")
 		return
 	}
 
 	id := uuid.New().String()
-	_, err = h.db.Exec(
+	_, err = db.Exec(h.db, h.provider, 
 		"INSERT INTO chat_messages (id, user_id, username, message, parent_id) VALUES (?, ?, ?, ?, ?)",
 		id, claims.UserID, username, req.Message, nullIfEmpty(req.ParentID),
 	)
@@ -114,7 +116,7 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var m ws.ChatMessage
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE id = ?", id,
 	).Scan(&m.ID, &m.UserID, &m.Username, &m.Message, &m.ParentID, &m.MessageType, &m.CreatedAt)
 	if err != nil {
@@ -139,7 +141,7 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 func (h *ChatHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM chat_messages WHERE id = ?", id)
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM chat_messages WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete message")
 		return

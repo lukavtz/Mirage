@@ -5,14 +5,16 @@ import (
 	"net/http"
 
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/db"
 )
 
 type SSPHandler struct {
 	processor *services.LogProcessor
+	provider     db.ProviderType
 }
 
-func NewSSPHandler(processor *services.LogProcessor) *SSPHandler {
-	return &SSPHandler{processor: processor}
+func NewSSPHandler(processor *services.LogProcessor, provider db.ProviderType) *SSPHandler {
+	return &SSPHandler{processor: processor, provider: provider}
 }
 
 func (h *SSPHandler) ProcessSSP(w http.ResponseWriter, r *http.Request) {

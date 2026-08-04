@@ -4,10 +4,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"zialfi-panel/internal/db"
 )
 
 type SettingsHandler struct {
 	db        *sql.DB
+	provider     db.ProviderType
 	jwtSecret string
 	onUpdate  func()
 }
@@ -26,12 +28,12 @@ type SettingsResponse struct {
 	Audit    []AuditEntry      `json:"audit"`
 }
 
-func NewSettingsHandler(db *sql.DB, jwtSecret string) *SettingsHandler {
-	return &SettingsHandler{db: db, jwtSecret: jwtSecret}
+func NewSettingsHandler(db *sql.DB, jwtSecret string, provider db.ProviderType) *SettingsHandler {
+	return &SettingsHandler{db: db, jwtSecret: jwtSecret, provider: provider}
 }
 
 func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT key, value FROM settings")
+	rows, err := db.Query(h.db, h.provider, "SELECT key, value FROM settings")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query settings")
 		return
@@ -46,7 +48,7 @@ func (h *SettingsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	auditRows, err := h.db.Query(
+	auditRows, err := db.Query(h.db, h.provider, 
 		"SELECT id, COALESCE(user_id,''), action, COALESCE(details,''), COALESCE(ip,''), created_at FROM audit_log ORDER BY created_at DESC LIMIT 50",
 	)
 	if err != nil {
@@ -80,7 +82,7 @@ func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for k, v := range updates {
-		_, err := h.db.Exec(
+		_, err := db.Exec(h.db, h.provider, 
 			"INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
 			k, v,
 		)
@@ -96,7 +98,7 @@ func (h *SettingsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		h.onUpdate()
 	}
 
-	rows, err := h.db.Query("SELECT key, value FROM settings")
+	rows, err := db.Query(h.db, h.provider, "SELECT key, value FROM settings")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query settings")
 		return

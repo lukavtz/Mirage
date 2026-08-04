@@ -255,7 +255,7 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	r.Group(func(r chi.Router) {
 		r.Use(api.AuthMiddleware(jwtSecret))
-		statsHandler := api.NewStatsHandler(d, hub)
+		statsHandler := api.NewStatsHandler(d, hub, db.ProviderSQLite)
 		r.Get("/api/stats", statsHandler.Dashboard)
 	})
 

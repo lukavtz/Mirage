@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 )
 
 func TestSettingsHandler_Get(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSettingsHandler(d, "test-secret")
+	handler := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
 	w := httptest.NewRecorder()
@@ -38,7 +39,7 @@ func TestSettingsHandler_Get(t *testing.T) {
 
 func TestSettingsHandler_Get_IncludesAudit(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSettingsHandler(d, "test-secret")
+	handler := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
 	w := httptest.NewRecorder()

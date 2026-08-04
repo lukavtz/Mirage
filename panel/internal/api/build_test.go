@@ -59,7 +59,7 @@ func setupBuildHandler(t *testing.T) (*api.BuildHandler, *sql.DB) {
 	d := openTestDB(t)
 	svc := services.NewBuildService()
 	stealer := makeTestPE(t)
-	handler := api.NewBuildHandler(svc, stealer, nil, d)
+	handler := api.NewBuildHandler(svc, stealer, nil, d, db.ProviderSQLite)
 	return handler, d
 }
 

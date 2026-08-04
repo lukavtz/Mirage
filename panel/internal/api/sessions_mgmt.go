@@ -10,10 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/db"
 )
 
 type SessionMgmtHandler struct {
 	db *sql.DB
+	provider db.ProviderType
 }
 
 type AuthSessionItem struct {
@@ -28,8 +30,8 @@ type AuthSessionItem struct {
 	CreatedAt    string `json:"created_at"`
 }
 
-func NewSessionMgmtHandler(db *sql.DB) *SessionMgmtHandler {
-	return &SessionMgmtHandler{db: db}
+func NewSessionMgmtHandler(db *sql.DB, provider db.ProviderType) *SessionMgmtHandler {
+	return &SessionMgmtHandler{db: db, provider: provider}
 }
 
 func (h *SessionMgmtHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +41,7 @@ func (h *SessionMgmtHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Query(`
+	rows, err := db.Query(h.db, h.provider, `
 		SELECT id, user_id, device, os, browser, ip, location, last_active_at, created_at
 		FROM auth_sessions WHERE user_id = ? ORDER BY last_active_at DESC`, claims.UserID)
 	if err != nil {
@@ -69,7 +71,7 @@ func (h *SessionMgmtHandler) Terminate(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM auth_sessions WHERE id = ? AND user_id = ?", sessionID, claims.UserID)
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM auth_sessions WHERE id = ? AND user_id = ?", sessionID, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to terminate session")
 		return
@@ -94,13 +96,13 @@ func (h *SessionMgmtHandler) TerminateAll(w http.ResponseWriter, r *http.Request
 	currentSessionID := claims.SessionID
 
 	if currentSessionID != "" {
-		_, err := h.db.Exec("DELETE FROM auth_sessions WHERE user_id = ? AND id != ?", claims.UserID, currentSessionID)
+		_, err := db.Exec(h.db, h.provider, "DELETE FROM auth_sessions WHERE user_id = ? AND id != ?", claims.UserID, currentSessionID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
 			return
 		}
 	} else {
-		_, err := h.db.Exec("DELETE FROM auth_sessions WHERE user_id = ?", claims.UserID)
+		_, err := db.Exec(h.db, h.provider, "DELETE FROM auth_sessions WHERE user_id = ?", claims.UserID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
 			return

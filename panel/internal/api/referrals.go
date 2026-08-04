@@ -61,7 +61,7 @@ func (h *ReferralHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var referrerID string
-	err := h.db.QueryRow("SELECT id FROM users WHERE referral_code = ?", req.Code).Scan(&referrerID)
+	err := db.QueryRow(h.db, h.provider, "SELECT id FROM users WHERE referral_code = ?", req.Code).Scan(&referrerID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "invalid referral code")
 		return
@@ -73,14 +73,14 @@ func (h *ReferralHandler) Apply(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var refCount int
-	h.db.QueryRow("SELECT COUNT(*) FROM referrals WHERE referred_user_id = ?", claims.UserID).Scan(&refCount)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM referrals WHERE referred_user_id = ?", claims.UserID).Scan(&refCount)
 	if refCount > 0 {
 		writeError(w, http.StatusBadRequest, "already applied a referral code")
 		return
 	}
 	insertReferral := db.Placeholders(h.provider,
 		"INSERT INTO referrals (referrer_id, referred_user_id, code, applied_at) VALUES (?, ?, ?, "+db.Now(h.provider)+")")
-	_, err = h.db.Exec(insertReferral, referrerID, claims.UserID, req.Code)
+	_, err = db.Exec(h.db, h.provider, insertReferral, referrerID, claims.UserID, req.Code)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to apply referral code")
 		return
@@ -106,7 +106,7 @@ func (h *ReferralHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var totalRefers int
-	h.db.QueryRow("SELECT COUNT(*) FROM purchases WHERE referred_by = ?", claims.UserID).Scan(&totalRefers)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM purchases WHERE referred_by = ?", claims.UserID).Scan(&totalRefers)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"code":         code,
@@ -116,10 +116,10 @@ func (h *ReferralHandler) Stats(w http.ResponseWriter, r *http.Request) {
 
 func (h *ReferralHandler) ensureCode(claims *auth.Claims) (string, error) {
 	var code string
-	err := h.db.QueryRow("SELECT referral_code FROM users WHERE id = ?", claims.UserID).Scan(&code)
+	err := db.QueryRow(h.db, h.provider, "SELECT referral_code FROM users WHERE id = ?", claims.UserID).Scan(&code)
 	if err != nil || code == "" {
 		code = generateReferralCode()
-		_, err = h.db.Exec("UPDATE users SET referral_code = ? WHERE id = ?", code, claims.UserID)
+		_, err = db.Exec(h.db, h.provider, "UPDATE users SET referral_code = ? WHERE id = ?", code, claims.UserID)
 		if err != nil {
 			return "", err
 		}

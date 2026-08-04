@@ -12,11 +12,12 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/db"
 )
 
 func TestTicket_Create(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser", "pass")
 
@@ -55,7 +56,7 @@ func TestTicket_Create(t *testing.T) {
 
 func TestTicket_CreateInvalidCategory(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser2", "pass")
 
@@ -77,7 +78,7 @@ func TestTicket_CreateInvalidCategory(t *testing.T) {
 
 func TestTicket_ListUserSeesOwn(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser3", "pass")
 	_, err := d.Exec(
@@ -122,7 +123,7 @@ func TestTicket_ListUserSeesOwn(t *testing.T) {
 
 func TestTicket_ListAdminSeesAll(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "adminuser", "pass")
 	_, err := d.Exec(
@@ -164,7 +165,7 @@ func TestTicket_ListAdminSeesAll(t *testing.T) {
 
 func TestTicket_Get(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser4", "pass")
 	tid := uuid.New().String()
@@ -204,7 +205,7 @@ func TestTicket_Get(t *testing.T) {
 
 func TestTicket_GetForbidden(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser5", "pass")
 	tid := uuid.New().String()
@@ -232,7 +233,7 @@ func TestTicket_GetForbidden(t *testing.T) {
 
 func TestTicket_Reply(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser6", "pass")
 	tid := uuid.New().String()
@@ -270,7 +271,7 @@ func TestTicket_Reply(t *testing.T) {
 
 func TestTicket_Close(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser7", "pass")
 	tid := uuid.New().String()
@@ -304,7 +305,7 @@ func TestTicket_Close(t *testing.T) {
 
 func TestTicket_CloseAlreadyClosed(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewTicketHandler(d)
+	handler := api.NewTicketHandler(d, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "ticketuser8", "pass")
 	tid := uuid.New().String()

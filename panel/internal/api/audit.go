@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+
+	"zialfi-panel/internal/db"
 )
 
 func LogAudit(db *sql.DB, userID, action, details, ip string) {
@@ -18,11 +20,12 @@ func LogAudit(db *sql.DB, userID, action, details, ip string) {
 }
 
 type AuditHandler struct {
-	db *sql.DB
+	db       *sql.DB
+	provider db.ProviderType
 }
 
-func NewAuditHandler(db *sql.DB) *AuditHandler {
-	return &AuditHandler{db: db}
+func NewAuditHandler(db *sql.DB, provider db.ProviderType) *AuditHandler {
+	return &AuditHandler{db: db, provider: provider}
 }
 
 type auditEntry struct {
@@ -68,13 +71,13 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions)
 	}
-	h.db.QueryRow(countQuery, args...).Scan(&total)
+	db.QueryRow(h.db, h.provider, countQuery, args...).Scan(&total)
 
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
 	offset := (page - 1) * limit
 	qargs := append(args, limit, offset)
 
-	rows, err := h.db.Query(query, qargs...)
+	rows, err := db.Query(h.db, h.provider, query, qargs...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query audit log")
 		return
@@ -127,11 +130,11 @@ func (h *AuditHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	today := "datetime('now', 'start of day')"
 	var stats auditStats
 
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action LIKE 'session.view%' AND created_at >= "+today, workerID).Scan(&stats.SessionsViewed)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.export' AND created_at >= "+today, workerID).Scan(&stats.Exports)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action IN ('session.lock','session.unlock') AND created_at >= "+today, workerID).Scan(&stats.Locks)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.comment' AND created_at >= "+today, workerID).Scan(&stats.Comments)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND created_at >= "+today, workerID).Scan(&stats.Total)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action LIKE 'session.view%' AND created_at >= "+today, workerID).Scan(&stats.SessionsViewed)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.export' AND created_at >= "+today, workerID).Scan(&stats.Exports)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action IN ('session.lock','session.unlock') AND created_at >= "+today, workerID).Scan(&stats.Locks)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.comment' AND created_at >= "+today, workerID).Scan(&stats.Comments)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND created_at >= "+today, workerID).Scan(&stats.Total)
 
 	writeJSON(w, http.StatusOK, stats)
 }

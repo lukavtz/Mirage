@@ -9,14 +9,16 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"zialfi-panel/internal/db"
 )
 
 type ScreenshotsHandler struct {
 	db *sql.DB
+	provider     db.ProviderType
 }
 
-func NewScreenshotsHandler(db *sql.DB) *ScreenshotsHandler {
-	return &ScreenshotsHandler{db: db}
+func NewScreenshotsHandler(db *sql.DB, provider db.ProviderType) *ScreenshotsHandler {
+	return &ScreenshotsHandler{db: db, provider: provider}
 }
 
 // Get serves a session's captured screenshot. Tenant-scoped: non-admins only
@@ -35,7 +37,7 @@ func (h *ScreenshotsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var relPath, mime string
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT file_path, mime_type FROM screenshots WHERE session_id = ?", sessionID,
 	).Scan(&relPath, &mime)
 	if err == sql.ErrNoRows {
@@ -92,7 +94,7 @@ func (h *ScreenshotsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var relPath string
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT file_path FROM screenshots WHERE session_id = ?", sessionID,
 	).Scan(&relPath)
 	if err == sql.ErrNoRows {
@@ -104,7 +106,7 @@ func (h *ScreenshotsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := h.db.Exec("DELETE FROM screenshots WHERE session_id = ?", sessionID); err != nil {
+	if _, err := db.Exec(h.db, h.provider, "DELETE FROM screenshots WHERE session_id = ?", sessionID); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete failed")
 		return
 	}

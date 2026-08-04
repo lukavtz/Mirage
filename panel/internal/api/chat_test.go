@@ -15,13 +15,14 @@ import (
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/ws"
+	"zialfi-panel/internal/db"
 )
 
 func TestChat_Send(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "chatuser", "pass")
 
@@ -59,7 +60,7 @@ func TestChat_SendEmptyMessage(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "chatuser2", "pass")
 
@@ -83,7 +84,7 @@ func TestChat_List(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "chatuser3", "pass")
 	_, err := d.Exec(
@@ -123,7 +124,7 @@ func TestChat_ListEmpty(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Get("/api/chat/messages", handler.List)
@@ -151,7 +152,7 @@ func TestChat_Delete(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "chatuser4", "pass")
 	mid := uuid.New().String()
@@ -185,7 +186,7 @@ func TestChat_DeleteNotFound(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Delete("/api/chat/messages/{id}", handler.Delete)
@@ -203,7 +204,7 @@ func TestChat_ListBadSince(t *testing.T) {
 	d := openTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub)
+	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Get("/api/chat/messages", handler.List)
@@ -219,7 +220,7 @@ func TestChat_ListBadSince(t *testing.T) {
 
 func TestChat_ListTenantIsolation(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewChatHandler(d, nil)
+	handler := api.NewChatHandler(d, nil, db.ProviderSQLite)
 
 	userA, _ := workerToken(t, d, "worker-a")
 	userB, _ := workerToken(t, d, "worker-b")

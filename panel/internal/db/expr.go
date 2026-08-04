@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"fmt"
 	"strings"
 )
@@ -53,4 +54,19 @@ func Placeholders(p ProviderType, sql string) string {
 		b.WriteByte(c)
 	}
 	return b.String()
+}
+
+// Exec runs sql against db, rewriting "?" placeholders to "$N" for PG.
+func Exec(d *sql.DB, p ProviderType, sql string, args ...any) (sql.Result, error) {
+	return d.Exec(Placeholders(p, sql), args...)
+}
+
+// Query runs sql against db, rewriting "?" placeholders to "$N" for PG.
+func Query(d *sql.DB, p ProviderType, sql string, args ...any) (*sql.Rows, error) {
+	return d.Query(Placeholders(p, sql), args...)
+}
+
+// QueryRow runs sql against db, rewriting "?" placeholders to "$N" for PG.
+func QueryRow(d *sql.DB, p ProviderType, sql string, args ...any) *sql.Row {
+	return d.QueryRow(Placeholders(p, sql), args...)
 }

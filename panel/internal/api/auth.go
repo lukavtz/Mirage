@@ -111,7 +111,7 @@ func (h *AuthHandler) cleanupPasswordResets() {
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
-		h.db.Exec(db.Placeholders(h.provider, "DELETE FROM password_resets WHERE expires_at < "+db.Now(h.provider)+" OR used = 1"))
+		db.Exec(h.db, h.provider, db.Placeholders(h.provider, "DELETE FROM password_resets WHERE expires_at < "+db.Now(h.provider)+" OR used = 1"))
 	}
 }
 
@@ -119,7 +119,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ip := extractIP(r)
 
 	var banID string
-	err := h.db.QueryRow("SELECT id FROM bans WHERE ip = ?", ip).Scan(&banID)
+	err := db.QueryRow(h.db, h.provider, "SELECT id FROM bans WHERE ip = ?", ip).Scan(&banID)
 	if err == nil {
 		writeError(w, http.StatusForbidden, "IP is banned")
 		return
@@ -149,7 +149,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id, username, passwordHash, role string
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, username, password_hash, role FROM users WHERE username = ?",
 		req.Username,
 	).Scan(&id, &username, &passwordHash, &role)
@@ -173,7 +173,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var totpEnabled bool
 	var totpSecret string
-	h.db.QueryRow("SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret)
+	db.QueryRow(h.db, h.provider, "SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret)
 	if totpEnabled {
 		tempToken := uuid.New().String()
 		h.tempMu.Lock()
@@ -195,7 +195,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	ua := r.Header.Get("User-Agent")
 	os, browser := parseUserAgent(ua)
-	h.db.Exec(`INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+	db.Exec(h.db, h.provider, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, id, hashToken(token), "", os, browser, ip)
 
 	score := mw.CheckIP(ip)
@@ -231,7 +231,7 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var secret string
-	err := h.db.QueryRow("SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret)
+	err := db.QueryRow(h.db, h.provider, "SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -252,7 +252,7 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 
 	ua := r.Header.Get("User-Agent")
 	os, browser := parseUserAgent(ua)
-	h.db.Exec(`INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+	db.Exec(h.db, h.provider, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, entry.userID, hashToken(token), "", os, browser, ip)
 
 	score := mw.CheckIP(ip)
@@ -272,7 +272,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var totpEnabled bool
-	h.db.QueryRow("SELECT totp_enabled FROM users WHERE id = ?", claims.UserID).Scan(&totpEnabled)
+	db.QueryRow(h.db, h.provider, "SELECT totp_enabled FROM users WHERE id = ?", claims.UserID).Scan(&totpEnabled)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user_id":      claims.UserID,
 		"role":         claims.Role,
@@ -303,7 +303,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	const genericMsg = "If the account exists, a reset token has been generated."
 
 	var userID string
-	err := h.db.QueryRow("SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
+	err := db.QueryRow(h.db, h.provider, "SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"message": genericMsg})
 		return
@@ -323,7 +323,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New().String()
 	expiresAt := time.Now().Add(15 * time.Minute)
-	_, err = h.db.Exec(
+	_, err = db.Exec(h.db, h.provider, 
 		"INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
 		id, userID, tokenHash, expiresAt.UTC().Format(time.RFC3339),
 	)
@@ -334,8 +334,8 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Send token via Telegram if configured, otherwise log to console
 	var tgToken, tgChatID string
-	h.db.QueryRow("SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&tgToken)
-	h.db.QueryRow("SELECT value FROM settings WHERE key = 'telegram_chat_id'").Scan(&tgChatID)
+	db.QueryRow(h.db, h.provider, "SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&tgToken)
+	db.QueryRow(h.db, h.provider, "SELECT value FROM settings WHERE key = 'telegram_chat_id'").Scan(&tgChatID)
 
 	if tgToken != "" && tgChatID != "" {
 		text := fmt.Sprintf("🔐 Password reset requested\n\nUser: %s\nCode: %s\nExpires: 15 minutes", req.Username, token)
@@ -385,7 +385,7 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	var resetID, userID string
 	var expiresAt string
 	var used int
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?",
 		tokenHash,
 	).Scan(&resetID, &userID, &expiresAt, &used)
@@ -415,13 +415,13 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update password, mark token used, revoke all sessions
-	_, err = h.db.Exec("UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userID)
+	_, err = db.Exec(h.db, h.provider, "UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	h.db.Exec("UPDATE password_resets SET used = 1 WHERE id = ?", resetID)
-	h.db.Exec("DELETE FROM auth_sessions WHERE user_id = ?", userID)
+	db.Exec(h.db, h.provider, "UPDATE password_resets SET used = 1 WHERE id = ?", resetID)
+	db.Exec(h.db, h.provider, "DELETE FROM auth_sessions WHERE user_id = ?", userID)
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
 }
@@ -441,7 +441,7 @@ func (h *AuthHandler) recordFailedAttempt(ip string) {
 
 	if shouldBan {
 		id := uuid.New().String()
-		_, _ = h.db.Exec("INSERT INTO bans (id, ip, reason) VALUES (?, ?, ?)",
+		_, _ = db.Exec(h.db, h.provider, "INSERT INTO bans (id, ip, reason) VALUES (?, ?, ?)",
 			id, ip, "auto-ban: too many failed login attempts")
 	}
 }

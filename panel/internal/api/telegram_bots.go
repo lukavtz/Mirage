@@ -8,21 +8,23 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/db"
 )
 
 type TelegramBotHandler struct {
 	db *sql.DB
+	provider db.ProviderType
 }
 
-func NewTelegramBotHandler(db *sql.DB) *TelegramBotHandler {
-	return &TelegramBotHandler{db: db}
+func NewTelegramBotHandler(db *sql.DB, provider db.ProviderType) *TelegramBotHandler {
+	return &TelegramBotHandler{db: db, provider: provider}
 }
 
 func (h *TelegramBotHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims := claimsFromCtx(r)
 	isAdmin := claims != nil && claims.Role == "admin"
 
-	rows, err := h.db.Query(`SELECT id, name, token, chat_id, COALESCE(tier,'basic'), is_active, created_at FROM telegram_bots ORDER BY created_at DESC`)
+	rows, err := db.Query(h.db, h.provider, `SELECT id, name, token, chat_id, COALESCE(tier,'basic'), is_active, created_at FROM telegram_bots ORDER BY created_at DESC`)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query bots")
 		return
@@ -80,7 +82,7 @@ func (h *TelegramBotHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := uuid.New().String()
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		`INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES (?, ?, ?, ?, ?, 1)`,
 		id, body.Name, body.Token, body.ChatID, body.Tier,
 	)
@@ -117,7 +119,7 @@ func (h *TelegramBotHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.db.Exec("UPDATE telegram_bots SET is_active = ? WHERE id = ?", *body.IsActive, id)
+	result, err := db.Exec(h.db, h.provider, "UPDATE telegram_bots SET is_active = ? WHERE id = ?", *body.IsActive, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update bot")
 		return
@@ -173,7 +175,7 @@ func (h *TelegramBotHandler) Test(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var token, chatID string
-	err := h.db.QueryRow("SELECT token, chat_id FROM telegram_bots WHERE id = ?", id).Scan(&token, &chatID)
+	err := db.QueryRow(h.db, h.provider, "SELECT token, chat_id FROM telegram_bots WHERE id = ?", id).Scan(&token, &chatID)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "bot not found")
 		return
@@ -200,7 +202,7 @@ func (h *TelegramBotHandler) ListFilters(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rows, err := h.db.Query(`SELECT id, bot_id, filter_type, filter_value, created_at FROM bot_filters WHERE bot_id = ? ORDER BY created_at`, botID)
+	rows, err := db.Query(h.db, h.provider, `SELECT id, bot_id, filter_type, filter_value, created_at FROM bot_filters WHERE bot_id = ? ORDER BY created_at`, botID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query filters")
 		return
@@ -254,7 +256,7 @@ func (h *TelegramBotHandler) CreateFilter(w http.ResponseWriter, r *http.Request
 	}
 
 	id := uuid.New().String()
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		`INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES (?, ?, ?, ?)`,
 		id, botID, body.FilterType, body.FilterValue,
 	)
@@ -274,7 +276,7 @@ func (h *TelegramBotHandler) DeleteFilter(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	result, err := h.db.Exec("DELETE FROM bot_filters WHERE id = ? AND bot_id = ?", filterID, botID)
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM bot_filters WHERE id = ? AND bot_id = ?", filterID, botID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete filter")
 		return

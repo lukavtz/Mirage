@@ -10,11 +10,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/db"
 )
 
 func TestNotes_Create(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewNotesHandler(d)
+	handler := api.NewNotesHandler(d, db.ProviderSQLite)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
@@ -59,7 +60,7 @@ func TestNotes_Create(t *testing.T) {
 
 func TestNotes_List(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewNotesHandler(d)
+	handler := api.NewNotesHandler(d, db.ProviderSQLite)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
@@ -105,7 +106,7 @@ func TestNotes_List(t *testing.T) {
 
 func TestNotes_Delete(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewNotesHandler(d)
+	handler := api.NewNotesHandler(d, db.ProviderSQLite)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
@@ -148,7 +149,7 @@ func TestNotes_Delete(t *testing.T) {
 
 func TestNotes_DeleteNotFound(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewNotesHandler(d)
+	handler := api.NewNotesHandler(d, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Delete("/api/notes/{id}", handler.Delete)
@@ -172,7 +173,7 @@ func TestNotes_DeleteNotFound(t *testing.T) {
 
 func TestNotes_EmptyList(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewNotesHandler(d)
+	handler := api.NewNotesHandler(d, db.ProviderSQLite)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)

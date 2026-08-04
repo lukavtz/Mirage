@@ -9,14 +9,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/db"
 )
 
 type TicketHandler struct {
 	db *sql.DB
+	provider db.ProviderType
 }
 
-func NewTicketHandler(db *sql.DB) *TicketHandler {
-	return &TicketHandler{db: db}
+func NewTicketHandler(db *sql.DB, provider db.ProviderType) *TicketHandler {
+	return &TicketHandler{db: db, provider: provider}
 }
 
 type Ticket struct {
@@ -75,7 +77,7 @@ func (h *TicketHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		"INSERT INTO support_tickets (id, user_id, subject, category, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
 		id, claims.UserID, req.Subject, req.Category, now, now,
 	)
@@ -85,7 +87,7 @@ func (h *TicketHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var t Ticket
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets WHERE id = ?", id,
 	).Scan(&t.ID, &t.UserID, &t.Subject, &t.Category, &t.Status, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -107,9 +109,9 @@ func (h *TicketHandler) List(w http.ResponseWriter, r *http.Request) {
 	var err error
 
 	if claims.Role == "admin" {
-		rows, err = h.db.Query("SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets ORDER BY updated_at DESC")
+		rows, err = db.Query(h.db, h.provider, "SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets ORDER BY updated_at DESC")
 	} else {
-		rows, err = h.db.Query("SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets WHERE user_id = ? ORDER BY updated_at DESC", claims.UserID)
+		rows, err = db.Query(h.db, h.provider, "SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets WHERE user_id = ? ORDER BY updated_at DESC", claims.UserID)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query tickets")
@@ -139,7 +141,7 @@ func (h *TicketHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var t TicketDetail
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets WHERE id = ?", id,
 	).Scan(&t.ID, &t.UserID, &t.Subject, &t.Category, &t.Status, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -152,7 +154,7 @@ func (h *TicketHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	replyRows, err := h.db.Query(
+	replyRows, err := db.Query(h.db, h.provider, 
 		"SELECT id, ticket_id, user_id, message, created_at FROM ticket_replies WHERE ticket_id = ? ORDER BY created_at ASC", id,
 	)
 	if err == nil {
@@ -180,7 +182,7 @@ func (h *TicketHandler) Reply(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var t Ticket
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets WHERE id = ?", id,
 	).Scan(&t.ID, &t.UserID, &t.Subject, &t.Category, &t.Status, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -208,7 +210,7 @@ func (h *TicketHandler) Reply(w http.ResponseWriter, r *http.Request) {
 	replyID := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	_, err = h.db.Exec(
+	_, err = db.Exec(h.db, h.provider, 
 		"INSERT INTO ticket_replies (id, ticket_id, user_id, message, created_at) VALUES (?, ?, ?, ?, ?)",
 		replyID, id, claims.UserID, req.Message, now,
 	)
@@ -217,14 +219,14 @@ func (h *TicketHandler) Reply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.db.Exec("UPDATE support_tickets SET status = 'open', updated_at = ? WHERE id = ?", now, id)
+	_, err = db.Exec(h.db, h.provider, "UPDATE support_tickets SET status = 'open', updated_at = ? WHERE id = ?", now, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update ticket")
 		return
 	}
 
 	var rpl TicketReply
-	err = h.db.QueryRow(
+	err = db.QueryRow(h.db, h.provider, 
 		"SELECT id, ticket_id, user_id, message, created_at FROM ticket_replies WHERE id = ?", replyID,
 	).Scan(&rpl.ID, &rpl.TicketID, &rpl.UserID, &rpl.Message, &rpl.CreatedAt)
 	if err != nil {
@@ -245,7 +247,7 @@ func (h *TicketHandler) Close(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
 	var t Ticket
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		"SELECT id, user_id, subject, category, status, created_at, updated_at FROM support_tickets WHERE id = ?", id,
 	).Scan(&t.ID, &t.UserID, &t.Subject, &t.Category, &t.Status, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -264,7 +266,7 @@ func (h *TicketHandler) Close(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = h.db.Exec("UPDATE support_tickets SET status = 'closed', updated_at = ? WHERE id = ?", now, id)
+	_, err = db.Exec(h.db, h.provider, "UPDATE support_tickets SET status = 'closed', updated_at = ? WHERE id = ?", now, id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to close ticket")
 		return

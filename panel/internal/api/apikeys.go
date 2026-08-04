@@ -11,10 +11,12 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 )
 
 type APIKeyHandler struct {
 	db *sql.DB
+	provider db.ProviderType
 }
 
 type APIKeyResponse struct {
@@ -26,8 +28,8 @@ type APIKeyResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
-func NewAPIKeyHandler(db *sql.DB) *APIKeyHandler {
-	return &APIKeyHandler{db: db}
+func NewAPIKeyHandler(db *sql.DB, provider db.ProviderType) *APIKeyHandler {
+	return &APIKeyHandler{db: db, provider: provider}
 }
 
 func generateAPIKey() (string, string) {
@@ -68,7 +70,7 @@ func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id := uuid.New().String()
 	rawKey, keyHash := generateAPIKey()
 
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		"INSERT INTO api_keys (id, user_id, name, key_hash, scope, rate_limit) VALUES (?, ?, ?, ?, ?, ?)",
 		id, claims.UserID, req.Name, keyHash, req.Scope, req.RateLimit,
 	)
@@ -93,7 +95,7 @@ func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Query(
+	rows, err := db.Query(h.db, h.provider, 
 		"SELECT id, name, scope, rate_limit, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC",
 		claims.UserID,
 	)
@@ -124,7 +126,7 @@ func (h *APIKeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM api_keys WHERE id = ? AND user_id = ?", id, claims.UserID)
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM api_keys WHERE id = ? AND user_id = ?", id, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete API key")
 		return

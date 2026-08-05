@@ -204,15 +204,20 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
     /* LZ4-compress the packed TLV buffer before encryption */
     {
         int comp_bound = lz4_compress_bound((int)off);
-        unsigned char *comp = (unsigned char *)malloc((size_t)comp_bound + 1);
+        unsigned char *comp = (unsigned char *)malloc((size_t)comp_bound + 5);
         if (comp) {
-            int comp_len = lz4_compress((const char *)buf, (char *)(comp + 1),
+            int comp_len = lz4_compress((const char *)buf, (char *)(comp + 5),
                                          (int)off, comp_bound);
             if (comp_len > 0 && (size_t)comp_len < off) {
                 comp[0] = 0x01; /* magic: LZ4 compressed */
+                /* Store original uncompressed size as LE uint32 */
+                comp[1] = (unsigned char)(off);
+                comp[2] = (unsigned char)(off >> 8);
+                comp[3] = (unsigned char)(off >> 16);
+                comp[4] = (unsigned char)(off >> 24);
                 free(buf);
                 buf = comp;
-                off = (size_t)comp_len + 1;
+                off = (size_t)comp_len + 5;
             } else {
                 free(comp);
                 /* keep original uncompressed buf */

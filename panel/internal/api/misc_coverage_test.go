@@ -89,7 +89,7 @@ func skipIfNoDocsDir(t *testing.T) {
 
 func TestSessionLockUnlock(t *testing.T) {
 	d := openTestDB(t)
-	h := api.NewSessionsHandler(d, db.ProviderSQLite)
+	h := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
 	r := chi.NewRouter()
 	r.Post("/api/sessions/{id}/lock", h.Lock)
 	r.Post("/api/sessions/{id}/unlock", h.Unlock)

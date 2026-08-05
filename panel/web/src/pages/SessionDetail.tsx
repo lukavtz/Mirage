@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare, Image } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare, Image, Lock, Unlock } from 'lucide-react'
 import { api } from '@/lib/api'
+import { wsClient } from '@/lib/ws'
 import { useI18n } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -23,6 +24,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 import { FlagIcon } from '@/components/charts/flag-icon'
 import type { SessionDetail, Note } from '@/types'
 
@@ -74,6 +86,24 @@ export default function SessionDetail() {
   const deleteNoteMutation = useMutation({
     mutationFn: (noteId: string) => api.del(`/api/notes/${noteId}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notes', id] }),
+  })
+
+  const lockMutation = useMutation({
+    mutationFn: () => api.post(`/api/sessions/${id}/lock`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['session', id] }),
+  })
+
+  const unlockMutation = useMutation({
+    mutationFn: () => api.post(`/api/sessions/${id}/unlock`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['session', id] }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.del(`/api/sessions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+      navigate('/sessions')
+    },
   })
 
   const toggleReveal = (id: string) => {
@@ -140,6 +170,18 @@ export default function SessionDetail() {
     }
   }, [id])
 
+  // Auto-refresh on session update via WebSocket
+  useEffect(() => {
+    if (!id) return
+    const unsub = wsClient.on('session_update', (data: any) => {
+      if (data?.session_id === id) {
+        queryClient.invalidateQueries({ queryKey: ['session', id] })
+        queryClient.invalidateQueries({ queryKey: ['notes', id] })
+      }
+    })
+    return unsub
+  }, [id, queryClient])
+
   if (query.isLoading) {
     return (
       <div className="space-y-6">
@@ -165,6 +207,7 @@ export default function SessionDetail() {
   }
 
   const session = query.data
+  const isLocked = (session as any).locked as boolean | undefined
 
   return (
     <div className="space-y-6">
@@ -191,6 +234,51 @@ export default function SessionDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <div className="flex items-center gap-2">
+          {isLocked ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => unlockMutation.mutate()}
+              disabled={unlockMutation.isPending}
+            >
+              <Unlock className="h-4 w-4 mr-2" />
+              Unlock
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => lockMutation.mutate()}
+              disabled={lockMutation.isPending}
+            >
+              <Lock className="h-4 w-4 mr-2" />
+              Lock
+            </Button>
+          )}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Session</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this session? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => deleteMutation.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">
@@ -198,6 +286,11 @@ export default function SessionDetail() {
           <h1 className="text-2xl font-semibold tracking-tight font-mono">{session.ip}</h1>
           <FlagIcon country={session.country_code ?? ''} width={24} height={24} />
           <span className="text-sm text-muted-foreground font-mono">{session.country_code}</span>
+          {isLocked && (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+              <Lock className="h-3 w-3" /> Locked
+            </span>
+          )}
         </div>
         {screenshotState.status !== 'absent' && screenshotState.status !== 'gone' && id && (
           <button
@@ -440,12 +533,13 @@ export default function SessionDetail() {
                     <TableHead className="w-8">#</TableHead>
                     <TableHead>{t('table.filename')}</TableHead>
                     <TableHead className="text-right">{t('table.size')}</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.files?.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                         {t('session.no_files')}
                       </TableCell>
                     </TableRow>
@@ -455,6 +549,16 @@ export default function SessionDetail() {
                         <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                         <TableCell className="font-mono text-xs">{f.filename ?? '-'}</TableCell>
                         <TableCell className="text-right tabular-nums text-xs">{formatBytes(f.size)}</TableCell>
+                        <TableCell className="text-right">
+                          <a
+                            href={`/api/sessions/${id}/files/${f.id}/download`}
+                            className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                            title="Download"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

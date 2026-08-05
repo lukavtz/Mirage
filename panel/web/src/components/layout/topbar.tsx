@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,8 +12,12 @@ import { useAuth } from '@/hooks/use-auth'
 import { useTheme } from '@/lib/theme-provider'
 import { useI18n } from '@/lib/i18n'
 import { api } from '@/lib/api'
-import { useQuery } from '@tanstack/react-query'
+import { wsClient } from '@/lib/ws'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { formatDistanceToNow } from 'date-fns'
 import { LogOut, Sun, Moon, Languages, Bell, Menu } from 'lucide-react'
+import { FlagIcon } from '@/components/charts/flag-icon'
+import type { SessionListItem } from '@/types'
 
 interface TopbarProps {
   onToggleMobileSidebar?: () => void
@@ -29,6 +34,10 @@ export function Topbar({ onToggleMobileSidebar }: TopbarProps) {
   const { logout } = useAuth()
   const { theme, toggle } = useTheme()
   const { t, lang, setLang } = useI18n()
+  const queryClient = useQueryClient()
+
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [recentSessions, setRecentSessions] = useState<SessionListItem[]>([])
 
   const { data: userInfo } = useQuery<UserInfo>({
     queryKey: ['user-me'],
@@ -36,6 +45,29 @@ export function Topbar({ onToggleMobileSidebar }: TopbarProps) {
     staleTime: 60000,
   })
 
+  // Subscribe to new_session WS events for notification bell
+  useEffect(() => {
+    const unsub = wsClient.on('new_session', (data: any) => {
+      setUnreadCount(c => c + 1)
+      if (data) {
+        setRecentSessions(prev => {
+          const next = [data as SessionListItem, ...prev.filter(s => s.id !== data.id)]
+          return next.slice(0, 5)
+        })
+      }
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    })
+    return unsub
+  }, [queryClient])
+
+  const handleBellClick = useCallback(() => {
+    setUnreadCount(0)
+    if (recentSessions.length === 0) {
+      api.get<{ sessions: SessionListItem[] }>('/api/sessions', { limit: 5, sort: '-created_at' })
+        .then(res => setRecentSessions((res.sessions ?? []).slice(0, 5)))
+        .catch(() => {})
+    }
+  }, [recentSessions.length])
 
   const username = userInfo?.username ?? 'admin'
   const role = userInfo?.role ?? 'admin'
@@ -70,9 +102,45 @@ export function Topbar({ onToggleMobileSidebar }: TopbarProps) {
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </Button>
 
-        <Button variant="ghost" size="sm" className="relative">
-          <Bell className="h-4 w-4" />
-        </Button>
+        <DropdownMenu onOpenChange={(open) => { if (open) handleBellClick() }}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="relative">
+              <Bell className="h-4 w-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 min-w-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">
+                  {unreadCount > 99 ? '99+' : unreadCount}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-72">
+            <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+              {t('topbar.notifications') || 'Notifications'}
+            </div>
+            <DropdownMenuSeparator />
+            {recentSessions.length === 0 ? (
+              <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                {t('topbar.no_notifications') || 'No new sessions'}
+              </div>
+            ) : (
+              recentSessions.map((s) => (
+                <DropdownMenuItem
+                  key={s.id}
+                  className="flex items-center gap-2 cursor-pointer"
+                  onClick={() => navigate(`/sessions/${s.id}`)}
+                >
+                  {s.country && <FlagIcon country={s.country} className="w-4 h-3 shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-medium truncate">{s.ip || s.hwid || s.id}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {s.created_at ? formatDistanceToNow(new Date(s.created_at), { addSuffix: true }) : ''}
+                    </div>
+                  </div>
+                </DropdownMenuItem>
+              ))
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3 ml-1">
           <div className="h-7 w-7 rounded-full bg-foreground/10 flex items-center justify-center text-[10px] font-bold text-foreground">

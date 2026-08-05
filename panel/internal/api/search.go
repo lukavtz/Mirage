@@ -8,14 +8,12 @@ import (
 	"strings"
 
 	"zialfi-panel/internal/middleware"
-	"zialfi-panel/internal/services"
 	"zialfi-panel/internal/db"
 )
 
 type SearchHandler struct {
 	db      *sql.DB
 	provider     db.ProviderType
-	logProc *services.LogProcessor
 }
 
 func NewSearchHandler(db *sql.DB, provider db.ProviderType) *SearchHandler {

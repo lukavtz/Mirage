@@ -43,13 +43,6 @@ type restoreResponse struct {
 	Cookies   []restoreCookie `json:"cookies"`
 }
 
-type proxyConfigRequest struct {
-	Type     string `json:"type"`
-	Host     string `json:"host"`
-	Port     int    `json:"port"`
-	Username string `json:"username,omitempty"`
-	Password string `json:"password,omitempty"`
-}
 
 type cookieUploadRequest struct {
 	SessionID   string                `json:"session_id"`

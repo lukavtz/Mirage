@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -49,6 +50,16 @@ func (h *LogsHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metadata := r.FormValue("metadata")
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		m := map[string]string{"user_agent": ua}
+		if metadata != "" {
+			_ = json.Unmarshal([]byte(metadata), &m)
+			m["user_agent"] = ua
+		}
+		if b, err := json.Marshal(m); err == nil {
+			metadata = string(b)
+		}
+	}
 	sessionID, err := h.processor.Process(archive, metadata, claimsUserID(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "processing failed")
@@ -190,6 +201,16 @@ func (h *LogsHandler) CompleteChunked(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metadata := r.FormValue("metadata")
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		m := map[string]string{"user_agent": ua}
+		if metadata != "" {
+			_ = json.Unmarshal([]byte(metadata), &m)
+			m["user_agent"] = ua
+		}
+		if b, err := json.Marshal(m); err == nil {
+			metadata = string(b)
+		}
+	}
 	newSessionID, err := h.processor.Process(archive.Bytes(), metadata, claimsUserID(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "processing failed")

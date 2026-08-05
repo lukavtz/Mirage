@@ -46,3 +46,10 @@ func NewSessionEvent(payload NewSessionPayload) []byte {
 func NewChatEvent(msg ChatMessage) []byte {
 	return newEvent("chat_message", msg)
 }
+
+// NewSessionUpdateEvent broadcasts a mutation on an existing session
+// (lock, unlock, mark-viewed, delete). The frontend SessionDetail page
+// subscribes to "session_update" and refetches when session_id matches.
+func NewSessionUpdateEvent(sessionID string) []byte {
+	return newEvent("session_update", map[string]string{"session_id": sessionID})
+}

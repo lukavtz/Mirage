@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/lib/api'
-import { useTheme } from '@/lib/theme-provider'
+import { useTheme, ACCENT_PRESETS } from '@/lib/theme-provider'
 import { getLang, setLang, t } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Sun, Moon, Loader2 } from 'lucide-react'
+import { Sun, Moon, Loader2, Palette, Check } from 'lucide-react'
 import { TotpSetupCard } from '@/components/totp-setup'
 
 interface SettingsResponse {
@@ -17,7 +17,7 @@ interface SettingsResponse {
 }
 
 export default function Settings() {
-  const { theme, toggle } = useTheme()
+  const { theme, toggle, accent, setAccent } = useTheme()
   const queryClient = useQueryClient()
   const currentLang = getLang()
 
@@ -108,6 +108,28 @@ export default function Settings() {
               <Button variant={theme === 'light' ? 'default' : 'outline'} size="sm" onClick={() => { if (theme !== 'light') toggle() }}>
                 <Sun className="h-4 w-4 mr-2" />{t('settings.light')}
               </Button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2"><Palette className="h-4 w-4" /> Accent Color</Label>
+            <div className="flex items-center gap-3 flex-wrap">
+              {ACCENT_PRESETS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className="relative h-8 w-8 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  style={{
+                    backgroundColor: color,
+                    borderColor: accent === color ? 'var(--foreground)' : 'transparent',
+                  }}
+                  onClick={() => setAccent(color)}
+                  aria-label={`Set accent color to ${color}`}
+                >
+                  {accent === color && (
+                    <Check className="h-4 w-4 absolute inset-0 m-auto text-white drop-shadow" />
+                  )}
+                </button>
+              ))}
             </div>
           </div>
           <div className="space-y-2">

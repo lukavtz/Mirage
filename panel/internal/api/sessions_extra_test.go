@@ -15,7 +15,7 @@ import (
 
 func TestSessions_MarkViewed_Success(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, db.ProviderSQLite)
+	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "mvuser", "pass")
 	sid := uuid.New().String()
@@ -40,7 +40,7 @@ func TestSessions_MarkViewed_Success(t *testing.T) {
 
 func TestSessions_MarkViewed_NotFound(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, db.ProviderSQLite)
+	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
 
 	uid := createTestUser(t, d, "mvmiss", "pass")
 
@@ -60,7 +60,7 @@ func TestSessions_MarkViewed_NotFound(t *testing.T) {
 
 func TestSessions_MarkViewed_Forbidden(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, db.ProviderSQLite)
+	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
 
 	owner := createTestUser(t, d, "mvboss", "pass")
 	other := createTestUserWithRole(t, d, "mvtrespass", "pass", "user")
@@ -86,7 +86,7 @@ func TestSessions_MarkViewed_Forbidden(t *testing.T) {
 
 func TestSessions_Unlock_NoClaims(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, db.ProviderSQLite)
+	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
 
 	r := chi.NewRouter()
 	r.Post("/api/sessions/{id}/unlock", handler.Unlock)
@@ -102,7 +102,7 @@ func TestSessions_Unlock_NoClaims(t *testing.T) {
 
 func TestSessions_Unlock_LockedByAnother(t *testing.T) {
 	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, db.ProviderSQLite)
+	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
 
 	owner := createTestUser(t, d, "ulockowner", "pass")
 	other := createTestUserWithRole(t, d, "ulockother", "pass", "user")

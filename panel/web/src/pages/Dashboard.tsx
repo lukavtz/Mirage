@@ -120,7 +120,7 @@ export default function Dashboard() {
     })
   }, [])
 
-  const exportOne = useCallback((id: string, format: 'json' | 'html') => {
+  const exportOne = useCallback((id: string, format: 'json' | 'html' | 'csv') => {
     const url = `/api/export/session/${id}?format=${format}`
     const token = localStorage.getItem('token')
     fetch(url, { headers: { Authorization: `Bearer ${token}` } })
@@ -134,7 +134,7 @@ export default function Dashboard() {
       })
   }, [])
 
-  const exportBulk = useCallback((ids: string[], format: 'json' | 'html') => {
+  const exportBulk = useCallback((ids: string[], format: 'json' | 'html' | 'csv') => {
     const token = localStorage.getItem('token')
     fetch('/api/export/bulk', {
       method: 'POST',
@@ -254,6 +254,42 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Top Domains */}
+      {data.top_domains && data.top_domains.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.top_domains')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1.5">
+              {data.top_domains.slice(0, 10).map((d, i) => {
+                const max = Math.max(...data.top_domains.map(x => x.count), 1)
+                const ratio = d.count / max
+                return (
+                  <div key={d.domain} className="flex items-center gap-3 py-1 px-2">
+                    <span className="text-[11px] mono text-muted-foreground/60 w-3 text-right tabular-nums">
+                      {String(i + 1).padStart(2, '0')}
+                    </span>
+                    <span className="text-[12.5px] font-medium flex-1 truncate text-foreground">
+                      {d.domain}
+                    </span>
+                    <span className="mono text-[11px] tabular-nums text-foreground w-14 text-right">
+                      {d.count.toLocaleString()}
+                    </span>
+                    <div className="w-24 h-1.5 bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-foreground transition-all duration-500 ease-out"
+                        style={{ width: (ratio * 100) + '%' }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
         {/* Latest logs with full table controls */}
         <Card>
           <CardHeader className="flex flex-col items-stretch gap-3 space-y-0">
@@ -313,6 +349,9 @@ export default function Dashboard() {
                   </Button>
                   <Button size="sm" variant="outline" onClick={() => exportBulk(Array.from(selected), 'html')} className="h-8 text-[11px]">
                     <Download className="h-3 w-3" /> {t('dashboard.export_html')}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => exportBulk(Array.from(selected), 'csv')} className="h-8 text-[11px]">
+                    <Download className="h-3 w-3" /> {t('dashboard.export_csv')}
                   </Button>
                 </>
               )}
@@ -418,6 +457,9 @@ export default function Dashboard() {
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => exportOne(s.id, 'html')} className="h-6 px-1.5 text-[10px]">
                             HTML
+                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => exportOne(s.id, 'csv')} className="h-6 px-1.5 text-[10px]">
+                            CSV
                           </Button>
                         </div>
                       </td>

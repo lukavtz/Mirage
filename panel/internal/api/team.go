@@ -88,7 +88,7 @@ func (h *TeamHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validRoles := map[string]bool{"admin": true, "worker": true, "viewer": true}
+	validRoles := map[string]bool{"admin": true, "checker": true, "worker": true, "viewer": true, "traffer": true}
 	if !validRoles[req.Role] {
 		writeError(w, http.StatusBadRequest, "invalid role")
 		return

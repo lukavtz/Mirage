@@ -128,11 +128,13 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 	// admins' channel. Admin replies are not pushed to clients in real time —
 	// there is no chat UI and no target_user_id yet; clients pick them up on
 	// the next REST List.
-	if claims.Role == "admin" {
-		h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
-	} else {
-		h.hub.Broadcast("chat:"+claims.UserID, ws.NewChatEvent(m))
-		h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+	if h.hub != nil {
+		if claims.Role == "admin" {
+			h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+		} else {
+			h.hub.Broadcast("chat:"+claims.UserID, ws.NewChatEvent(m))
+			h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, m)

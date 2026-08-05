@@ -59,6 +59,7 @@ SRCS = src/main.c \
        src/utils/base64.c \
        src/utils/file_utils.c \
        src/utils/secure_zero.c \
+       src/utils/lz4.c \
        src/evasion/anti_analysis.c \
        src/evasion/detection.c \
        src/evasion/evasion.c \

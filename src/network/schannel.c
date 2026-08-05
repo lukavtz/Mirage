@@ -13,6 +13,8 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "enc_strings.h"
+#include "bcrypt_peb.h"
+#include <wincrypt.h>
 
 /* ── SChannel constants (guard against mingw redefines) ─────────── */
 
@@ -262,13 +264,44 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
         }
     }
 
-    /* TODO: Certificate pinning
-     * Extract server cert public key hash after handshake via
-     * QueryContextAttributes(SECPKG_ATTR_REMOTE_CERT_CONTEXT),
-     * then hash the cert's SubjectPublicKeyInfo with SHA-256.
-     * Compare against expected hash from config.h CERT_PIN_HASH.
-     * Close connection on mismatch.
-     */
+#ifdef CERT_PINNING_ENABLED
+    /* Certificate pinning: SHA-256 hash of server cert, compared to CERT_PIN_HASH */
+    {
+#ifndef SECPKG_ATTR_REMOTE_CERT_CONTEXT
+#define SECPKG_ATTR_REMOTE_CERT_CONTEXT 0x53UL
+#endif
+        PCCERT_CONTEXT remote_cert = NULL;
+        SECURITY_STATUS pin_ss = fn_QueryAttr(&ctxt, SECPKG_ATTR_REMOTE_CERT_CONTEXT, &remote_cert);
+        if (pin_ss == SEC_E_OK && remote_cert && remote_cert->pbCertEncoded && remote_cert->cbCertEncoded > 0) {
+            const bcrypt_api_t *bc = mirage_bcrypt_api();
+            if (bc && bc->ready) {
+                BCRYPT_ALG_HANDLE hAlg = NULL;
+                BCRYPT_HASH_HANDLE hHash = NULL;
+                static const UCHAR sha256_oid[] = BCRYPT_SHA256_ALGORITHM;
+                if (bc->pOpen(&hAlg, (LPCWSTR)sha256_oid, NULL, 0) == 0) {
+                    if (bc->pCreateHash(hAlg, &hHash, NULL, 0, NULL, 0, 0) == 0) {
+                        bc->pHashData(hHash, remote_cert->pbCertEncoded, remote_cert->cbCertEncoded, 0);
+                        UCHAR hash[32];
+                        bc->pFinishHash(hHash, hash, 32, 0);
+                        bc->pDestroyHash(hHash);
+
+                        /* Compare against expected pin */
+                        static const UCHAR expected_pin[32] = CERT_PIN_HASH;
+                        if (memcmp(hash, expected_pin, 32) != 0) {
+                            bc->pClose(hAlg, 0);
+                            CertFreeCertificateContext(remote_cert);
+                            fn_DeleteCtx(&ctxt);
+                            fn_FreeCred(&cred);
+                            return TLS_ERR_PIN_FAILED;
+                        }
+                    }
+                    bc->pClose(hAlg, 0);
+                }
+            }
+            CertFreeCertificateContext(remote_cert);
+        }
+    }
+#endif /* CERT_PINNING_ENABLED */
 
     /* query stream sizes */
     SecPkgContext_StreamSizes sizes;

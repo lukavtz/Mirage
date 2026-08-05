@@ -384,6 +384,8 @@ export const messages = {
     'role.admin': 'Admin',
     'role.worker': 'Worker',
     'role.viewer': 'Viewer',
+    'topbar.notifications': 'Notifications',
+    'topbar.no_notifications': 'No new sessions',
   },
   ru: {
     // Nav
@@ -765,6 +767,8 @@ export const messages = {
     'role.admin': 'Администратор',
     'role.worker': 'Работник',
     'role.viewer': 'Наблюдатель',
+    'topbar.notifications': 'Уведомления',
+    'topbar.no_notifications': 'Нет новых сессий',
   },
 } as const
 

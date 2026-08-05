@@ -909,12 +909,36 @@
 <a name='L844'></a><a href='#L844'>844</a>
 <a name='L845'></a><a href='#L845'>845</a>
 <a name='L846'></a><a href='#L846'>846</a>
-<a name='L847'></a><a href='#L847'>847</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
+<a name='L847'></a><a href='#L847'>847</a>
+<a name='L848'></a><a href='#L848'>848</a>
+<a name='L849'></a><a href='#L849'>849</a>
+<a name='L850'></a><a href='#L850'>850</a>
+<a name='L851'></a><a href='#L851'>851</a>
+<a name='L852'></a><a href='#L852'>852</a>
+<a name='L853'></a><a href='#L853'>853</a>
+<a name='L854'></a><a href='#L854'>854</a>
+<a name='L855'></a><a href='#L855'>855</a>
+<a name='L856'></a><a href='#L856'>856</a>
+<a name='L857'></a><a href='#L857'>857</a>
+<a name='L858'></a><a href='#L858'>858</a>
+<a name='L859'></a><a href='#L859'>859</a></td><td class="line-coverage quiet"><span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">26x</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
+<span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1703,13 +1727,13 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-yes">206x</span>
-<span class="cline-any cline-yes">5100x</span>
-<span class="cline-any cline-yes">5100x</span>
+<span class="cline-any cline-yes">5319x</span>
+<span class="cline-any cline-yes">5319x</span>
 <span class="cline-any cline-yes">238x</span>
 <span class="cline-any cline-yes">346x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">5100x</span>
+<span class="cline-any cline-yes">5319x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1733,16 +1757,16 @@
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1509x</span>
+<span class="cline-any cline-yes">1521x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1509x</span>
-<span class="cline-any cline-yes">1509x</span>
+<span class="cline-any cline-yes">1521x</span>
+<span class="cline-any cline-yes">1521x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-yes">1x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
-<span class="cline-any cline-yes">1509x</span>
+<span class="cline-any cline-yes">1521x</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
 <span class="cline-any cline-neutral">&nbsp;</span>
@@ -1886,6 +1910,7 @@ export const messages = {
     'dashboard.export_all': 'Export all',
     'dashboard.export_json': 'JSON',
     'dashboard.export_html': 'HTML',
+    'dashboard.export_csv': 'CSV',
     'dashboard.per_page': 'Per page',
     'dashboard.page_of': 'Page {p} of {t}',
     'dashboard.showing': 'Showing {a}–{b} of {t}',
@@ -1909,6 +1934,9 @@ export const messages = {
     'sessions.columns': 'Columns',
     'sessions.show_all': 'Show all',
     'sessions.hide_empty': 'Hide empty',
+    'sessions.all_wallets': 'All wallets',
+    'sessions.wallet_type': 'Wallet',
+    'sessions.export_csv': 'Export CSV',
     'sessions.showing': 'Showing {a} of {b} sessions',
     'sessions.page': 'Page {p} of {t}',
     // Session Detail
@@ -2137,6 +2165,8 @@ export const messages = {
     'role.admin': 'Admin',
     'role.worker': 'Worker',
     'role.viewer': 'Viewer',
+    'topbar.notifications': 'Notifications',
+    'topbar.no_notifications': 'No new sessions',
   },
   ru: {
     // Nav
@@ -2264,6 +2294,7 @@ export const messages = {
     'dashboard.export_all': 'Экспорт всех',
     'dashboard.export_json': 'JSON',
     'dashboard.export_html': 'HTML',
+    'dashboard.export_csv': 'CSV',
     'dashboard.per_page': 'На странице',
     'dashboard.page_of': 'Страница {p} из {t}',
     'dashboard.showing': 'Показано {a}–{b} из {t}',
@@ -2286,6 +2317,9 @@ export const messages = {
     'sessions.columns': 'Колонки',
     'sessions.show_all': 'Показать все',
     'sessions.hide_empty': 'Скрыть пустые',
+    'sessions.all_wallets': 'Все кошельки',
+    'sessions.wallet_type': 'Кошелёк',
+    'sessions.export_csv': 'Экспорт CSV',
     'sessions.showing': 'Показано {a} из {b} сессий',
     'sessions.page': 'Страница {p} из {t}',
     // Session Detail
@@ -2514,6 +2548,8 @@ export const messages = {
     'role.admin': 'Администратор',
     'role.worker': 'Работник',
     'role.viewer': 'Наблюдатель',
+    'topbar.notifications': 'Уведомления',
+    'topbar.no_notifications': 'Нет новых сессий',
   },
 } as const
 &nbsp;
@@ -2608,7 +2644,7 @@ export function setLang(lang: Lang) {
             <div class='footer quiet pad2 space-top1 center small'>
                 Code coverage generated by
                 <a href="https://istanbul.js.org/" target="_blank" rel="noopener noreferrer">istanbul</a>
-                at 2026-08-04T20:24:28.268Z
+                at 2026-08-05T13:27:41.435Z
             </div>
         <script src="../../prettify.js"></script>
         <script>

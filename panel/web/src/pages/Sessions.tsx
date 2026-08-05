@@ -13,6 +13,7 @@ import type { SortingState, PaginationState } from '@tanstack/react-table'
 import { formatDistanceToNow } from 'date-fns'
 import { ChevronLeft, ChevronRight, Search, Settings2, Eye, EyeOff, Trash2, Download } from 'lucide-react'
 import { api } from '@/lib/api'
+import { wsClient } from '@/lib/ws'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {

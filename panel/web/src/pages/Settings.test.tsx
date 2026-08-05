@@ -9,10 +9,13 @@ vi.mock('@/lib/api', () => ({
 }))
 
 const { mockTheme } = vi.hoisted(() => ({
-  mockTheme: { theme: 'light', toggle: vi.fn(), setTheme: vi.fn() },
+  mockTheme: { theme: 'light', toggle: vi.fn(), setTheme: vi.fn(), accent: '#5865F2', setAccent: vi.fn() },
 }))
 
-vi.mock('@/lib/theme-provider', () => ({ useTheme: () => mockTheme }))
+vi.mock('@/lib/theme-provider', () => ({
+  useTheme: () => mockTheme,
+  ACCENT_PRESETS: ['#5865F2', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899'],
+}))
 vi.mock('@/components/totp-setup', () => ({ TotpSetupCard: () => null }))
 
 import { api } from '@/lib/api'

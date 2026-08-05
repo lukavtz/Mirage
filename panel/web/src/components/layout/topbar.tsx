@@ -129,7 +129,7 @@ export function Topbar({ onToggleMobileSidebar }: TopbarProps) {
                   className="flex items-center gap-2 cursor-pointer"
                   onClick={() => navigate(`/sessions/${s.id}`)}
                 >
-                  {s.country && <FlagIcon country={s.country} className="w-4 h-3 shrink-0" />}
+                  {s.country_code && <FlagIcon country={s.country_code} className="w-4 h-3 shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium truncate">{s.ip || s.hwid || s.id}</div>
                     <div className="text-[10px] text-muted-foreground">

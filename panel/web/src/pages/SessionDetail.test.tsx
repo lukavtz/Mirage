@@ -251,7 +251,8 @@ describe('SessionDetail', () => {
     await screen.findByText('203.0.113.7')
     switchTab(screen.getByRole('tab', { name: 'Notes' }))
     await screen.findByText('First note')
-    fireEvent.click(document.querySelector('.lucide-trash-2')!.closest('button')!)
+    const trashButtons = document.querySelectorAll('.lucide-trash-2')
+    fireEvent.click(trashButtons[trashButtons.length - 1]!.closest('button')!)
     await waitFor(() => {
       expect(api.del).toHaveBeenCalledWith('/api/notes/n1')
     })

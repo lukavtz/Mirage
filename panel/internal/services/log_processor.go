@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"database/sql"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -162,6 +163,21 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 		err := p.db.QueryRow("SELECT EXISTS(SELECT 1 FROM bans WHERE hwid = ?)", hwid).Scan(&banned)
 		if err == nil && banned {
 			return "", errors.New("hwid is banned")
+		}
+	}
+
+	// Try ChaCha20-Poly1305 decrypt (graceful fallback for unencrypted uploads)
+	decrypted, decErr := DecryptArchive(archive)
+	if decErr == nil {
+		archive = decrypted
+	}
+
+	// Check LZ4 magic (0x01 prefix with 4-byte uncompressed size)
+	if len(archive) > 5 && archive[0] == 0x01 {
+		origSize := binary.LittleEndian.Uint32(archive[1:5])
+		decompressed, lz4Err := DecompressLZ4(archive)
+		if lz4Err == nil && uint32(len(decompressed)) == origSize {
+			archive = decompressed
 		}
 	}
 
@@ -345,6 +361,15 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	if systemInfoContent != "" { qualityScore += 10 }
 
 	sessionID := uuid.New().String()
+
+	// Persist the raw archive so session files can be downloaded later.
+	// Best-effort: a disk failure must not fail the log ingestion itself.
+	if len(archive) > 0 {
+		dir := filepath.Join("data", "sessions")
+		if err := os.MkdirAll(dir, 0o755); err == nil {
+			_ = os.WriteFile(filepath.Join(dir, sessionID+".zip"), archive, 0o644)
+		}
+	}
 
 	tx, err := p.db.Begin()
 	if err != nil {

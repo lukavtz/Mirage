@@ -52,6 +52,8 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 	logsHandler := NewLogsHandler(logProc, provider)
 	sessionsHandler := NewSessionsHandler(sqlDB, broadcaster, provider)
 	searchHandler := NewSearchHandler(sqlDB, provider)
+	dataHandler := NewDataHandler(sqlDB, provider)
+	filesHandler := NewFilesHandler(sqlDB, provider)
 	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, sqlDB, provider)
 	notesHandler := NewNotesHandler(sqlDB, provider)
 	exportHandler := NewExportHandler(sqlDB, provider)
@@ -132,6 +134,9 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 
 		r.Get("/api/search", searchHandler.Search)
 		r.Get("/api/search/advanced", searchHandler.AdvancedSearch)
+
+		r.Get("/api/data/{type}", dataHandler.List)
+		r.Get("/api/sessions/{id}/files/{fid}/download", filesHandler.Download)
 
 		detectHandler := NewDuplicateDetectHandler(sqlDB, provider)
 		r.Get("/api/detect/duplicates", detectHandler.Detect)

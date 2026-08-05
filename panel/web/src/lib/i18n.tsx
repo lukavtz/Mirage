@@ -116,7 +116,6 @@ export const messages = {
     'dashboard.timeline': 'Timeline (30 days)',
     'dashboard.geo': 'Geo Distribution',
     'dashboard.browsers': 'Browser Distribution',
-    'dashboard.top_domains': 'Top Domains',
     'dashboard.today': '+{n} today',
     'dashboard.vs_yesterday': '{pct}% vs yesterday',
     'dashboard.no_data': 'No data yet — waiting for first log',
@@ -344,6 +343,12 @@ export const messages = {
     'error.something_wrong': 'Something went wrong.',
     'error.not_found': 'Page not found',
     'error.404': '404',
+    // Data
+    'data.no_data': 'No data',
+    'data.export': 'Export CSV',
+    'data.total': '{count} total',
+    'data.search_placeholder': 'Search...',
+    'data.blur': 'Blur',
     // Table headers
     'table.url': 'URL',
     'table.username': 'Username',
@@ -500,7 +505,6 @@ export const messages = {
     'dashboard.timeline': 'Активность (30 дней)',
     'dashboard.geo': 'География',
     'dashboard.browsers': 'Браузеры',
-    'dashboard.top_domains': 'Топ доменов',
     'dashboard.today': '+{n} сегодня',
     'dashboard.vs_yesterday': '{pct}% к вчера',
     'dashboard.no_data': 'Нет данных — ждём первый лог',
@@ -727,6 +731,12 @@ export const messages = {
     'error.something_wrong': 'Что-то пошло не так.',
     'error.not_found': 'Страница не найдена',
     'error.404': '404',
+    // Data
+    'data.no_data': 'Нет данных',
+    'data.export': 'Экспорт CSV',
+    'data.total': 'Всего: {count}',
+    'data.search_placeholder': 'Поиск...',
+    'data.blur': 'Размытие',
     // Table headers
     'table.url': 'URL',
     'table.username': 'Логин',

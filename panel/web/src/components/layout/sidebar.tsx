@@ -5,7 +5,8 @@ import { cn } from '@/lib/utils'
 import { useI18n, type TranslationKey } from '@/lib/i18n'
 import {
   LayoutDashboard, Database, Bug, Key, Cookie, CreditCard, Wallet, FileText,
-  Scissors, LifeBuoy, ChevronLeft, ChevronRight,
+  Scissors, LifeBuoy, Search, Hammer, Settings, KeyRound, Users, UserCog,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react'
 
 import { motion, AnimatePresence } from 'motion/react'
@@ -25,14 +26,75 @@ const navItems: NavItem[] = [
   { to: '/support', label: 'nav.support', icon: LifeBuoy },
 ]
 
+const extraNavItems: NavItem[] = [
+  { to: '/search', label: 'nav.search', icon: Search },
+  { to: '/build', label: 'nav.build', icon: Hammer },
+  { to: '/settings', label: 'nav.settings', icon: Settings },
+  { to: '/api-keys', label: 'nav.api_keys', icon: KeyRound },
+  { to: '/users', label: 'nav.users', icon: Users },
+  { to: '/team', label: 'nav.team', icon: UserCog },
+]
+
 interface SidebarProps {
   open?: boolean
   onClose?: () => void
 }
 
+function NavLinkItem({ item, collapsed, open, onClose }: { item: NavItem; collapsed: boolean; open?: boolean; onClose?: () => void }) {
+  const location = useLocation()
+  const { t } = useI18n()
+  const isActive = item.end
+    ? location.pathname === item.to
+    : location.pathname === item.to ||
+      (item.to !== '/' && location.pathname.startsWith(item.to + '/'))
+
+  return (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      onClick={() => { if (open && onClose) onClose() }}
+      aria-current={isActive ? 'page' : undefined}
+      className={cn(
+        'group relative flex items-center rounded-lg transition-all duration-200 ease-out',
+        collapsed ? 'justify-center h-11 w-full' : 'gap-3 h-11 px-3',
+        isActive
+          ? 'bg-accent text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:scale-[0.98]',
+      )}
+      title={collapsed ? t(item.label) : undefined}
+    >
+      {isActive && (
+        <motion.span
+          layoutId="sidebar-active-marker"
+          className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-foreground"
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        />
+      )}
+      <motion.span
+        whileHover={!isActive ? { scale: 1.08 } : undefined}
+        whileTap={{ scale: 0.92 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+        className="flex items-center justify-center"
+      >
+        <item.icon
+          strokeWidth={1.5}
+          className={cn(
+            'h-[18px] w-[18px] shrink-0 transition-colors duration-200',
+            isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground',
+          )}
+        />
+      </motion.span>
+      {!collapsed && (
+        <span className="text-[13.5px] leading-none font-medium tracking-[-0.005em] truncate">
+          {t(item.label)}
+        </span>
+      )}
+    </NavLink>
+  )
+}
+
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const { t } = useI18n()
-  const location = useLocation()
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true')
 
   const toggle = useCallback(() => {
@@ -69,57 +131,13 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
       </div>
       <nav className="flex-1 py-4 overflow-y-auto">
         <div className="px-3 space-y-1">
-          {navItems.map((item) => {
-            const isActive = item.end
-              ? location.pathname === item.to
-              : location.pathname === item.to ||
-                (item.to !== '/' && location.pathname.startsWith(item.to + '/'))
-
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                onClick={() => { if (open && onClose) onClose() }}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'group relative flex items-center rounded-lg transition-all duration-200 ease-out',
-                  collapsed ? 'justify-center h-11 w-full' : 'gap-3 h-11 px-3',
-                  isActive
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:scale-[0.98]',
-                )}
-                title={collapsed ? t(item.label) : undefined}
-              >
-                {isActive && (
-                  <motion.span
-                    layoutId="sidebar-active-marker"
-                    className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-foreground"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <motion.span
-                  whileHover={!isActive ? { scale: 1.08 } : undefined}
-                  whileTap={{ scale: 0.92 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 26 }}
-                  className="flex items-center justify-center"
-                >
-                  <item.icon
-                    strokeWidth={1.5}
-                    className={cn(
-                      'h-[18px] w-[18px] shrink-0 transition-colors duration-200',
-                      isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground',
-                    )}
-                  />
-                </motion.span>
-                {!collapsed && (
-                  <span className="text-[13.5px] leading-none font-medium tracking-[-0.005em] truncate">
-                    {t(item.label)}
-                  </span>
-                )}
-              </NavLink>
-            )
-          })}
+          {navItems.map((item) => (
+            <NavLinkItem key={item.to} item={item} collapsed={collapsed} open={open} onClose={onClose} />
+          ))}
+          <div className="mx-3 my-2 h-px bg-border" />
+          {extraNavItems.map((item) => (
+            <NavLinkItem key={item.to} item={item} collapsed={collapsed} open={open} onClose={onClose} />
+          ))}
         </div>
       </nav>
       <button

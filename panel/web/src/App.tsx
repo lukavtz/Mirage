@@ -10,6 +10,7 @@ import Login from '@/pages/Login'
 import Dashboard from '@/pages/Dashboard'
 import Sessions from '@/pages/Sessions'
 import SessionDetail from '@/pages/SessionDetail'
+import DataTablePage from '@/pages/DataTablePage'
 import SearchPage from '@/pages/Search'
 import BuildPage from '@/pages/Build'
 import Settings from '@/pages/Settings'
@@ -69,13 +70,13 @@ export const router = createBrowserRouter([
       { index: true, element: <Dashboard /> },
       { path: 'sessions', element: <Sessions /> },
       { path: 'sessions/:id', element: <SessionDetail /> },
-      // Category routes — Sessions reads the URL path to filter by type
+      // Data tabs render their own pages; infections/clippers/tasks reuse Sessions
       { path: 'infections', element: <Sessions /> },
-      { path: 'cookies', element: <Sessions /> },
-      { path: 'passwords', element: <Sessions /> },
-      { path: 'cards', element: <Sessions /> },
-      { path: 'wallets', element: <Sessions /> },
-      { path: 'files', element: <Sessions /> },
+      { path: 'cookies', element: <DataTablePage type="cookies" /> },
+      { path: 'passwords', element: <DataTablePage type="passwords" /> },
+      { path: 'cards', element: <DataTablePage type="cards" /> },
+      { path: 'wallets', element: <DataTablePage type="wallets" /> },
+      { path: 'files', element: <DataTablePage type="files" /> },
       { path: 'clippers', element: <Sessions /> },
       { path: 'tasks', element: <Sessions /> },
       { path: 'search', element: <SearchPage /> },

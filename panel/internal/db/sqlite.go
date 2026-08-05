@@ -106,19 +106,19 @@ func RunMigrations(db *sql.DB, migrations fs.FS) error {
 	return nil
 }
 
-func RunMigrationsWithProvider(db *sql.DB, migrationsFS embed.FS, provider ProviderType) error {
+func RunMigrationsWithProvider(db *sql.DB, migrationsFS fs.FS, provider ProviderType) error {
 	if provider == ProviderPostgres {
 		return RunPGMigrations(db, migrationsFS)
 	}
 	return RunMigrations(db, MigrationsFS)
 }
 
-func RunPGMigrations(db *sql.DB, migrationsFS embed.FS) error {
+func RunPGMigrations(db *sql.DB, migrationsFS fs.FS) error {
 	if _, err := db.Exec(`
 		CREATE TABLE IF NOT EXISTS _migrations (
 			name        VARCHAR(255) PRIMARY KEY,
 			hash        VARCHAR(64) NOT NULL,
-			executed_at TIMESTAMP DEFAULT NOW()
+			executed_at TIMESTAMP DEFAULT (NOW())
 		)
 	`); err != nil {
 		return fmt.Errorf("create _migrations: %w", err)
@@ -211,7 +211,7 @@ func RunPGMigrations(db *sql.DB, migrationsFS embed.FS) error {
 
 func translateSQLiteToPG(sql string) string {
 	repl := map[string]string{
-		"lower(hex(randomblob(16)))":        "gen_random_uuid()::text",
+		"lower(hex(randomblob(16)))":         "gen_random_uuid()::text",
 		" INTEGER PRIMARY KEY AUTOINCREMENT": " SERIAL PRIMARY KEY",
 		" INTEGER PRIMARY KEY":               " SERIAL PRIMARY KEY",
 		" BLOB":                              " BYTEA",
@@ -500,7 +500,7 @@ func firstLine(s string) string {
 // and pg_*.sql overrides + base files (minus overridden bases) with the
 // "migrations/" prefix for PostgreSQL. Shared by RunMigrations,
 // RunPGMigrations and VerifySchema.
-func migrationEntries(migrationsFS embed.FS, provider ProviderType) ([]string, error) {
+func migrationEntries(migrationsFS fs.FS, provider ProviderType) ([]string, error) {
 	all, err := fs.Glob(migrationsFS, "migrations/*.sql")
 	if err != nil {
 		return nil, fmt.Errorf("list migrations: %w", err)

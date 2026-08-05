@@ -25,12 +25,20 @@ func TestVerifySchema_SQLite(t *testing.T) {
 		t.Fatalf("VerifySchema after clean migrate: %v", err)
 	}
 
-	// Corrupt one stored hash → VerifySchema must fail.
+	// Corrupt one stored hash → VerifySchema must fail. Restore the
+	// original hash afterwards so the shared SQLite DB is left clean.
+	var origHash string
+	if err := d.QueryRow("SELECT hash FROM _migrations WHERE name = '001_users.sql'").Scan(&origHash); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := d.Exec("UPDATE _migrations SET hash = 'deadbeef' WHERE name = '001_users.sql'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.VerifySchema(d, verifyFS, db.ProviderSQLite); err == nil {
 		t.Fatal("VerifySchema succeeded despite corrupted migration hash")
+	}
+	if _, err := d.Exec("UPDATE _migrations SET hash = ? WHERE name = '001_users.sql'", origHash); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -57,11 +65,21 @@ func TestVerifySchema_Postgres(t *testing.T) {
 		t.Fatalf("VerifySchema after clean PG migrate: %v", err)
 	}
 
+	// Corrupt one stored hash → VerifySchema must fail. Restore the
+	// original hash afterwards so subsequent PG tests (e.g.
+	// TestPGMigrations) see a pristine _migrations table.
+	var origHash string
+	if err := sqlDB.QueryRow("SELECT hash FROM _migrations WHERE name='migrations/001_users.sql'").Scan(&origHash); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := sqlDB.Exec("UPDATE _migrations SET hash='deadbeef' WHERE name='migrations/001_users.sql'"); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.VerifySchema(sqlDB, verifyFS, db.ProviderPostgres); err == nil {
 		t.Fatal("VerifySchema succeeded despite corrupted PG migration hash")
+	}
+	if _, err := sqlDB.Exec("UPDATE _migrations SET hash=$1 WHERE name='migrations/001_users.sql'", origHash); err != nil {
+		t.Fatal(err)
 	}
 }
 

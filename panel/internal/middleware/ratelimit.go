@@ -73,16 +73,20 @@ func (rl *rateLimiter) cleanup() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for ip, entry := range rl.entries {
-			entry.mu.Lock()
-			if now.After(entry.resetAt) {
-				delete(rl.entries, ip)
-			}
-			entry.mu.Unlock()
+		rl.pruneExpired()
+	}
+}
+
+func (rl *rateLimiter) pruneExpired() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	for ip, entry := range rl.entries {
+		entry.mu.Lock()
+		if now.After(entry.resetAt) {
+			delete(rl.entries, ip)
 		}
-		rl.mu.Unlock()
+		entry.mu.Unlock()
 	}
 }
 

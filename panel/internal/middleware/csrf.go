@@ -39,14 +39,18 @@ func init() {
 func (s *csrfStore) cleanupLoop() {
 	t := time.NewTicker(15 * time.Minute)
 	for range t.C {
-		s.mu.Lock()
-		now := time.Now()
-		for tok, exp := range s.valid {
-			if now.After(exp) {
-				delete(s.valid, tok)
-			}
+		s.pruneExpired()
+	}
+}
+
+func (s *csrfStore) pruneExpired() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for tok, exp := range s.valid {
+		if now.After(exp) {
+			delete(s.valid, tok)
 		}
-		s.mu.Unlock()
 	}
 }
 

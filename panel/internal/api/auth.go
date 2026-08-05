@@ -194,7 +194,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ua := r.Header.Get("User-Agent")
-	os, browser := parseUserAgent(ua)
+	os, browser := ParseUserAgent(ua)
 	db.Exec(h.db, h.provider, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, id, hashToken(token), "", os, browser, ip)
 
@@ -251,7 +251,7 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ua := r.Header.Get("User-Agent")
-	os, browser := parseUserAgent(ua)
+	os, browser := ParseUserAgent(ua)
 	db.Exec(h.db, h.provider, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, entry.userID, hashToken(token), "", os, browser, ip)
 

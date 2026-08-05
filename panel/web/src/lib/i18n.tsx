@@ -3,7 +3,7 @@ import { ru as dateFnsRu } from 'date-fns/locale/ru'
 import type { Locale } from 'date-fns'
 
 // ── Translation dictionary ──────────────────────────────────────────
-const messages = {
+export const messages = {
   en: {
     // Nav
     'nav.dashboard': 'Dashboard',

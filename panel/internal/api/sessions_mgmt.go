@@ -117,7 +117,7 @@ func hashToken(token string) string {
 	return fmt.Sprintf("%x", h)
 }
 
-func parseUserAgent(ua string) (os, browser string) {
+func ParseUserAgent(ua string) (os, browser string) {
 	if ua == "" {
 		return "Unknown", "Unknown"
 	}

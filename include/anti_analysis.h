@@ -29,7 +29,8 @@ typedef struct {
     uint32_t mouse_static    : 1;
     uint32_t geo_cis         : 1;
     uint32_t hosting_ip      : 1;
-    uint32_t _unused         : 20;
+    uint32_t sandbox_proc    : 1;
+    uint32_t _unused         : 19;
 } mirage_analysis_flags;
 
 /* ── Analysis result ─────────────────────────────────────── */
@@ -54,6 +55,13 @@ int mirage_anti_analysis_should_exit(mirage_analysis_result result);
  * mirage_anti_analysis_print — Print score and detected flags.
  */
 void mirage_anti_analysis_print(mirage_analysis_result result);
+
+/*
+ * check_sandbox_processes — Scan running processes for analysis/sandbox tools.
+ * Uses PEB-walk for CreateToolhelp32Snapshot/Process32FirstW/Process32NextW.
+ * Returns 1 if any detected, 0 if clean, -1 on error.
+ */
+int check_sandbox_processes(void);
 
 #ifdef __cplusplus
 }

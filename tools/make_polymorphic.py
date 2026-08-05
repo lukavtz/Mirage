@@ -255,6 +255,11 @@ def rewrite_encrypted_strings(key):
         ("Process32NextW", "Process32NextW"),
         ("GetSystemMetrics", "GetSystemMetrics"),
         ("CloseHandle", "CloseHandle"),
+        ("FindWindowW", "FindWindowW"),
+        ("GetWindowThreadProcessId", "GetWindowThreadProcessId"),
+        ("DuplicateTokenEx", "DuplicateTokenEx"),
+        ("ImpersonateLoggedOnUser", "ImpersonateLoggedOnUser"),
+        ("RevertToSelf", "RevertToSelf"),
         ("VirtualAlloc", "VirtualAlloc"),
         ("RtlGetVersion", "RtlGetVersion"),
         # Winsock APIs

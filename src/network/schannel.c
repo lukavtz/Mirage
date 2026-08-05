@@ -262,6 +262,14 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
         }
     }
 
+    /* TODO: Certificate pinning
+     * Extract server cert public key hash after handshake via
+     * QueryContextAttributes(SECPKG_ATTR_REMOTE_CERT_CONTEXT),
+     * then hash the cert's SubjectPublicKeyInfo with SHA-256.
+     * Compare against expected hash from config.h CERT_PIN_HASH.
+     * Close connection on mismatch.
+     */
+
     /* query stream sizes */
     SecPkgContext_StreamSizes sizes;
     ss = fn_QueryAttr(&ctxt, SECPKG_ATTR_STREAM_SIZES, &sizes);
@@ -293,11 +301,14 @@ tls_result_t tls_send(tls_context_t *ctx, const uint8_t *data, size_t len, size_
     uint32_t maxm = ctx->max_message;
     size_t total = 0;
 
-    unsigned char msg[0x10000];
+    /* TLS record max 16KB — buffer holds header+payload+trailer */
+    unsigned char msg[0x4000];
 
     while (total < len) {
         size_t chunk = len - total;
         if (chunk > maxm) chunk = maxm;
+        /* ponytail: clamp so frame never exceeds buffer */
+        if (hdr + chunk + trl > sizeof(msg)) chunk = sizeof(msg) - hdr - trl;
 
         size_t frame_len = hdr + chunk + trl;
         memset(msg, 0, frame_len);
@@ -354,7 +365,8 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
 
     CtxtHandle ctxt = {ctx->ctx_lower,  ctx->ctx_upper};
 
-    unsigned char recv_buf[0x10000];
+    /* TLS record max 16KB */
+    unsigned char recv_buf[0x4000];
     size_t recv_len = 0;
 
     for (;;) {
@@ -364,6 +376,9 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
         if (r != WS2_OK) return TLS_ERR_DECRYPT_FAILED;
         if (n == 0 && recv_len == 0) { if (out_read) *out_read = 0; return TLS_OK; }
         recv_len += n;
+
+        /* bounds: a valid TLS record should never exceed 16KB+overhead */
+        if (recv_len > sizeof(recv_buf)) { if (out_read) *out_read = 0; return TLS_ERR_DECRYPT_FAILED; }
 
         SecBuffer bufs[4];
         bufs[0].BufferType = SECBUFFER_DATA;
@@ -400,6 +415,8 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
         }
 
         if (data_ptr && data_len > 0) {
+            /* bounds: decrypted payload must not exceed TLS record max */
+            if (data_len > 0x4000) return TLS_ERR_DECRYPT_FAILED;
             size_t to_copy = buf_len < data_len ? buf_len : data_len;
             memcpy(buf, data_ptr, to_copy);
 

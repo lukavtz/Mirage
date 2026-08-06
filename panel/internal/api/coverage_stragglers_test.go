@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestMarketplaceCreateProduct(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/products", h.CreateProduct)
 	r.Get("/api/marketplace/purchases", h.MyPurchases)
@@ -46,8 +46,8 @@ func TestMarketplaceCreateProduct(t *testing.T) {
 }
 
 func TestUsersList(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewUsersHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Get("/api/users", h.List)
 
@@ -70,9 +70,9 @@ func TestUsersList(t *testing.T) {
 }
 
 func TestLogsProcessSSP(t *testing.T) {
-	d := openTestDB(t)
-	logProc := services.NewLogProcessor(d, nil, db.ProviderSQLite)
-	h := api.NewSSPHandler(logProc, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	logProc := services.NewLogProcessor(d, nil)
+	h := api.NewSSPHandler(logProc)
 	r := chi.NewRouter()
 	r.Post("/api/log/ssp", h.ProcessSSP)
 
@@ -86,13 +86,13 @@ func TestLogsProcessSSP(t *testing.T) {
 }
 
 func TestReferralListStats(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewReferralHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/referrals/stats", h.Stats)
 	uid := "rl-user"
-	d.Exec("INSERT INTO referral_codes (id, user_id, code) VALUES (?, ?, ?)", uuid.New().String(), uid, "MYCODE")
-	d.Exec("INSERT INTO referral_redemptions (id, referrer_id, redeemed_by, code) VALUES (?, ?, ?, ?)",
+	d.Exec("INSERT INTO referral_codes (id, user_id, code) VALUES ($1, $2, $3)", uuid.New().String(), uid, "MYCODE")
+	d.Exec("INSERT INTO referral_redemptions (id, referrer_id, redeemed_by, code) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), uid, "other", "MYCODE")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/referrals/stats", nil)
@@ -104,4 +104,3 @@ func TestReferralListStats(t *testing.T) {
 	}
 
 }
-

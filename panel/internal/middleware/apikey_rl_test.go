@@ -6,46 +6,26 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupAPIKeyWithRateLimit(t *testing.T, rateLimit int) (*sql.DB, string) {
 	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "mirage-apikey-rl-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-
+	d := testutil.OpenTestDB(t)
 	userID := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
-		userID, "apikey-rl-user", "x", "worker"); err != nil {
+	if _, err := d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4)", userID, "apikey-rl-user", "x", "worker"); err != nil {
 		t.Fatal(err)
 	}
-
 	raw := uuid.New().String() + uuid.New().String()
 	hash := sha256.Sum256([]byte(raw))
-	if _, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash, rate_limit) VALUES (?, ?, ?, ?, ?)",
-		uuid.New().String(), userID, "rl-key", fmt.Sprintf("%x", hash), rateLimit); err != nil {
+	if _, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash, rate_limit) VALUES ($1, $2, $3, $4, $5)", uuid.New().String(), userID, "rl-key", fmt.Sprintf("%x", hash), rateLimit); err != nil {
 		t.Fatal(err)
 	}
-
 	return d, raw
 }
 

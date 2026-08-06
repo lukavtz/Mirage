@@ -1,0 +1,8 @@
+=== test_chrome_crypto: Chrome key extraction ===
+  PASS: test_extract_key_basic
+  PASS: test_extract_key_missing
+  PASS: test_extract_key_empty
+  PASS: test_extract_key_buffer_too_small
+  PASS: test_extract_key_realistic
+  PASS: test_extract_key_truncated
+=== test_chrome_crypto: 6/6 PASSED ===

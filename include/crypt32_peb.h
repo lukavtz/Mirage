@@ -13,7 +13,7 @@
 extern "C" {
 #endif
 
-#ifndef _WINCRYPT_H
+#if !defined(_WINCRYPT_H) && !defined(__WINCRYPT_H__)
 typedef struct _CRYPTOAPI_BLOB {
     DWORD cbData;
     BYTE *pbData;
@@ -22,13 +22,19 @@ typedef struct _CRYPTOAPI_BLOB {
 
 typedef BOOL (WINAPI *pCryptUnprotectData)(DATA_BLOB *, LPWSTR *, DATA_BLOB *,
                                              PVOID, void *, DWORD, DATA_BLOB *);
+typedef BOOL (WINAPI *pCertFreeCertificateContext)(const void *);
 
 typedef struct {
-    pCryptUnprotectData pUnprotect;
+    pCryptUnprotectData         pUnprotect;
+    pCertFreeCertificateContext pCertFree;
     int ready;
 } crypt32_api_t;
 
 const crypt32_api_t *mirage_crypt32_api(void);
+
+#ifdef ZIALFI_TEST_MODE
+void mirage_crypt32_api_install(const crypt32_api_t *mock);
+#endif
 
 #ifdef __cplusplus
 }

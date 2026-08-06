@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestSSP_IngestValidArchive(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	zipData := createTestZip(t, map[string]string{
@@ -35,7 +36,7 @@ func TestSSP_IngestValidArchive(t *testing.T) {
 }
 
 func TestSSP_NotAZip(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	body := []byte("this is not a zip file")
@@ -58,7 +59,7 @@ func TestSSP_NotAZip(t *testing.T) {
 }
 
 func TestSSP_EmptyArchive(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/ssp", nil)
@@ -80,7 +81,7 @@ func TestSSP_EmptyArchive(t *testing.T) {
 }
 
 func TestSSP_NoAuth(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/ssp", nil)

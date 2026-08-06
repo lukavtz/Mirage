@@ -30,9 +30,9 @@ func makeTestPE(t *testing.T) []byte {
 	peSignature := []byte{'P', 'E', 0, 0}
 
 	coffHeader := make([]byte, 20)
-	binary.LittleEndian.PutUint16(coffHeader[0:2], 0x8664)     // Machine: AMD64
-	binary.LittleEndian.PutUint16(coffHeader[2:4], 2)          // NumberOfSections
-	binary.LittleEndian.PutUint32(coffHeader[16:20], 0x10)     // SizeOfOptionalHeader
+	binary.LittleEndian.PutUint16(coffHeader[0:2], 0x8664) // Machine: AMD64
+	binary.LittleEndian.PutUint16(coffHeader[2:4], 2)      // NumberOfSections
+	binary.LittleEndian.PutUint32(coffHeader[16:20], 0x10) // SizeOfOptionalHeader
 
 	optionalHeader := make([]byte, 240)
 	binary.LittleEndian.PutUint16(optionalHeader[0:2], 0x020B) // PE32+ magic
@@ -44,7 +44,7 @@ func makeTestPE(t *testing.T) []byte {
 
 	sectText := make([]byte, 40)
 	copy(sectText[0:8], []byte(".text\x00\x00\x00"))
-	binary.LittleEndian.PutUint32(sectText[16:20], 0x100) // VirtualSize
+	binary.LittleEndian.PutUint32(sectText[16:20], 0x100)  // VirtualSize
 	binary.LittleEndian.PutUint32(sectText[20:24], 0x1000) // VirtualAddress
 	binary.LittleEndian.PutUint32(sectText[24:28], 0x100)  // SizeOfRawData
 	binary.LittleEndian.PutUint32(sectText[28:32], 0x200)  // PointerToRawData

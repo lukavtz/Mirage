@@ -5,33 +5,46 @@ import (
 	"fmt"
 	"os"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/crypto/bcrypt"
-	_ "modernc.org/sqlite"
 )
 
 func main() {
-	pw := "admin"
-	if len(os.Args) > 1 {
-		pw = os.Args[1]
+	if len(os.Args) != 2 || os.Args[1] == "" {
+		fmt.Fprintln(os.Stderr, "usage: hashpw <password>")
+		os.Exit(2)
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(pw), bcrypt.DefaultCost)
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		fmt.Fprintln(os.Stderr, "DATABASE_URL is required")
+		os.Exit(2)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(os.Args[1]), bcrypt.DefaultCost)
 	if err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "hash password: %v\n", err)
+		os.Exit(1)
 	}
-	fmt.Println(string(hash))
 
-	db, err := sql.Open("sqlite", "data/mirage.db")
+	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "db open: %v\n", err)
-		return
+		os.Exit(1)
 	}
 	defer db.Close()
 
-	res, err := db.Exec("UPDATE users SET password_hash = ? WHERE id = 'u_admin'", string(hash))
+	res, err := db.Exec("UPDATE users SET password_hash = $1 WHERE id = $2", string(hash), "u_admin")
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "update: %v\n", err)
-		return
+		os.Exit(1)
 	}
-	n, _ := res.RowsAffected()
-	fmt.Fprintf(os.Stderr, "admin password set (%d rows)\n", n)
+	n, err := res.RowsAffected()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "rows affected: %v\n", err)
+		os.Exit(1)
+	}
+	if n != 1 {
+		fmt.Fprintf(os.Stderr, "update affected %d rows; expected 1\n", n)
+		os.Exit(1)
+	}
+	fmt.Fprintln(os.Stderr, "admin password set")
 }

@@ -300,12 +300,12 @@ static int write_netscape_cookies(const char *json_resp, const char *output_path
 
         if (domain[0] && name[0]) {
             /* Netscape format: domain\tflag\tpath\tsecure\texpiry\tname\tvalue */
-            CDP_APPEND("%s\t%s\t%s\t%s\t%ld\t%s\t%s\n",
+            CDP_APPEND("%s\t%s\t%s\t%s\t%lld\t%s\t%s\n",
                     domain,
                     domain[0] == '.' ? "TRUE" : "FALSE",
                     path[0] ? path : "/",
                     secure ? "TRUE" : "FALSE",
-                    (long)expires,
+                    (long long)expires,
                     name,
                     value);
             cookie_count++;

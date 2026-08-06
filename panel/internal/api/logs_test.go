@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"zialfi-panel/internal/testutil"
 )
 
 func createTestZip(t *testing.T, files map[string]string) []byte {
@@ -30,7 +31,7 @@ func createTestZip(t *testing.T, files map[string]string) []byte {
 }
 
 func TestLogIngest_ValidArchive(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -64,7 +65,7 @@ func TestLogIngest_ValidArchive(t *testing.T) {
 }
 
 func TestIngest_BindsOwner(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -96,7 +97,7 @@ func TestIngest_BindsOwner(t *testing.T) {
 	}
 
 	var ownerID string
-	err := d.QueryRow("SELECT COALESCE(owner_id, '') FROM sessions WHERE id = ?", resp["session_id"]).Scan(&ownerID)
+	err := d.QueryRow("SELECT COALESCE(owner_id, '') FROM sessions WHERE id = $1", resp["session_id"]).Scan(&ownerID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +107,7 @@ func TestIngest_BindsOwner(t *testing.T) {
 }
 
 func TestLogIngest_MissingArchive(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -132,7 +133,7 @@ func TestLogIngest_MissingArchive(t *testing.T) {
 }
 
 func TestLogIngest_TooLarge(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	largeData := strings.Repeat("A", 101<<20)
@@ -155,7 +156,7 @@ func TestLogIngest_TooLarge(t *testing.T) {
 }
 
 func TestLogIngest_NoAuth(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", nil)
@@ -175,7 +176,7 @@ func TestLogIngest_NoAuth(t *testing.T) {
 }
 
 func TestChunk_Complete(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	zipData := createTestZip(t, map[string]string{
@@ -240,7 +241,7 @@ func TestChunk_Complete(t *testing.T) {
 }
 
 func TestChunk_MissingSession(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	form := "session_id=nonexistent&total_chunks=1"
@@ -262,7 +263,7 @@ func TestChunk_MissingSession(t *testing.T) {
 }
 
 func TestChunk_InvalidIndex(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer

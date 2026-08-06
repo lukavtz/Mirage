@@ -8,12 +8,13 @@
  * each BaseDllName byte before hashing (28 iterations, case-insensitive).
  */
 
+
+#include <windows.h>
 #include "peb.h"
 #include "hash.h"
 #include "config.h"
 #include "mirage_asm.h"
 #include <stddef.h>
-#include <windows.h>
 
 /* ── Rotl32 (local copy for hot path) ─────────────────────── */
 static inline uint32_t rotl32(uint32_t value, int shift)
@@ -22,8 +23,31 @@ static inline uint32_t rotl32(uint32_t value, int shift)
 }
 
 /* ── mirage_get_module_by_hash ────────────────────────────── */
+#ifdef ZIALFI_TEST_MODE
+#define MAX_MOCK_MODULES 32
+static struct { uint32_t hash; void *base; } g_mock_modules[MAX_MOCK_MODULES];
+static int g_mock_count = 0;
+
+void mirage_peb_mock_module(uint32_t hash, void *base) {
+    if (g_mock_count < MAX_MOCK_MODULES) {
+        g_mock_modules[g_mock_count].hash = hash;
+        g_mock_modules[g_mock_count].base = base;
+        g_mock_count++;
+    }
+}
+
+void mirage_peb_mock_clear(void) {
+    g_mock_count = 0;
+}
+#endif
+
 void* mirage_get_module_by_hash(uint32_t moduleHash)
 {
+#ifdef ZIALFI_TEST_MODE
+    for (int i = 0; i < g_mock_count; i++)
+        if (g_mock_modules[i].hash == moduleHash)
+            return g_mock_modules[i].base;
+#endif
     /* Read PEB from GS:[0x60] via NASM stub */
     PPEB peb = (PPEB)getPeb();
     if (!peb || !peb->Ldr)

@@ -111,9 +111,15 @@ func generateSelfSignedCert(certDir string) (string, string, error) {
 
 func main() {
 	port := getEnv("PORT", "8080")
-	dbPath := getEnv("DB_PATH", "data/mirage.db")
-	databaseURL := getEnv("DATABASE_URL", "")
-	dbProvider := getEnv("DB_PROVIDER", "sqlite")
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
+	}
+	if os.Getenv("DB_PROVIDER") != "" || os.Getenv("DB_PATH") != "" {
+		slog.Error("DB_PROVIDER and DB_PATH are unsupported; use DATABASE_URL")
+		os.Exit(1)
+	}
 	jwtSecret := getEnv("JWT_SECRET", "")
 	allowedOrigins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173")
 
@@ -121,14 +127,16 @@ func main() {
 	tlsSelfSigned, _ := strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
 
 	if jwtSecret == "" {
-		secretFile := filepath.Join(filepath.Dir(dbPath), ".jwt_secret")
+		secretFile := filepath.Join("data", ".jwt_secret")
 		if data, err := os.ReadFile(secretFile); err == nil {
 			jwtSecret = strings.TrimSpace(string(data))
 			slog.Info("loaded JWT secret from file", "path", secretFile)
 		} else {
 			jwtSecret = generateSecret()
 			slog.Warn("generated new JWT secret — all existing sessions are now invalid", "path", secretFile)
-			if err := os.WriteFile(secretFile, []byte(jwtSecret), 0600); err != nil {
+			if err := os.MkdirAll(filepath.Dir(secretFile), 0755); err != nil {
+				slog.Warn("failed to create JWT secret directory", "err", err)
+			} else if err := os.WriteFile(secretFile, []byte(jwtSecret), 0600); err != nil {
 				slog.Warn("failed to persist JWT secret, tokens will be invalid after restart", "err", err)
 			}
 		}
@@ -136,44 +144,24 @@ func main() {
 
 	slog.Info("starting Mirage Panel",
 		"port", port,
-		"db", dbPath,
-		"provider", dbProvider,
+		"database", "postgresql",
 		"tls", tlsEnabled,
 		"allowed_origins", allowedOrigins,
 	)
 
-	providerType := db.ProviderSQLite
-	switch strings.ToLower(dbProvider) {
-	case "postgres", "postgresql":
-		providerType = db.ProviderPostgres
-	}
-
-	connString := dbPath
-	if providerType == db.ProviderPostgres {
-		if databaseURL != "" {
-			connString = databaseURL
-		}
-	} else {
-		if err := os.MkdirAll(filepath.Dir(connString), 0755); err != nil {
-			slog.Error("failed to create data directory", "err", err)
-			os.Exit(1)
-		}
-	}
-
-	p := db.NewProvider(providerType, connString)
-	sqlDB, err := p.Open()
+	sqlDB, err := db.OpenPostgres(databaseURL)
 	if err != nil {
 		slog.Error("failed to open database", "err", err)
 		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
-	if err := db.RunMigrationsWithProvider(sqlDB, db.MigrationsFS, providerType); err != nil {
+	if err := db.RunMigrations(sqlDB, db.MigrationsFS); err != nil {
 		slog.Error("failed to run migrations", "err", err)
 		os.Exit(1)
 	}
 
-	if err := db.VerifySchema(sqlDB, db.MigrationsFS, providerType); err != nil {
+	if err := db.VerifySchema(sqlDB, db.MigrationsFS); err != nil {
 		slog.Error("schema verification failed — refusing to start", "err", err)
 		os.Exit(1)
 	}
@@ -213,26 +201,21 @@ func main() {
 	wsHub := ws.NewHub()
 	go wsHub.Run()
 
-	// Session-event fan-out: SQLite keeps the in-process hub; PostgreSQL
-	// additionally publishes via LISTEN/NOTIFY so multiple panel workers
-	// stay in sync (the LISTEN goroutine forwards into the same hub).
-	var broadcaster services.Broadcaster = wsHub
-	if providerType == db.ProviderPostgres {
-		pgCtx, pgCancel := context.WithCancel(context.Background())
-		defer pgCancel()
-		notifier, err := services.NewPGNotifier(pgCtx, connString, wsHub)
-		if err != nil {
-			slog.Error("failed to create PG notifier", "err", err)
-			os.Exit(1)
-		}
-		broadcaster = notifier
-		go func() {
-			if err := notifier.Listen(pgCtx); err != nil {
-				slog.Error("pg listener stopped", "err", err)
-			}
-		}()
-		slog.Info("postgres LISTEN/NOTIFY broadcaster enabled")
+	// PostgreSQL LISTEN/NOTIFY fans session events across panel workers.
+	pgCtx, pgCancel := context.WithCancel(context.Background())
+	defer pgCancel()
+	notifier, err := services.NewPGNotifier(pgCtx, databaseURL, wsHub)
+	if err != nil {
+		slog.Error("failed to create PG notifier", "err", err)
+		os.Exit(1)
 	}
+	broadcaster := services.Broadcaster(notifier)
+	go func() {
+		if err := notifier.Listen(pgCtx); err != nil {
+			slog.Error("pg listener stopped", "err", err)
+		}
+	}()
+	slog.Info("postgres LISTEN/NOTIFY broadcaster enabled")
 
 	// Start Telegram sales bot
 	tgBot := bot.New(sqlDB)
@@ -263,7 +246,7 @@ func main() {
 		slog.Info("loaded decryptor DLL", "path", decryptorPath, "size", len(decryptorDll))
 	}
 
-	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll, providerType, broadcaster)
+	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll, broadcaster)
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		slog.Error("failed to resolve frontend filesystem", "err", err)
@@ -327,7 +310,7 @@ func main() {
 		addr := srv.Addr
 		if tlsEnabled {
 			scheme := "https"
-			certDir := filepath.Join(filepath.Dir(connString), "certs")
+			certDir := filepath.Join("data", "certs")
 			var certFile, keyFile string
 			var tlsDesc string
 			if tlsSelfSigned {

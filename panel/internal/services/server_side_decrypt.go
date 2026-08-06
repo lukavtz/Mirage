@@ -20,8 +20,8 @@ const (
 
 // ExtractedKey holds the result of parsing os_crypt.encrypted_key from Local State.
 type ExtractedKey struct {
-	Raw    []byte // the decoded bytes after stripping the prefix
-	Type   KeyType
+	Raw  []byte // the decoded bytes after stripping the prefix
+	Type KeyType
 }
 
 // ExtractMasterKey parses Chrome's Local State JSON and extracts the encrypted key.

@@ -8,14 +8,14 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestAuthCleanupFailedAttempts(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "cleanup2", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 	// Login with wrong password enough times to trigger failed_attempts
 	// and allow cleanupFailedAttempts to run
 	body := `{"username":"cleanup2","password":"wrongpass","ip":"10.0.0.1"}`
@@ -31,10 +31,10 @@ func TestAuthCleanupFailedAttempts(t *testing.T) {
 }
 
 func TestAuthForgotPassword(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "forgot-user", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/forgot-password", handler.ForgotPassword)
 	r.Post("/api/auth/reset-password", handler.ResetPassword)
@@ -59,10 +59,10 @@ func TestAuthForgotPassword(t *testing.T) {
 }
 
 func TestAuthResetPasswordEdgeCases(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "reset-user", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/reset-password", handler.ResetPassword)
 
@@ -86,8 +86,8 @@ func TestAuthResetPasswordEdgeCases(t *testing.T) {
 }
 
 func TestAuthRecordFailedAttempt(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 	// recordFailedAttempt is called from Login with wrong password
 	// it's an internal method, but we can trigger it through repeated login
 	body := `{"username":"nonexistent","password":"x"}`

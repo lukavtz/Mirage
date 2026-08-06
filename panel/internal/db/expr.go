@@ -6,67 +6,36 @@ import (
 	"strings"
 )
 
-// Now returns the dialect-correct SQL expression for "current timestamp at
-// insert time". SQLite uses datetime('now'); PostgreSQL has NOW(). The
-// returned string is meant to be embedded in a SQL string at parse time on
-// the server's startup, never on a per-request user-supplied path.
-func Now(p ProviderType) string {
-	if p == ProviderPostgres {
-		return "NOW()"
-	}
-	return "datetime('now')"
-}
+func Now() string { return "CURRENT_TIMESTAMP" }
 
-// UUID returns the dialect-correct SQL expression for a fresh UUID rendered
-// as a lowercase hex / dashed text. Caller concatenates into a DEFAULT
-// clause at parse time (e.g. when generating CREATE TABLE statements at
-// server start), never on a per-request user-supplied path.
-func UUID(p ProviderType) string {
-	if p == ProviderPostgres {
-		return "gen_random_uuid()::text"
-	}
-	return "lower(hex(randomblob(16)))"
-}
+func UUID() string { return "gen_random_uuid()::text" }
 
-// Placeholders rewrites every "?" in sql to "$1, $2, …, $N" when the
-// provider is PostgreSQL; returns sql unchanged for SQLite. The driver
-// pgx (via database/sql) requires $N placeholders; the sqlite driver
-// (modernc.org/sqlite) accepts both. Use at the moment a query string is
-// built; result is meant to be passed to db.Exec / db.Query / db.QueryRow
-// once, not interpolated with user input.
-func Placeholders(p ProviderType, sql string) string {
-	if p != ProviderPostgres {
-		return sql
-	}
-	if !strings.Contains(sql, "?") {
-		return sql
+// Placeholders rewrites ? parameters to PostgreSQL positional parameters.
+func Placeholders(query string) string {
+	if !strings.Contains(query, "?") {
+		return query
 	}
 	var b strings.Builder
-	b.Grow(len(sql) + 8)
-	n := 1
-	for i := 0; i < len(sql); i++ {
-		c := sql[i]
-		if c == '?' {
+	b.Grow(len(query) + 8)
+	for i, n := 0, 1; i < len(query); i++ {
+		if query[i] == '?' {
 			fmt.Fprintf(&b, "$%d", n)
 			n++
-			continue
+		} else {
+			b.WriteByte(query[i])
 		}
-		b.WriteByte(c)
 	}
 	return b.String()
 }
 
-// Exec runs sql against db, rewriting "?" placeholders to "$N" for PG.
-func Exec(d *sql.DB, p ProviderType, sql string, args ...any) (sql.Result, error) {
-	return d.Exec(Placeholders(p, sql), args...)
+func Exec(d *sql.DB, query string, args ...any) (sql.Result, error) {
+	return d.Exec(Placeholders(query), args...)
 }
 
-// Query runs sql against db, rewriting "?" placeholders to "$N" for PG.
-func Query(d *sql.DB, p ProviderType, sql string, args ...any) (*sql.Rows, error) {
-	return d.Query(Placeholders(p, sql), args...)
+func Query(d *sql.DB, query string, args ...any) (*sql.Rows, error) {
+	return d.Query(Placeholders(query), args...)
 }
 
-// QueryRow runs sql against db, rewriting "?" placeholders to "$N" for PG.
-func QueryRow(d *sql.DB, p ProviderType, sql string, args ...any) *sql.Row {
-	return d.QueryRow(Placeholders(p, sql), args...)
+func QueryRow(d *sql.DB, query string, args ...any) *sql.Row {
+	return d.QueryRow(Placeholders(query), args...)
 }

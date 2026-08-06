@@ -30,6 +30,10 @@ typedef struct {
 
 const com_api_t *mirage_com_api(void);
 
+#ifdef ZIALFI_TEST_MODE
+void mirage_com_api_install(const com_api_t *mock);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

@@ -51,10 +51,10 @@ func CheckIP(ip string) IPScoreResult {
 	}
 
 	var (
-		apiData     ipAPIData
-		ipapi       ipapiData
-		proxycheck  proxycheckData
-		wg          sync.WaitGroup
+		apiData    ipAPIData
+		ipapi      ipapiData
+		proxycheck proxycheckData
+		wg         sync.WaitGroup
 	)
 
 	wg.Add(3)

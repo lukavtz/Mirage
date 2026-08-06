@@ -12,12 +12,12 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestTicket_Create(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser", "pass")
 
@@ -55,8 +55,8 @@ func TestTicket_Create(t *testing.T) {
 }
 
 func TestTicket_CreateInvalidCategory(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser2", "pass")
 
@@ -77,19 +77,19 @@ func TestTicket_CreateInvalidCategory(t *testing.T) {
 }
 
 func TestTicket_ListUserSeesOwn(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser3", "pass")
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), uid, "my issue", "bug",
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), "other-user", "not mine", "question",
 	)
 	if err != nil {
@@ -122,19 +122,19 @@ func TestTicket_ListUserSeesOwn(t *testing.T) {
 }
 
 func TestTicket_ListAdminSeesAll(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "adminuser", "pass")
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), uid, "admin ticket", "feature",
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), "other-user", "other ticket", "bug",
 	)
 	if err != nil {
@@ -164,13 +164,13 @@ func TestTicket_ListAdminSeesAll(t *testing.T) {
 }
 
 func TestTicket_Get(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser4", "pass")
 	tid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		tid, uid, "my ticket", "question",
 	)
 	if err != nil {
@@ -204,13 +204,13 @@ func TestTicket_Get(t *testing.T) {
 }
 
 func TestTicket_GetForbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser5", "pass")
 	tid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		tid, "other-owner", "not mine", "bug",
 	)
 	if err != nil {
@@ -232,13 +232,13 @@ func TestTicket_GetForbidden(t *testing.T) {
 }
 
 func TestTicket_Reply(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser6", "pass")
 	tid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		tid, uid, "reply test", "bug",
 	)
 	if err != nil {
@@ -270,13 +270,13 @@ func TestTicket_Reply(t *testing.T) {
 }
 
 func TestTicket_Close(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser7", "pass")
 	tid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES (?, ?, ?, ?)",
+		"INSERT INTO support_tickets (id, user_id, subject, category) VALUES ($1, $2, $3, $4)",
 		tid, uid, "close test", "other",
 	)
 	if err != nil {
@@ -297,20 +297,20 @@ func TestTicket_Close(t *testing.T) {
 	}
 
 	var status string
-	d.QueryRow("SELECT status FROM support_tickets WHERE id = ?", tid).Scan(&status)
+	d.QueryRow("SELECT status FROM support_tickets WHERE id = $1", tid).Scan(&status)
 	if status != "closed" {
 		t.Errorf("status = %q, want %q", status, "closed")
 	}
 }
 
 func TestTicket_CloseAlreadyClosed(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTicketHandler(d)
 
 	uid := createTestUser(t, d, "ticketuser8", "pass")
 	tid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO support_tickets (id, user_id, subject, category, status) VALUES (?, ?, ?, ?, 'closed')",
+		"INSERT INTO support_tickets (id, user_id, subject, category, status) VALUES ($1, $2, $3, $4, 'closed')",
 		tid, uid, "already closed", "bug",
 	)
 	if err != nil {

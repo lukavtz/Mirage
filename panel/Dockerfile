@@ -6,7 +6,7 @@ RUN npm ci --registry=https://registry.npmjs.org --fetch-retries=5 --fetch-retry
 COPY web/ .
 RUN npm run build
 
-# Stage 2: build Go binary (CGO-free, modernc/sqlite / pgx)
+# Stage 2: build Go binaries (PostgreSQL-only, CGO-free)
 FROM golang:1.25-alpine AS backend
 WORKDIR /app
 COPY go.* ./

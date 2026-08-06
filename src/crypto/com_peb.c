@@ -39,9 +39,18 @@ const com_api_t *mirage_com_api(void) {
     g_com.pUninit = (pCoUninitialize)mirage_get_function_by_hash(
         mod, mirage_encrypted_hash_func(fn));
 
-    if (!g_com.pInit || !g_com.pCreate || !g_com.pUninit)
+    if (!g_com.pInit || !g_com.pCreate || !g_com.pBlanket || !g_com.pUninit)
         return NULL;
 
     g_com.ready = 1;
     return &g_com;
 }
+
+#ifdef ZIALFI_TEST_MODE
+void mirage_com_api_install(const com_api_t *mock) {
+    if (mock) {
+        g_com = *mock;
+        g_com.ready = 1;
+    }
+}
+#endif

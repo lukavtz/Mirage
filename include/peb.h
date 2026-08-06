@@ -29,6 +29,11 @@ extern "C" {
  */
 void* mirage_get_module_by_hash(uint32_t moduleHash);
 
+#ifdef ZIALFI_TEST_MODE
+void mirage_peb_mock_module(uint32_t hash, void *base);
+void mirage_peb_mock_clear(void);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

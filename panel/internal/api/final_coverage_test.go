@@ -10,20 +10,20 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestReferralApply(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewReferralHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/referrals/apply", h.Apply)
 	r.Get("/api/referrals/stats", h.Stats)
 
 	uid := "ref-user"
 	// referral codes live on users.referral_code (migration 026)
-	d.Exec("UPDATE users SET referral_code = 'MYCODE' WHERE id = ?", createTestUser(t, d, "referrer-user", "pass"))
+	d.Exec("UPDATE users SET referral_code = 'MYCODE' WHERE id = $1", createTestUser(t, d, "referrer-user", "pass"))
 
 	// apply valid code
 	req := httptest.NewRequest(http.MethodPost, "/api/referrals/apply", bytes.NewReader([]byte(`{"code":"MYCODE"}`)))
@@ -66,13 +66,13 @@ func TestReferralApply(t *testing.T) {
 }
 
 func TestSettingsGet(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSettingsHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Get("/api/settings", h.Get)
 	r.Put("/api/settings", h.Update)
 
-	d.Exec("INSERT INTO settings (key, value) VALUES (?, ?)", "lang", "ru")
+	d.Exec("INSERT INTO settings (key, value) VALUES ($1, $2)", "lang", "ru")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
 	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{UserID: "x", Role: "admin"}))
@@ -101,8 +101,8 @@ func TestSettingsGet(t *testing.T) {
 }
 
 func TestTOTPDisable(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTOTPHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/auth/2fa/setup", h.Setup)
 	r.Post("/api/auth/2fa/verify", h.Verify)
@@ -116,7 +116,9 @@ func TestTOTPDisable(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("setup: expected 200, got %d", w.Code)
 	}
-	var setup struct{ Secret string `json:"secret"` }
+	var setup struct {
+		Secret string `json:"secret"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &setup)
 
 	// generate code from secret
@@ -129,5 +131,3 @@ func TestTOTPDisable(t *testing.T) {
 	_ = code
 	_ = setup.Secret
 }
-
-

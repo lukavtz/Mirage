@@ -7,12 +7,12 @@ import (
 	"testing"
 
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestLogin_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(`bad`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -25,8 +25,8 @@ func TestLogin_InvalidJSON(t *testing.T) {
 }
 
 func TestLogin_MissingFields_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	cases := []string{`{}`, `{"username":"u"}`, `{"password":"p"}`}
 	for _, body := range cases {
@@ -41,8 +41,8 @@ func TestLogin_MissingFields_Extra(t *testing.T) {
 }
 
 func TestForgotPassword_RateLimit(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"nobody"}`
 	var lastCode int
@@ -59,8 +59,8 @@ func TestForgotPassword_RateLimit(t *testing.T) {
 }
 
 func TestForgotPassword_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(`bad`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -73,8 +73,8 @@ func TestForgotPassword_InvalidJSON(t *testing.T) {
 }
 
 func TestForgotPassword_MissingUsername(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(`{}`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -87,8 +87,8 @@ func TestForgotPassword_MissingUsername(t *testing.T) {
 }
 
 func TestResetPassword_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", bytes.NewReader([]byte(`bad`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -101,8 +101,8 @@ func TestResetPassword_InvalidJSON(t *testing.T) {
 }
 
 func TestResetPassword_MissingToken(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/reset-password", bytes.NewReader([]byte(`{"new_password":"longenough"}`)))
 	req.Header.Set("Content-Type", "application/json")

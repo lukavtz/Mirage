@@ -11,11 +11,10 @@ import (
 
 type DuplicateDetectHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
 }
 
-func NewDuplicateDetectHandler(db *sql.DB, provider db.ProviderType) *DuplicateDetectHandler {
-	return &DuplicateDetectHandler{db: db, provider: provider}
+func NewDuplicateDetectHandler(db *sql.DB) *DuplicateDetectHandler {
+	return &DuplicateDetectHandler{db: db}
 }
 
 type DuplicateInfo struct {
@@ -48,11 +47,15 @@ func (h *DuplicateDetectHandler) Detect(w http.ResponseWriter, r *http.Request) 
 
 	if hwid != "" {
 		var count int
-		err := db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE hwid = ?"+ownerClause, append([]any{hwid}, ownerArg)...).Scan(&count)
+		args := []any{hwid}
+		if ownerClause != "" {
+			args = append(args, ownerArg)
+		}
+		err := db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions WHERE hwid = ?"+ownerClause, args...).Scan(&count)
 		if err == nil {
 			resp.Hwid.Count = count
 			if count > 1 {
-				rows, err := db.Query(h.db, h.provider, "SELECT id FROM sessions WHERE hwid = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{hwid}, ownerArg)...)
+				rows, err := db.Query(h.db, "SELECT id FROM sessions WHERE hwid = ?"+ownerClause+" ORDER BY created_at DESC", args...)
 				if err == nil {
 					defer rows.Close()
 					for rows.Next() {
@@ -68,11 +71,15 @@ func (h *DuplicateDetectHandler) Detect(w http.ResponseWriter, r *http.Request) 
 
 	if ip != "" {
 		var count int
-		err := db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE ip = ?"+ownerClause, append([]any{ip}, ownerArg)...).Scan(&count)
+		args := []any{ip}
+		if ownerClause != "" {
+			args = append(args, ownerArg)
+		}
+		err := db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions WHERE ip = ?"+ownerClause, args...).Scan(&count)
 		if err == nil {
 			resp.Ip.Count = count
 			if count > 1 {
-				rows, err := db.Query(h.db, h.provider, "SELECT id FROM sessions WHERE ip = ?"+ownerClause+" ORDER BY created_at DESC", append([]any{ip}, ownerArg)...)
+				rows, err := db.Query(h.db, "SELECT id FROM sessions WHERE ip = ?"+ownerClause+" ORDER BY created_at DESC", args...)
 				if err == nil {
 					defer rows.Close()
 					for rows.Next() {

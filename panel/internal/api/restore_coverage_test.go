@@ -14,23 +14,23 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func insertRestoreSession(t *testing.T, d *sql.DB, ownerID string) string {
 	t.Helper()
 	sid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', ?, datetime('now'))`, sid, ownerID); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, ownerID); err != nil {
 		t.Fatal(err)
 	}
 	return sid
 }
 
 func TestRestore_UploadCookies_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/restore/upload", handler.UploadCookies)
@@ -46,8 +46,8 @@ func TestRestore_UploadCookies_NoClaims(t *testing.T) {
 }
 
 func TestRestore_UploadCookies_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "upjson", "pass")
 
@@ -67,8 +67,8 @@ func TestRestore_UploadCookies_InvalidJSON(t *testing.T) {
 }
 
 func TestRestore_UploadCookies_MissingFields(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "upmiss", "pass")
 
@@ -93,8 +93,8 @@ func TestRestore_UploadCookies_MissingFields(t *testing.T) {
 }
 
 func TestRestore_UploadCookies_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	owner := createTestUser(t, d, "reowner", "pass")
 	other := createTestUser(t, d, "reother", "pass")
@@ -117,8 +117,8 @@ func TestRestore_UploadCookies_Forbidden(t *testing.T) {
 }
 
 func TestRestore_UploadCookies_Success(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "upsuccess", "pass")
 	sid := insertRestoreSession(t, d, uid)
@@ -153,7 +153,7 @@ func TestRestore_UploadCookies_Success(t *testing.T) {
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		var status string
-		if err := d.QueryRow("SELECT status FROM restore_sessions WHERE id = ?", resp["id"]).Scan(&status); err == nil && status != "processing" {
+		if err := d.QueryRow("SELECT status FROM restore_sessions WHERE id = $1", resp["id"]).Scan(&status); err == nil && status != "processing" {
 			if status != "completed" && status != "failed" {
 				t.Fatalf("unexpected final status %q", status)
 			}
@@ -165,8 +165,8 @@ func TestRestore_UploadCookies_Success(t *testing.T) {
 }
 
 func TestRestore_ListSessions_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	r := chi.NewRouter()
 	r.Get("/api/restore/sessions", handler.ListSessions)
@@ -181,8 +181,8 @@ func TestRestore_ListSessions_NoClaims(t *testing.T) {
 }
 
 func TestRestore_ListSessions_UserAndAdmin(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUserWithRole(t, d, "rsuser", "pass", "user")
 	admin := createTestUser(t, d, "rsadmin", "pass")
@@ -191,7 +191,7 @@ func TestRestore_ListSessions_UserAndAdmin(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := d.Exec(
 		`INSERT INTO restore_sessions (id, user_id, session_id, cookies_json, proxy_config, status, access_token, error, created_at, updated_at)
-		 VALUES (?, ?, 'sid1', '[{}]', '', 'completed', '', '', ?, ?)`,
+		 VALUES ($1, $2, 'sid1', '[{}]', '', 'completed', '', '', $3, $4)`,
 		uuid.New().String(), uid, now, now,
 	); err != nil {
 		t.Fatal(err)
@@ -238,8 +238,8 @@ func TestRestore_ListSessions_UserAndAdmin(t *testing.T) {
 }
 
 func TestRestore_SessionStatus(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUserWithRole(t, d, "rsstat", "pass", "user")
 	other := createTestUser(t, d, "rsstat2", "pass")
@@ -248,7 +248,7 @@ func TestRestore_SessionStatus(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	if _, err := d.Exec(
 		`INSERT INTO restore_sessions (id, user_id, session_id, cookies_json, proxy_config, status, access_token, error, created_at, updated_at)
-		 VALUES (?, ?, 'sid1', '[{}]', '', 'completed', 'tok123', '', ?, ?)`,
+		 VALUES ($1, $2, 'sid1', '[{}]', '', 'completed', 'tok123', '', $3, $4)`,
 		rsID, uid, now, now,
 	); err != nil {
 		t.Fatal(err)
@@ -316,8 +316,8 @@ func TestRestore_SessionStatus(t *testing.T) {
 }
 
 func TestRestore_SessionStatus_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	r := chi.NewRouter()
 	r.Get("/api/restore/sessions/{id}", handler.SessionStatus)
@@ -332,8 +332,8 @@ func TestRestore_SessionStatus_NoClaims(t *testing.T) {
 }
 
 func TestRestore_NoProxy_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "noproxy", "pass")
 	sid := insertRestoreSession(t, d, uid)
@@ -352,8 +352,8 @@ func TestRestore_NoProxy_Extra(t *testing.T) {
 }
 
 func TestRestore_SessionNotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "nosess", "pass")
 
@@ -371,8 +371,8 @@ func TestRestore_SessionNotFound(t *testing.T) {
 }
 
 func TestRestore_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	owner := createTestUser(t, d, "resowner", "pass")
 	other := createTestUserWithRole(t, d, "resother", "pass", "user")
@@ -392,14 +392,14 @@ func TestRestore_Forbidden(t *testing.T) {
 }
 
 func TestRestore_SuccessWithCookies(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "ressuccess", "pass")
 	sid := insertRestoreSession(t, d, uid)
 
 	if _, err := d.Exec(
-		`INSERT INTO cookies (id, session_id, name, domain, value, path) VALUES (?, ?, 'sid', 'example.com', 'abc', '/')`,
+		`INSERT INTO cookies (id, session_id, name, domain, value, path) VALUES ($1, $2, 'sid', 'example.com', 'abc', '/')`,
 		uuid.New().String(), sid,
 	); err != nil {
 		t.Fatal(err)
@@ -432,8 +432,8 @@ func TestRestore_SuccessWithCookies(t *testing.T) {
 }
 
 func TestRestore_SuccessWithProxyConfig(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewRestoreHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewRestoreHandler(d)
 
 	uid := createTestUser(t, d, "resproxycfg", "pass")
 	sid := insertRestoreSession(t, d, uid)

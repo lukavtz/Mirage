@@ -15,12 +15,10 @@ import (
 
 type RestoreHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
-
 }
 
-func NewRestoreHandler(db *sql.DB, provider db.ProviderType) *RestoreHandler {
-	return &RestoreHandler{db: db, provider: provider}
+func NewRestoreHandler(db *sql.DB) *RestoreHandler {
+	return &RestoreHandler{db: db}
 }
 
 type restoreRequest struct {
@@ -42,7 +40,6 @@ type restoreResponse struct {
 	Count     int             `json:"count"`
 	Cookies   []restoreCookie `json:"cookies"`
 }
-
 
 type cookieUploadRequest struct {
 	SessionID   string                `json:"session_id"`
@@ -77,19 +74,18 @@ func (h *RestoreHandler) Restore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var exists int
-	err := db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE id = ?", req.SessionID).Scan(&exists)
+	err := db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions WHERE id = ?", req.SessionID).Scan(&exists)
 	if err != nil || exists == 0 {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
 
-	if !sessionOwnedBy(h.db, h.provider, r, req.SessionID) {
+	if !sessionOwnedBy(h.db, r, req.SessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
-	rows, err := db.Query(h.db, h.provider, 
-		"SELECT domain, name, value, path FROM cookies WHERE session_id = ?",
+	rows, err := db.Query(h.db, "SELECT domain, name, value, path FROM cookies WHERE session_id = ?",
 		req.SessionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query cookies")
@@ -140,7 +136,7 @@ func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, h.provider, r, req.SessionID) {
+	if !sessionOwnedBy(h.db, r, req.SessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -155,11 +151,9 @@ func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format(time.RFC3339)
 
-	_, err := db.Exec(h.db, h.provider, 
-		`INSERT INTO restore_sessions (id, user_id, session_id, cookies_json, proxy_config, status, created_at, updated_at)
+	_, err := db.Exec(h.db, `INSERT INTO restore_sessions (id, user_id, session_id, cookies_json, proxy_config, status, created_at, updated_at)
 		 VALUES (?, ?, ?, ?, ?, 'processing', ?, ?)`,
-		id, claims.UserID, req.SessionID, string(cookiesJSON), proxyJSON, now, now,
-	)
+		id, claims.UserID, req.SessionID, string(cookiesJSON), proxyJSON, now, now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create restore session")
 		return
@@ -169,10 +163,8 @@ func (h *RestoreHandler) UploadCookies(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if r := recover(); r != nil {
 				now := time.Now().UTC().Format(time.RFC3339)
-				db.Exec(h.db, h.provider, 
-					`UPDATE restore_sessions SET status = 'failed', error = 'internal panic', updated_at = ? WHERE id = ?`,
-					now, id,
-				)
+				db.Exec(h.db, `UPDATE restore_sessions SET status = 'failed', error = 'internal panic', updated_at = ? WHERE id = ?`,
+					now, id)
 			}
 		}()
 		h.processRestore(id, req, proxyJSON)
@@ -208,10 +200,8 @@ func (h *RestoreHandler) processRestore(id string, req cookieUploadRequest, prox
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	db.Exec(h.db, h.provider, 
-		`UPDATE restore_sessions SET status = ?, access_token = ?, error = ?, updated_at = ? WHERE id = ?`,
-		status, accessToken, errMsg, now, id,
-	)
+	db.Exec(h.db, `UPDATE restore_sessions SET status = ?, access_token = ?, error = ?, updated_at = ? WHERE id = ?`,
+		status, accessToken, errMsg, now, id)
 }
 
 func (h *RestoreHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
@@ -231,7 +221,7 @@ func (h *RestoreHandler) ListSessions(w http.ResponseWriter, r *http.Request) {
 		args = nil
 	}
 
-	rows, err := db.Query(h.db, h.provider, query, args...)
+	rows, err := db.Query(h.db, query, args...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query restore sessions")
 		return
@@ -261,10 +251,8 @@ func (h *RestoreHandler) SessionStatus(w http.ResponseWriter, r *http.Request) {
 
 	var s restoreSessionResponse
 	var userID string
-	err := db.QueryRow(h.db, h.provider, 
-		`SELECT id, session_id, user_id, status, COALESCE(access_token,''), COALESCE(error,''), created_at, updated_at
-		 FROM restore_sessions WHERE id = ?`, id,
-	).Scan(&s.ID, &s.SessionID, &userID, &s.Status, &s.AccessToken, &s.Error, &s.CreatedAt, &s.UpdatedAt)
+	err := db.QueryRow(h.db, `SELECT id, session_id, user_id, status, COALESCE(access_token,''), COALESCE(error,''), created_at, updated_at
+		 FROM restore_sessions WHERE id = ?`, id).Scan(&s.ID, &s.SessionID, &userID, &s.Status, &s.AccessToken, &s.Error, &s.CreatedAt, &s.UpdatedAt)
 
 	if err != nil {
 		writeError(w, http.StatusNotFound, "restore session not found")

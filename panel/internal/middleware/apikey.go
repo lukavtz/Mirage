@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"zialfi-panel/internal/auth"
+	dbutil "zialfi-panel/internal/db"
 )
 
 type apiKeyEntry struct {
@@ -43,7 +44,7 @@ func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 
 			var userID, scope string
 			var rateLimit int
-			err := db.QueryRow(
+			err := dbutil.QueryRow(db,
 				"SELECT user_id, scope, rate_limit FROM api_keys WHERE key_hash = ?",
 				keyHash,
 			).Scan(&userID, &scope, &rateLimit)
@@ -57,7 +58,7 @@ func APIKeyAuth(db *sql.DB) func(http.Handler) http.Handler {
 				return
 			}
 
-			db.Exec("UPDATE api_keys SET last_used_at = datetime('now') WHERE key_hash = ?", keyHash)
+			dbutil.Exec(db, "UPDATE api_keys SET last_used_at = CURRENT_TIMESTAMP WHERE key_hash = ?", keyHash)
 
 			claims := &auth.Claims{
 				UserID: userID,

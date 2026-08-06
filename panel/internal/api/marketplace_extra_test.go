@@ -14,18 +14,18 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestMarketplace_RenewLicense(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "renewer", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Renewable", "Can renew", 1999, "module",
 	)
 	if err != nil {
@@ -37,7 +37,7 @@ func TestMarketplace_RenewLicense(t *testing.T) {
 	expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	purchaseID := uuid.New().String()
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		purchaseID, uid, pid, licenseKey, "starter", `{"max_sessions":50}`, expires, now,
 	)
 	if err != nil {
@@ -72,8 +72,8 @@ func TestMarketplace_RenewLicense(t *testing.T) {
 }
 
 func TestMarketplace_RenewLicense_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "renewfail", "pass")
 
@@ -94,13 +94,13 @@ func TestMarketplace_RenewLicense_NotFound(t *testing.T) {
 }
 
 func TestMarketplace_RenewLicense_Lifetime(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "lifetimeuser", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Lifetime", "Lifetime license", 9999, "module",
 	)
 	if err != nil {
@@ -112,7 +112,7 @@ func TestMarketplace_RenewLicense_Lifetime(t *testing.T) {
 	expires := time.Now().UTC().Add(100 * 365 * 24 * time.Hour).Format(time.RFC3339)
 	purchaseID := uuid.New().String()
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		purchaseID, uid, pid, licenseKey, "lifetime", `{"max_sessions":-1}`, expires, now,
 	)
 	if err != nil {
@@ -136,13 +136,13 @@ func TestMarketplace_RenewLicense_Lifetime(t *testing.T) {
 }
 
 func TestMarketplace_LicenseStatus(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "statuscheck", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "StatusMod", "Check status", 1499, "module",
 	)
 	if err != nil {
@@ -154,7 +154,7 @@ func TestMarketplace_LicenseStatus(t *testing.T) {
 	expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	purchaseID := uuid.New().String()
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		purchaseID, uid, pid, licenseKey, "starter", `{"max_sessions":50}`, expires, now,
 	)
 	if err != nil {
@@ -187,8 +187,8 @@ func TestMarketplace_LicenseStatus(t *testing.T) {
 }
 
 func TestMarketplace_LicenseStatus_NoLicense(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "nolicense", "pass")
 
@@ -215,13 +215,13 @@ func TestMarketplace_LicenseStatus_NoLicense(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "upgrader", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "UpgradeMod", "Can upgrade", 2999, "module",
 	)
 	if err != nil {
@@ -233,7 +233,7 @@ func TestMarketplace_Upgrade(t *testing.T) {
 	expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	purchaseID := uuid.New().String()
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		purchaseID, uid, pid, licenseKey, "starter", `{"max_sessions":50}`, expires, now,
 	)
 	if err != nil {
@@ -265,8 +265,8 @@ func TestMarketplace_Upgrade(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade_NoLicense(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "noupgrade", "pass")
 
@@ -287,8 +287,8 @@ func TestMarketplace_Upgrade_NoLicense(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade_InvalidTier(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "badtier", "pass")
 
@@ -309,8 +309,8 @@ func TestMarketplace_Upgrade_InvalidTier(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "badjson", "pass")
 
@@ -330,8 +330,8 @@ func TestMarketplace_Upgrade_InvalidJSON(t *testing.T) {
 }
 
 func TestMarketplace_StartTrial(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "trialuser", "pass")
 
@@ -361,13 +361,13 @@ func TestMarketplace_StartTrial(t *testing.T) {
 }
 
 func TestMarketplace_StartTrial_AlreadyUsed(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "trialused", "pass")
 
 	_, err := d.Exec(`INSERT INTO license_trials (id, user_id, ip, machine_id, tier, max_sessions, expires_at)
-		VALUES (?, ?, '1.2.3.4', 'm1', 'starter', 50, datetime('now', '+7 days'))`,
+		VALUES ($1, $2, '1.2.3.4', 'm1', 'starter', 50, CURRENT_TIMESTAMP + INTERVAL '7 days')`,
 		uuid.New().String(), uid)
 	if err != nil {
 		t.Fatal(err)
@@ -388,14 +388,14 @@ func TestMarketplace_StartTrial_AlreadyUsed(t *testing.T) {
 }
 
 func TestMarketplace_RenewLicense_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	owner := createTestUser(t, d, "licowner", "pass")
 	other := createTestUser(t, d, "licother", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "LicMod", "desc", 999, "module",
 	)
 	if err != nil {
@@ -406,7 +406,7 @@ func TestMarketplace_RenewLicense_Forbidden(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), owner, pid, licenseKey, "starter", `{}`, expires, now,
 	)
 	if err != nil {
@@ -430,14 +430,14 @@ func TestMarketplace_RenewLicense_Forbidden(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	owner := createTestUser(t, d, "upowner", "pass")
 	other := createTestUser(t, d, "upother", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "UpMod", "desc", 999, "module",
 	)
 	if err != nil {
@@ -448,7 +448,7 @@ func TestMarketplace_Upgrade_Forbidden(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	expires := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), owner, pid, licenseKey, "starter", `{}`, expires, now,
 	)
 	if err != nil {
@@ -472,13 +472,13 @@ func TestMarketplace_Upgrade_Forbidden(t *testing.T) {
 }
 
 func TestMarketplace_LicenseStatus_Expired(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "expireduser", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "ExpMod", "desc", 999, "module",
 	)
 	if err != nil {
@@ -489,7 +489,7 @@ func TestMarketplace_LicenseStatus_Expired(t *testing.T) {
 	now := time.Now().UTC().Format(time.RFC3339)
 	expired := time.Now().UTC().Add(-10 * 24 * time.Hour).Format(time.RFC3339)
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), uid, pid, licenseKey, "starter", `{}`, expired, now,
 	)
 	if err != nil {
@@ -519,8 +519,8 @@ func TestMarketplace_LicenseStatus_Expired(t *testing.T) {
 }
 
 func TestMarketplace_Purchase_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/purchase", handler.Purchase)
@@ -536,8 +536,8 @@ func TestMarketplace_Purchase_NoClaims(t *testing.T) {
 }
 
 func TestMarketplace_Purchase_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "badpurchase", "pass")
 
@@ -557,13 +557,13 @@ func TestMarketplace_Purchase_InvalidJSON(t *testing.T) {
 }
 
 func TestMarketplace_Purchase_InvalidTier(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "badtierbuyer", "pass")
 	pid := uuid.New().String()
 	if _, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "TierMod", "desc", 999, "module",
 	); err != nil {
 		t.Fatal(err)
@@ -586,14 +586,14 @@ func TestMarketplace_Purchase_InvalidTier(t *testing.T) {
 }
 
 func TestMarketplace_Activate_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	owner := createTestUser(t, d, "actowner", "pass")
 	other := createTestUser(t, d, "actother", "pass")
 	pid := uuid.New().String()
 	if _, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "ActMod", "desc", 999, "module",
 	); err != nil {
 		t.Fatal(err)
@@ -602,7 +602,7 @@ func TestMarketplace_Activate_Forbidden(t *testing.T) {
 	licenseKey := "forbidden-activate"
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), owner, pid, licenseKey, "starter", `{}`, now, now,
 	)
 	if err != nil {
@@ -626,8 +626,8 @@ func TestMarketplace_Activate_Forbidden(t *testing.T) {
 }
 
 func TestMarketplace_RenewLicense_MissingKey(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "missingkey", "pass")
 
@@ -647,13 +647,13 @@ func TestMarketplace_RenewLicense_MissingKey(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade_SameTier(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "sametier", "pass")
 	pid := uuid.New().String()
 	if _, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "SameTier", "desc", 999, "module",
 	); err != nil {
 		t.Fatal(err)
@@ -662,7 +662,7 @@ func TestMarketplace_Upgrade_SameTier(t *testing.T) {
 	licenseKey := "same-tier-key"
 	now := time.Now().UTC().Format(time.RFC3339)
 	_, err := d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), uid, pid, licenseKey, "pro", `{}`, now, now,
 	)
 	if err != nil {
@@ -687,8 +687,8 @@ func TestMarketplace_Upgrade_SameTier(t *testing.T) {
 }
 
 func TestLicenseMiddleware_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	var called bool
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { called = true })
@@ -706,8 +706,8 @@ func TestLicenseMiddleware_NoClaims(t *testing.T) {
 }
 
 func TestLicenseMiddleware_NoLicense(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	uid := createTestUserWithRole(t, d, "nolic", "pass", "user")
 
@@ -729,8 +729,8 @@ func TestLicenseMiddleware_NoLicense(t *testing.T) {
 }
 
 func TestLicenseMiddleware_Admin(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	uid := createTestUser(t, d, "adminlic", "pass")
 
@@ -752,13 +752,13 @@ func TestLicenseMiddleware_Admin(t *testing.T) {
 }
 
 func TestLicenseMiddleware_ValidLicense(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	uid := createTestUserWithRole(t, d, "validlic", "pass", "user")
 	pid := uuid.New().String()
 	if _, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Lic", "desc", 999, "module",
 	); err != nil {
 		t.Fatal(err)
@@ -766,7 +766,7 @@ func TestLicenseMiddleware_ValidLicense(t *testing.T) {
 
 	future := time.Now().UTC().Add(30 * 24 * time.Hour).Format(time.RFC3339)
 	if _, err := d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), uid, pid, "valid-key", "starter", `{}`, future, future,
 	); err != nil {
 		t.Fatal(err)
@@ -790,13 +790,13 @@ func TestLicenseMiddleware_ValidLicense(t *testing.T) {
 }
 
 func TestLicenseMiddleware_ExpiredLicense(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	uid := createTestUserWithRole(t, d, "explics", "pass", "user")
 	pid := uuid.New().String()
 	if _, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Lic", "desc", 999, "module",
 	); err != nil {
 		t.Fatal(err)
@@ -804,7 +804,7 @@ func TestLicenseMiddleware_ExpiredLicense(t *testing.T) {
 
 	past := time.Now().UTC().Add(-10 * 24 * time.Hour).Format(time.RFC3339)
 	if _, err := d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
 		uuid.New().String(), uid, pid, "expired-key", "starter", `{}`, past, past,
 	); err != nil {
 		t.Fatal(err)
@@ -828,12 +828,12 @@ func TestLicenseMiddleware_ExpiredLicense(t *testing.T) {
 }
 
 func TestLicenseMiddleware_ActiveTrial(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	uid := createTestUserWithRole(t, d, "trialuser2", "pass", "user")
 	if _, err := d.Exec(`INSERT INTO license_trials (id, user_id, ip, machine_id, tier, max_sessions, expires_at)
-		VALUES (?, ?, '1.2.3.4', 'm1', 'starter', 50, datetime('now', '+7 days'))`,
+		VALUES ($1, $2, '1.2.3.4', 'm1', 'starter', 50, CURRENT_TIMESTAMP + INTERVAL '7 days')`,
 		uuid.New().String(), uid); err != nil {
 		t.Fatal(err)
 	}
@@ -856,13 +856,13 @@ func TestLicenseMiddleware_ActiveTrial(t *testing.T) {
 }
 
 func TestLicenseMiddleware_ExpiredTrial(t *testing.T) {
-	d := openTestDB(t)
-	mw := api.LicenseMiddleware(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	mw := api.LicenseMiddleware(d)
 
 	uid := createTestUserWithRole(t, d, "exptrial", "pass", "user")
 	past := time.Now().UTC().Add(-24 * time.Hour).Format(time.RFC3339)
 	if _, err := d.Exec(`INSERT INTO license_trials (id, user_id, ip, machine_id, tier, max_sessions, expires_at)
-		VALUES (?, ?, '1.2.3.4', 'm1', 'starter', 50, ?)`,
+		VALUES ($1, $2, '1.2.3.4', 'm1', 'starter', 50, $3)`,
 		uuid.New().String(), uid, past); err != nil {
 		t.Fatal(err)
 	}

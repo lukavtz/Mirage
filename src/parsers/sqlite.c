@@ -26,7 +26,7 @@ static const unsigned char SQLITE_MAGIC[16] = {
 /* ── Database open / close ───────────────────────────────────── */
 
 int sqlite_open(SqliteDb *db, const void *data, size_t len) {
-    if (len < 100) return -1;
+    if (!data || len < 100) return -1;
     if (memcmp(data, SQLITE_MAGIC, 16) != 0) return -1;
 
     const unsigned char *p = (const unsigned char *)data;

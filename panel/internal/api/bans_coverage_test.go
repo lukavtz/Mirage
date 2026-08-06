@@ -10,14 +10,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func newBanTestHandler(t *testing.T) (*api.BanHandler, *chi.Mux) {
 	t.Helper()
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/bans/{id}", handler.Delete)
 	return handler, r
@@ -28,8 +28,8 @@ func banAdminRequest(t *testing.T, d interface{}) {
 }
 
 func TestBans_ListEmpty(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/bans", nil)
 	w := httptest.NewRecorder()
@@ -44,8 +44,8 @@ func TestBans_ListEmpty(t *testing.T) {
 }
 
 func TestBans_CreateIP(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	uid := createTestUser(t, d, "banadmin", "pass")
 
 	body := `{"ip":"203.0.113.10","reason":"spam"}`
@@ -81,8 +81,8 @@ func TestBans_CreateIP(t *testing.T) {
 }
 
 func TestBans_CreateHWID(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	uid := createTestUser(t, d, "banadmin2", "pass")
 
 	body := `{"hwid":"HWID-ABC-123"}`
@@ -109,8 +109,8 @@ func TestBans_CreateHWID(t *testing.T) {
 }
 
 func TestBans_CreateEmptyIPAndHWID(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	uid := createTestUser(t, d, "banadmin3", "pass")
 
 	body := `{"reason":"nothing"}`
@@ -134,8 +134,8 @@ func TestBans_CreateEmptyIPAndHWID(t *testing.T) {
 }
 
 func TestBans_CreateInvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	uid := createTestUser(t, d, "banadmin4", "pass")
 
 	body := `{"ip":`
@@ -159,8 +159,8 @@ func TestBans_CreateInvalidJSON(t *testing.T) {
 }
 
 func TestBans_CreateNoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 
 	body := `{"ip":"198.51.100.5"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/bans", strings.NewReader(body))
@@ -182,7 +182,7 @@ func TestBans_CreateNoClaims(t *testing.T) {
 }
 
 func TestBans_DeleteAfterCreate(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler, r := newBanTestHandler(t)
 	uid := createTestUser(t, d, "banadmin5", "pass")
 
@@ -220,8 +220,8 @@ func TestBans_DeleteAfterCreate(t *testing.T) {
 }
 
 func TestBans_DeleteNonexistent(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/bans/{id}", handler.Delete)
 	uid := createTestUser(t, d, "banadmin6", "pass")
@@ -245,7 +245,7 @@ func TestBans_DeleteNonexistent(t *testing.T) {
 }
 
 func TestBans_DeleteNoClaims(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler, r := newBanTestHandler(t)
 	uid := createTestUser(t, d, "banadmin7", "pass")
 
@@ -274,8 +274,8 @@ func TestBans_DeleteNoClaims(t *testing.T) {
 }
 
 func TestBans_ListShowsCreated(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewBanHandler(d)
 	uid := createTestUser(t, d, "banadmin8", "pass")
 
 	createBody := `{"ip":"203.0.113.99","reason":"manual"}`

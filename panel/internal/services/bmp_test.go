@@ -10,9 +10,9 @@ import (
 // more). The returned buffer is suitable for parseBMPHeader.
 func makeBMP(width, height, bitCount int, pixelBytes int) []byte {
 	const (
-		fileHeaderSize  = 14
-		infoHeaderSize  = 40
-		headerSize      = fileHeaderSize + infoHeaderSize
+		fileHeaderSize = 14
+		infoHeaderSize = 40
+		headerSize     = fileHeaderSize + infoHeaderSize
 	)
 	pixels := make([]byte, pixelBytes)
 	bmp := make([]byte, headerSize+len(pixels))
@@ -28,7 +28,7 @@ func makeBMP(width, height, bitCount int, pixelBytes int) []byte {
 	binary.LittleEndian.PutUint32(bmp[14:], uint32(infoHeaderSize)) // biSize
 	binary.LittleEndian.PutUint32(bmp[18:], uint32(width))          // biWidth
 	binary.LittleEndian.PutUint32(bmp[22:], uint32(height))         // biHeight
-	binary.LittleEndian.PutUint16(bmp[26:], 1)                     // biPlanes
+	binary.LittleEndian.PutUint16(bmp[26:], 1)                      // biPlanes
 	binary.LittleEndian.PutUint16(bmp[28:], uint16(bitCount))       // biBitCount
 	// rest of info header stays 0 (BI_RGB, etc.)
 
@@ -38,12 +38,12 @@ func makeBMP(width, height, bitCount int, pixelBytes int) []byte {
 
 func TestParseBMPHeader(t *testing.T) {
 	tests := []struct {
-		name       string
-		data       []byte
-		wantW      int
-		wantH      int
-		wantSize   int
-		wantOK     bool
+		name     string
+		data     []byte
+		wantW    int
+		wantH    int
+		wantSize int
+		wantOK   bool
 	}{
 		{
 			name:     "valid 24-bit BMP with pixel data",
@@ -62,9 +62,9 @@ func TestParseBMPHeader(t *testing.T) {
 			wantOK:   true,
 		},
 		{
-			name:     "missing BM magic",
-			data:     makeBMP(4, 3, 24, 0)[:30],
-			wantOK:   false,
+			name:   "missing BM magic",
+			data:   makeBMP(4, 3, 24, 0)[:30],
+			wantOK: false,
 		},
 		{
 			name: "biSize too small (OS/2 header)",

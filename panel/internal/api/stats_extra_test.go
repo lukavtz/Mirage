@@ -10,20 +10,20 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestStats_Dashboard_NonAdmin(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewStatsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewStatsHandler(d, nil)
 
 	uid := createTestUserWithRole(t, d, "statowner", "pass", "user")
 
 	// Session owned by the user
 	sid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', ?, datetime('now'))`, sid, uid); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -31,7 +31,7 @@ func TestStats_Dashboard_NonAdmin(t *testing.T) {
 	other := createTestUserWithRole(t, d, "statother", "pass", "user")
 	sid2 := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'u2', '1.2.3.4', 'US', ?, datetime('now'))`, sid2, other); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'u2', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid2, other); err != nil {
 		t.Fatal(err)
 	}
 

@@ -32,7 +32,7 @@ func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 	r := chi.NewRouter()
 	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
-	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestServeWs_WorkerSubscribesPerUser(t *testing.T) {
 	srv, _ := setupTestServer(t, hub)
 	defer srv.Close()
 
-	workerToken, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "")
+	workerToken, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

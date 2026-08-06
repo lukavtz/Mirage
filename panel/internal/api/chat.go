@@ -8,19 +8,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/ws"
-	"zialfi-panel/internal/db"
 )
 
 type ChatHandler struct {
-	db       *sql.DB
-	hub      *ws.Hub
-	provider     db.ProviderType
+	db  *sql.DB
+	hub *ws.Hub
 }
 
-func NewChatHandler(db *sql.DB, hub *ws.Hub, provider db.ProviderType) *ChatHandler {
-	return &ChatHandler{db: db, hub: hub, provider: provider}
+func NewChatHandler(db *sql.DB, hub *ws.Hub) *ChatHandler {
+	return &ChatHandler{db: db, hub: hub}
 }
 
 func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -50,15 +49,11 @@ func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims := middleware.ClaimsFromContext(r.Context())
 	var rows *sql.Rows
 	if claims != nil && claims.Role != "admin" {
-		rows, err = db.Query(h.db, h.provider, 
-			"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE (user_id = ? OR user_id IN (SELECT id FROM users WHERE role = 'admin')) AND created_at > ? ORDER BY created_at DESC LIMIT ?",
-			claims.UserID, sinceFormatted, limit,
-		)
+		rows, err = db.Query(h.db, "SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE (user_id = ? OR user_id IN (SELECT id FROM users WHERE role = 'admin')) AND created_at > ? ORDER BY created_at DESC LIMIT ?",
+			claims.UserID, sinceFormatted, limit)
 	} else {
-		rows, err = db.Query(h.db, h.provider, 
-			"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
-			sinceFormatted, limit,
-		)
+		rows, err = db.Query(h.db, "SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
+			sinceFormatted, limit)
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query messages")
@@ -97,28 +92,28 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "message is required")
 		return
 	}
+	if len(req.Message) > 4096 {
+		writeError(w, http.StatusBadRequest, "message too long (max 4096)")
+		return
+	}
 
 	var username string
-	err := db.QueryRow(h.db, h.provider, "SELECT username FROM users WHERE id = ?", claims.UserID).Scan(&username)
+	err := db.QueryRow(h.db, "SELECT username FROM users WHERE id = ?", claims.UserID).Scan(&username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lookup user")
 		return
 	}
 
 	id := uuid.New().String()
-	_, err = db.Exec(h.db, h.provider, 
-		"INSERT INTO chat_messages (id, user_id, username, message, parent_id) VALUES (?, ?, ?, ?, ?)",
-		id, claims.UserID, username, req.Message, nullIfEmpty(req.ParentID),
-	)
+	_, err = db.Exec(h.db, "INSERT INTO chat_messages (id, user_id, username, message, parent_id) VALUES (?, ?, ?, ?, ?)",
+		id, claims.UserID, username, req.Message, nullIfEmpty(req.ParentID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save message")
 		return
 	}
 
 	var m ws.ChatMessage
-	err = db.QueryRow(h.db, h.provider, 
-		"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE id = ?", id,
-	).Scan(&m.ID, &m.UserID, &m.Username, &m.Message, &m.ParentID, &m.MessageType, &m.CreatedAt)
+	err = db.QueryRow(h.db, "SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE id = ?", id).Scan(&m.ID, &m.UserID, &m.Username, &m.Message, &m.ParentID, &m.MessageType, &m.CreatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read back message")
 		return
@@ -143,7 +138,7 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 func (h *ChatHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := db.Exec(h.db, h.provider, "DELETE FROM chat_messages WHERE id = ?", id)
+	result, err := db.Exec(h.db, "DELETE FROM chat_messages WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete message")
 		return

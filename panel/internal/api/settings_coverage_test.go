@@ -10,13 +10,13 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestSettings_Update_Valid(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSettingsHandler(d, "test-secret")
 
 	body := bytes.NewBufferString(`{"test_key": "test_value"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings", body)
@@ -53,8 +53,8 @@ func TestSettings_Update_Valid(t *testing.T) {
 }
 
 func TestSettings_Update_NoAuth(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSettingsHandler(d, "test-secret")
 
 	body := bytes.NewBufferString(`{"test_key": "test_value"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings", body)
@@ -68,8 +68,8 @@ func TestSettings_Update_NoAuth(t *testing.T) {
 }
 
 func TestSettings_Update_NoAdminRole(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSettingsHandler(d, "test-secret")
 
 	body := bytes.NewBufferString(`{"test_key": "test_value"}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings", body)
@@ -85,8 +85,8 @@ func TestSettings_Update_NoAdminRole(t *testing.T) {
 }
 
 func TestSettings_Update_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSettingsHandler(d, "test-secret")
 
 	body := bytes.NewBufferString(`{not valid json`)
 	req := httptest.NewRequest(http.MethodPut, "/api/settings", body)

@@ -5,18 +5,20 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
-	"os"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+
+	dbutil "zialfi-panel/internal/db"
 )
 
 // Bot implements the Mirage Telegram sales bot.
@@ -42,23 +44,23 @@ type InlineKeyboardMarkup struct {
 
 // tgUpdate is a partial Telegram update.
 type tgUpdate struct {
-	UpdateID    int            `json:"update_id"`
-	Message     *tgMessage     `json:"message"`
-	Callback    *tgCallback    `json:"callback_query"`
+	UpdateID int         `json:"update_id"`
+	Message  *tgMessage  `json:"message"`
+	Callback *tgCallback `json:"callback_query"`
 }
 
 type tgMessage struct {
-	MessageID int     `json:"message_id"`
-	Chat      tgChat  `json:"chat"`
-	From      tgFrom  `json:"from"`
-	Text      string  `json:"text"`
+	MessageID int    `json:"message_id"`
+	Chat      tgChat `json:"chat"`
+	From      tgFrom `json:"from"`
+	Text      string `json:"text"`
 }
 
 type tgCallback struct {
-	ID      string    `json:"id"`
+	ID      string     `json:"id"`
 	Message *tgMessage `json:"message"`
-	From    tgFrom    `json:"from"`
-	Data    string    `json:"data"`
+	From    tgFrom     `json:"from"`
+	Data    string     `json:"data"`
 }
 
 type tgChat struct {
@@ -75,11 +77,11 @@ func New(db *sql.DB) *Bot {
 	// Token: env TELEGRAM_BOT_TOKEN first, then settings table
 	token := os.Getenv("TELEGRAM_BOT_TOKEN")
 	if token == "" {
-		db.QueryRow("SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&token)
+		dbutil.QueryRow(db, "SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&token)
 	}
 	var adminChat, panelURL string
-	db.QueryRow("SELECT value FROM settings WHERE key = 'bot_admin_chat_id'").Scan(&adminChat)
-	db.QueryRow("SELECT value FROM settings WHERE key = 'panel_url'").Scan(&panelURL)
+	dbutil.QueryRow(db, "SELECT value FROM settings WHERE key = 'bot_admin_chat_id'").Scan(&adminChat)
+	dbutil.QueryRow(db, "SELECT value FROM settings WHERE key = 'panel_url'").Scan(&panelURL)
 	if panelURL == "" {
 		panelURL = "http://localhost:8080"
 	}
@@ -153,7 +155,7 @@ func (b *Bot) handleStart(msg *tgMessage) {
 
 	// Check if user already exists
 	var userID, username, passwordHash string
-	err := b.db.QueryRow("SELECT id, username, password_hash FROM users WHERE telegram_id = ?", tgID).Scan(&userID, &username, &passwordHash)
+	err := dbutil.QueryRow(b.db, "SELECT id, username, password_hash FROM users WHERE telegram_id = ?", tgID).Scan(&userID, &username, &passwordHash)
 
 	if err == nil {
 		// Already registered — show main menu
@@ -173,10 +175,7 @@ func (b *Bot) handleStart(msg *tgMessage) {
 		return
 	}
 
-	_, err = b.db.Exec(
-		"INSERT INTO users (id, username, password_hash, role, telegram_id) VALUES (?, ?, ?, 'worker', ?)",
-		userID, username, string(pwHash), tgID,
-	)
+	_, err = dbutil.Exec(b.db, "INSERT INTO users (id, username, password_hash, role, telegram_id) VALUES (?, ?, ?, 'worker', ?)", userID, username, string(pwHash), tgID)
 	if err != nil {
 		slog.Error("bot: create user failed", "err", err)
 		b.sendMessage(msg.Chat.ID, "❌ Something went wrong. Please try again later.", "")
@@ -190,8 +189,7 @@ func (b *Bot) handleStart(msg *tgMessage) {
 		codes[i] = code
 		codeHash := sha256.Sum256([]byte(code))
 		codeID := uuid.New().String()
-		b.db.Exec("INSERT INTO recovery_codes (id, user_id, code_hash) VALUES (?, ?, ?)",
-			codeID, userID, hex.EncodeToString(codeHash[:]))
+		dbutil.Exec(b.db, "INSERT INTO recovery_codes (id, user_id, code_hash) VALUES (?, ?, ?)", codeID, userID, hex.EncodeToString(codeHash[:]))
 	}
 
 	// Format credentials message
@@ -227,14 +225,14 @@ func (b *Bot) handleCallback(cb *tgCallback) {
 	case strings.HasPrefix(data, "saved:"):
 		userID := strings.TrimPrefix(data, "saved:")
 		var username string
-		b.db.QueryRow("SELECT username FROM users WHERE id = ?", userID).Scan(&username)
+		dbutil.QueryRow(b.db, "SELECT username FROM users WHERE id = ?", userID).Scan(&username)
 		b.answerCallback(cb.ID)
 		b.editMainMenu(chatID, msgID, username)
 
 	case data == "menu:main":
 		var username string
 		tgID := fmt.Sprintf("%d", cb.From.ID)
-		b.db.QueryRow("SELECT username FROM users WHERE telegram_id = ?", tgID).Scan(&username)
+		dbutil.QueryRow(b.db, "SELECT username FROM users WHERE telegram_id = ?", tgID).Scan(&username)
 		b.answerCallback(cb.ID)
 		b.editMainMenu(chatID, msgID, username)
 
@@ -359,8 +357,8 @@ func (b *Bot) sendMainMenu(chatID int64, _ int, username string) {
 
 func (b *Bot) handleStats(chatID int64, msgID int) {
 	var total, today int
-	b.db.QueryRow("SELECT COUNT(*) FROM sessions").Scan(&total)
-	b.db.QueryRow("SELECT COUNT(*) FROM sessions WHERE date(created_at) = date('now')").Scan(&today)
+	dbutil.QueryRow(b.db, "SELECT COUNT(*) FROM sessions").Scan(&total)
+	dbutil.QueryRow(b.db, "SELECT COUNT(*) FROM sessions WHERE created_at::date = CURRENT_TIMESTAMP::date").Scan(&today)
 
 	text := fmt.Sprintf(
 		"📊 <b>Statistics</b>\n\n"+
@@ -377,7 +375,7 @@ func (b *Bot) handleStats(chatID int64, msgID int) {
 func (b *Bot) handleAccount(chatID int64, msgID int, tgID int64) {
 	tgIDStr := fmt.Sprintf("%d", tgID)
 	var username, role, createdAt string
-	err := b.db.QueryRow("SELECT username, role, created_at FROM users WHERE telegram_id = ?", tgIDStr).Scan(&username, &role, &createdAt)
+	err := dbutil.QueryRow(b.db, "SELECT username, role, created_at FROM users WHERE telegram_id = ?", tgIDStr).Scan(&username, &role, &createdAt)
 	if err != nil {
 		text := "❌ Account not found. Use /start to register."
 		b.editMessageMarkup(chatID, msgID, text, inlineKeyboard())
@@ -454,17 +452,14 @@ func (b *Bot) handleBuyConfirm(chatID int64, msgID int, tier string, tgID int64)
 func (b *Bot) handleBuySubmit(chatID int64, msgID int, tier string, tgID int64) {
 	tgIDStr := fmt.Sprintf("%d", tgID)
 	var userID, username string
-	err := b.db.QueryRow("SELECT id, username FROM users WHERE telegram_id = ?", tgIDStr).Scan(&userID, &username)
+	err := dbutil.QueryRow(b.db, "SELECT id, username FROM users WHERE telegram_id = ?", tgIDStr).Scan(&userID, &username)
 	if err != nil {
 		b.editMessageMarkup(chatID, msgID, "❌ Account not found. Use /start to register.", inlineKeyboard())
 		return
 	}
 
 	reqID := uuid.New().String()
-	_, err = b.db.Exec(
-		"INSERT INTO purchase_requests (id, user_id, tier, status) VALUES (?, ?, ?, 'pending')",
-		reqID, userID, tier,
-	)
+	_, err = dbutil.Exec(b.db, "INSERT INTO purchase_requests (id, user_id, tier, status) VALUES (?, ?, ?, 'pending')", reqID, userID, tier)
 	if err != nil {
 		slog.Error("bot: create purchase request failed", "err", err)
 		b.editMessageMarkup(chatID, msgID, "❌ Something went wrong.", inlineKeyboard())
@@ -507,17 +502,17 @@ func (b *Bot) handleBuySubmit(chatID int64, msgID int, tier string, tgID int64) 
 func (b *Bot) handleApprove(chatID int64, msgID int, reqID string, adminTGID int64) {
 	// Find the request
 	var userID, tier string
-	err := b.db.QueryRow("SELECT user_id, tier FROM purchase_requests WHERE id = ?", reqID).Scan(&userID, &tier)
+	err := dbutil.QueryRow(b.db, "SELECT user_id, tier FROM purchase_requests WHERE id = ?", reqID).Scan(&userID, &tier)
 	if err != nil {
 		b.editMessageMarkup(chatID, msgID, "❌ Request not found.", inlineKeyboard())
 		return
 	}
 
-	b.db.Exec("UPDATE purchase_requests SET status = 'approved', updated_at = datetime('now') WHERE id = ?", reqID)
+	dbutil.Exec(b.db, "UPDATE purchase_requests SET status = 'approved', updated_at = CURRENT_TIMESTAMP WHERE id = ?", reqID)
 
 	// Notify user
 	var userTGID string
-	b.db.QueryRow("SELECT telegram_id FROM users WHERE id = ?", userID).Scan(&userTGID)
+	dbutil.QueryRow(b.db, "SELECT telegram_id FROM users WHERE id = ?", userID).Scan(&userTGID)
 	if userTGID != "" {
 		var tgID int64
 		fmt.Sscanf(userTGID, "%d", &tgID)
@@ -535,7 +530,7 @@ func (b *Bot) handleApprove(chatID int64, msgID int, reqID string, adminTGID int
 }
 
 func (b *Bot) handleReject(chatID int64, msgID int, reqID string) {
-	b.db.Exec("UPDATE purchase_requests SET status = 'rejected', updated_at = datetime('now') WHERE id = ?", reqID)
+	dbutil.Exec(b.db, "UPDATE purchase_requests SET status = 'rejected', updated_at = CURRENT_TIMESTAMP WHERE id = ?", reqID)
 	b.editMessageMarkup(chatID, msgID, fmt.Sprintf("❌ Rejected: %s", reqID[:8]), inlineKeyboard())
 }
 

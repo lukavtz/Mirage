@@ -8,13 +8,13 @@ import (
 
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestChat_Send_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewChatHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewChatHandler(d, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat/send", bytes.NewReader([]byte(`{"message":"hi"}`)))
 	req.Header.Set("Content-Type", "application/json")
@@ -27,8 +27,8 @@ func TestChat_Send_NoClaims(t *testing.T) {
 }
 
 func TestChat_Send_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewChatHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewChatHandler(d, nil)
 
 	uid := createTestUser(t, d, "chatbad", "pass")
 
@@ -45,8 +45,8 @@ func TestChat_Send_InvalidJSON(t *testing.T) {
 }
 
 func TestChat_Send_UserNotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewChatHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewChatHandler(d, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/chat/send", bytes.NewReader([]byte(`{"message":"hi"}`)))
 	req.Header.Set("Content-Type", "application/json")

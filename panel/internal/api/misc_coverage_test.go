@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestSystemHealth(t *testing.T) {
@@ -33,12 +33,12 @@ func TestSystemHealth(t *testing.T) {
 }
 
 func TestPublicStats(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	_, err := d.Exec("UPDATE settings SET value = 'true' WHERE key = 'public_stats_enabled'")
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := api.NewPublicStatsHandler(d, db.ProviderSQLite)
+	h := api.NewPublicStatsHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/public/stats", h.GetPublicStats)
 	w := httptest.NewRecorder()
@@ -88,15 +88,15 @@ func skipIfNoDocsDir(t *testing.T) {
 }
 
 func TestSessionLockUnlock(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSessionsHandler(d, nil)
 	r := chi.NewRouter()
 	r.Post("/api/sessions/{id}/lock", h.Lock)
 	r.Post("/api/sessions/{id}/unlock", h.Unlock)
 
 	uid := "lock-user"
 	sid := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id) VALUES (?, ?, ?)", sid, "b1", uid); err != nil {
+	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id) VALUES ($1, $2, $3)", sid, "b1", uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -154,20 +154,18 @@ func TestSessionLockUnlock(t *testing.T) {
 	}
 }
 
-
-
 func TestExportNetscape(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/sessions/{id}/export", h.ExportSession)
 
 	uid := "export-user"
 	sid := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id) VALUES (?, ?, ?)", sid, "b1", uid); err != nil {
+	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id) VALUES ($1, $2, $3)", sid, "b1", uid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, ?, ?, ?, ?)",
+	if _, err := d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES ($1, $2, $3, $4, $5, $6)",
 		uuid.New().String(), sid, "https://example.com", "alice", "secret", "chrome"); err != nil {
 		t.Fatal(err)
 	}
@@ -185,9 +183,9 @@ func TestExportNetscape(t *testing.T) {
 }
 
 func TestSetOnUpdate(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	updated := false
-	h := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	h := api.NewSettingsHandler(d, "test-secret")
 	h.SetOnUpdate(func() { updated = true })
 
 	r := chi.NewRouter()

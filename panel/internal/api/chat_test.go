@@ -14,15 +14,15 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 	"zialfi-panel/internal/ws"
-	"zialfi-panel/internal/db"
 )
 
 func TestChat_Send(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	uid := createTestUser(t, d, "chatuser", "pass")
 
@@ -57,10 +57,10 @@ func TestChat_Send(t *testing.T) {
 }
 
 func TestChat_SendEmptyMessage(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	uid := createTestUser(t, d, "chatuser2", "pass")
 
@@ -81,14 +81,14 @@ func TestChat_SendEmptyMessage(t *testing.T) {
 }
 
 func TestChat_List(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	uid := createTestUser(t, d, "chatuser3", "pass")
 	_, err := d.Exec(
-		"INSERT INTO chat_messages (id, user_id, username, message, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+		"INSERT INTO chat_messages (id, user_id, username, message, created_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)",
 		uuid.New().String(), uid, "chatuser3", "test message",
 	)
 	if err != nil {
@@ -121,10 +121,10 @@ func TestChat_List(t *testing.T) {
 }
 
 func TestChat_ListEmpty(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	r := chi.NewRouter()
 	r.Get("/api/chat/messages", handler.List)
@@ -149,15 +149,15 @@ func TestChat_ListEmpty(t *testing.T) {
 }
 
 func TestChat_Delete(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	uid := createTestUser(t, d, "chatuser4", "pass")
 	mid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO chat_messages (id, user_id, username, message) VALUES (?, ?, ?, ?)",
+		"INSERT INTO chat_messages (id, user_id, username, message) VALUES ($1, $2, $3, $4)",
 		mid, uid, "chatuser4", "delete me",
 	)
 	if err != nil {
@@ -176,17 +176,17 @@ func TestChat_Delete(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM chat_messages WHERE id = ?", mid).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM chat_messages WHERE id = $1", mid).Scan(&count)
 	if count != 0 {
 		t.Error("expected message to be deleted")
 	}
 }
 
 func TestChat_DeleteNotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	r := chi.NewRouter()
 	r.Delete("/api/chat/messages/{id}", handler.Delete)
@@ -201,10 +201,10 @@ func TestChat_DeleteNotFound(t *testing.T) {
 }
 
 func TestChat_ListBadSince(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
-	handler := api.NewChatHandler(d, hub, db.ProviderSQLite)
+	handler := api.NewChatHandler(d, hub)
 
 	r := chi.NewRouter()
 	r.Get("/api/chat/messages", handler.List)
@@ -219,8 +219,8 @@ func TestChat_ListBadSince(t *testing.T) {
 }
 
 func TestChat_ListTenantIsolation(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewChatHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewChatHandler(d, nil)
 
 	userA, _ := workerToken(t, d, "worker-a")
 	userB, _ := workerToken(t, d, "worker-b")
@@ -229,7 +229,7 @@ func TestChat_ListTenantIsolation(t *testing.T) {
 	insert := func(userID, username, message string) {
 		t.Helper()
 		_, err := d.Exec(
-			"INSERT INTO chat_messages (id, user_id, username, message, created_at) VALUES (?, ?, ?, ?, datetime('now'))",
+			"INSERT INTO chat_messages (id, user_id, username, message, created_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)",
 			uuid.New().String(), userID, username, message,
 		)
 		if err != nil {

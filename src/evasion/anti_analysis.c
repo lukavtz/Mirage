@@ -5,6 +5,37 @@
  * Aggregates all evasion checks into a weighted score.
  */
 
+#ifdef TEST_SCORING_STANDALONE
+/* Standalone test mode: expose pure scoring helpers only */
+#include <windows.h>
+#include "anti_analysis.h"
+#include "config.h"
+#include <wchar.h>
+#include <wctype.h>
+
+wchar_t tolower_w(wchar_t c) {
+    if (c >= L'A' && c <= L'Z') return c + 32;
+    return c;
+}
+
+int wcsicontains(const wchar_t *haystack, const wchar_t *needle) {
+    size_t nlen = 0;
+    for (const wchar_t *q = needle; *q; q++) nlen++;
+    if (nlen == 0) return 0;
+    for (const wchar_t *p = haystack; *p; p++) {
+        size_t i = 0;
+        while (i < nlen && tolower_w(p[i]) == tolower_w(needle[i])) i++;
+        if (i == nlen) return 1;
+    }
+    return 0;
+}
+
+int mirage_anti_analysis_should_exit(mirage_analysis_result result) {
+    return result.score >= EVASION_SCORE_THRESHOLD ? 1 : 0;
+}
+
+#else /* Normal build */
+
 #include "anti_analysis.h"
 #include "evasion.h"
 #include "detection.h"
@@ -323,3 +354,4 @@ void mirage_anti_analysis_print(mirage_analysis_result result) {
 }
 
 #endif /* ENABLE_ANTI_ANALYSIS */
+#endif /* TEST_SCORING_STANDALONE */

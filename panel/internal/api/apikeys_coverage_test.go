@@ -10,8 +10,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestGenerateAPIKey(t *testing.T) {
@@ -25,9 +25,9 @@ func TestGenerateAPIKey(t *testing.T) {
 }
 
 func TestAPIKeyCreate_Success(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "apikey-create-user", "password123")
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	handler := NewAPIKeyHandler(d)
 
 	body := `{"name":"test-key","scope":"write","rate_limit":200}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -62,9 +62,9 @@ func TestAPIKeyCreate_Success(t *testing.T) {
 }
 
 func TestAPIKeyCreate_EmptyName(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "apikey-empty-name", "password123")
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	handler := NewAPIKeyHandler(d)
 
 	body := `{"name":"","scope":"read","rate_limit":100}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -80,8 +80,8 @@ func TestAPIKeyCreate_EmptyName(t *testing.T) {
 }
 
 func TestAPIKeyCreate_NoAuth(t *testing.T) {
-	d := openTestDB(t)
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := NewAPIKeyHandler(d)
 
 	body := `{"name":"test-key"}`
 	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
@@ -95,9 +95,9 @@ func TestAPIKeyCreate_NoAuth(t *testing.T) {
 }
 
 func TestAPIKeyList_Success(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "apikey-list-user", "password123")
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	handler := NewAPIKeyHandler(d)
 
 	// Create a key first so there's something to list
 	body := `{"name":"listable-key","scope":"read","rate_limit":50}`
@@ -134,8 +134,8 @@ func TestAPIKeyList_Success(t *testing.T) {
 }
 
 func TestAPIKeyList_NoAuth(t *testing.T) {
-	d := openTestDB(t)
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := NewAPIKeyHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -147,14 +147,14 @@ func TestAPIKeyList_NoAuth(t *testing.T) {
 }
 
 func TestAPIKeyDelete_Success(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "apikey-del-user", "password123")
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	handler := NewAPIKeyHandler(d)
 
 	// Create a key to delete
 	keyID := uuid.New().String()
 	rawKey, keyHash := generateAPIKey()
-	_, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash, scope, rate_limit) VALUES (?, ?, ?, ?, ?, ?)",
+	_, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash, scope, rate_limit) VALUES ($1, $2, $3, $4, $5, $6)",
 		keyID, uid, "delete-me", keyHash, "read", 100)
 	if err != nil {
 		t.Fatalf("insert key: %v", err)
@@ -181,9 +181,9 @@ func TestAPIKeyDelete_Success(t *testing.T) {
 }
 
 func TestAPIKeyDelete_NotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "apikey-del-notfound", "password123")
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	handler := NewAPIKeyHandler(d)
 
 	r := chi.NewRouter()
 	r.Delete("/api/keys/{id}", handler.Delete)
@@ -198,8 +198,8 @@ func TestAPIKeyDelete_NotFound(t *testing.T) {
 }
 
 func TestAPIKeyDelete_NoAuth(t *testing.T) {
-	d := openTestDB(t)
-	handler := NewAPIKeyHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := NewAPIKeyHandler(d)
 
 	r := chi.NewRouter()
 	r.Delete("/api/keys/{id}", handler.Delete)

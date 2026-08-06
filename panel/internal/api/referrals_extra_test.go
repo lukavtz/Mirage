@@ -10,13 +10,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestReferral_Apply_InvalidCode_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewReferralHandler(d)
 
 	uid := createTestUser(t, d, "refbad", "pass")
 
@@ -36,11 +36,11 @@ func TestReferral_Apply_InvalidCode_Extra(t *testing.T) {
 }
 
 func TestReferral_Apply_SelfReferral(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewReferralHandler(d)
 
 	uid := createTestUser(t, d, "refself", "pass")
-	if _, err := d.Exec("UPDATE users SET referral_code = 'SELF99' WHERE id = ?", uid); err != nil {
+	if _, err := d.Exec("UPDATE users SET referral_code = 'SELF99' WHERE id = $1", uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -60,8 +60,8 @@ func TestReferral_Apply_SelfReferral(t *testing.T) {
 }
 
 func TestReferral_Apply_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewReferralHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/referrals/apply", handler.Apply)
@@ -77,8 +77,8 @@ func TestReferral_Apply_NoClaims(t *testing.T) {
 }
 
 func TestReferral_Apply_MissingCode(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewReferralHandler(d)
 
 	uid := createTestUser(t, d, "refmiss", "pass")
 
@@ -98,8 +98,8 @@ func TestReferral_Apply_MissingCode(t *testing.T) {
 }
 
 func TestReferral_Apply_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewReferralHandler(d)
 
 	uid := createTestUser(t, d, "refjson", "pass")
 

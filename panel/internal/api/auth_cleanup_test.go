@@ -8,16 +8,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
-	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestAuthCleanupPaths(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "cleanup-user", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/login", handler.Login)
 	r.Get("/api/auth/me", handler.Me)
@@ -34,10 +34,10 @@ func TestAuthCleanupPaths(t *testing.T) {
 }
 
 func TestAuthMe(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "me-user", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Get("/api/auth/me", handler.Me)
 
@@ -55,4 +55,3 @@ func TestAuthMe(t *testing.T) {
 		t.Fatalf("me: bad body %s", w.Body.String())
 	}
 }
-

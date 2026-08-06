@@ -12,8 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/testutil"
 	"zialfi-panel/internal/ws"
 )
 
@@ -24,9 +24,9 @@ func setupTestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string) 
 
 	userID := createTestUser(t, d, "testuser", "testpass")
 
-	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, nil)
 
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func setupTestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, string) 
 }
 
 func TestStats_Empty(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
@@ -91,21 +91,21 @@ func TestStats_Empty(t *testing.T) {
 }
 
 func TestStats_WithData(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES ('s1', 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', datetime('now', '-1 day'))`)
+		VALUES ('s1', 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', CURRENT_TIMESTAMP - INTERVAL '1 day')`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES ('s2', 'b1', 'hw2', 'win11', 'user2', '5.6.7.8', 'GB', datetime('now'))`)
+		VALUES ('s2', 'b1', 'hw2', 'win11', 'user2', '5.6.7.8', 'GB', CURRENT_TIMESTAMP)`)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES ('s3', 'b1', 'hw3', 'macos', 'user3', '9.10.11.12', '', datetime('now'))`)
+		VALUES ('s3', 'b1', 'hw3', 'macos', 'user3', '9.10.11.12', '', CURRENT_TIMESTAMP)`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +219,7 @@ func TestStats_WithData(t *testing.T) {
 }
 
 func TestStats_RequiresAuth(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
@@ -240,13 +240,13 @@ func TestStats_RequiresAuth(t *testing.T) {
 }
 
 func TestStats_BroadcastsViaHub(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
 
 	jwtSecret := "test-secret"
 	userID := createTestUser(t, d, "broadcastuser", "testpass")
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,8 +254,8 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	r := chi.NewRouter()
 	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	r.Group(func(r chi.Router) {
-		r.Use(api.AuthMiddleware(jwtSecret))
-		statsHandler := api.NewStatsHandler(d, hub, db.ProviderSQLite)
+		r.Use(api.AuthMiddleware(jwtSecret, d))
+		statsHandler := api.NewStatsHandler(d, hub)
 		r.Get("/api/stats", statsHandler.Dashboard)
 	})
 

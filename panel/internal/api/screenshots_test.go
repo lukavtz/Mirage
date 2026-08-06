@@ -14,10 +14,10 @@ import (
 	"testing"
 
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 // makeTestBMP returns a minimal 24-bit BMP (4x3) of declared size 66 bytes.
@@ -96,7 +96,7 @@ func uploadZIP(t *testing.T, r http.Handler, apiKey, filename string, zipData []
 }
 
 func TestScreenshot_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, apiKey := setupE2ETestRouter(t, d, nil)
 
 	bmp := makeTestBMP()
@@ -111,7 +111,7 @@ func TestScreenshot_HappyPath(t *testing.T) {
 	var w2, h2, sz2 int
 	var mime string
 	if err := d.QueryRow(
-		"SELECT file_path, width, height, size_bytes, mime_type FROM screenshots WHERE session_id = ?",
+		"SELECT file_path, width, height, size_bytes, mime_type FROM screenshots WHERE session_id = $1",
 		sessionID,
 	).Scan(&filePath, &w2, &h2, &sz2, &mime); err != nil {
 		t.Fatalf("screenshot row missing: %v", err)
@@ -140,15 +140,15 @@ func TestScreenshot_HappyPath(t *testing.T) {
 }
 
 func TestScreenshot_TenantIsolation(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	userA := createTestUserWithRole(t, d, "tenanta", "pw", "user")
 	sessionID := uuid.New().String()
 	if _, err := d.Exec(
 		`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		 VALUES (?, 'b', 'h', 'win', 'u', '1.1.1.1', 'US', ?, datetime('now'))`,
+		 VALUES ($1, 'b', 'h', 'win', 'u', '1.1.1.1', 'US', $2, CURRENT_TIMESTAMP)`,
 		sessionID, userA,
 	); err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestScreenshot_TenantIsolation(t *testing.T) {
 	t.Cleanup(func() { _ = os.Remove(abs) })
 	if _, err := d.Exec(
 		`INSERT INTO screenshots (id, session_id, file_path, size_bytes, width, height)
-		 VALUES (?, ?, ?, 66, 4, 3)`,
+		 VALUES ($1, $2, $3, 66, 4, 3)`,
 		uuid.New().String(), sessionID, "data/screenshots/"+sessionID+".bmp",
 	); err != nil {
 		t.Fatal(err)
@@ -180,7 +180,7 @@ func TestScreenshot_TenantIsolation(t *testing.T) {
 }
 
 func TestScreenshot_DeleteAdminOnly(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, adminTok, apiKey := setupE2ETestRouter(t, d, nil)
 
 	bmp := makeTestBMP()
@@ -230,7 +230,7 @@ func TestScreenshot_DeleteAdminOnly(t *testing.T) {
 
 	// File removed from disk.
 	var filePath string
-	if err := d.QueryRow("SELECT file_path FROM screenshots WHERE session_id = ?", sessionID).Scan(&filePath); err == nil {
+	if err := d.QueryRow("SELECT file_path FROM screenshots WHERE session_id = $1", sessionID).Scan(&filePath); err == nil {
 		if _, err := os.Stat(filePath); !os.IsNotExist(err) {
 			t.Errorf("screenshot file still exists: err=%v", err)
 		}
@@ -238,7 +238,7 @@ func TestScreenshot_DeleteAdminOnly(t *testing.T) {
 }
 
 func TestScreenshot_AbsentFromZip(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, apiKey := setupE2ETestRouter(t, d, nil)
 
 	// Upload a ZIP with NO screenshot.bmp.

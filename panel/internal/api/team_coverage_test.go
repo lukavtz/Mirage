@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupTeamRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
@@ -20,8 +20,8 @@ func setupTeamRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	adminID := createTestUser(t, d, "teamadmin", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
-	token, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "")
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, nil)
+	token, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func setupTeamRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 }
 
 func TestTeam_List(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	// second user so the list has more than just the admin
@@ -59,7 +59,7 @@ func TestTeam_List(t *testing.T) {
 }
 
 func TestTeam_List_RoleFilter(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	createTestUserWithRole(t, d, "teammember", "testpass", "worker")
@@ -86,7 +86,7 @@ func TestTeam_List_RoleFilter(t *testing.T) {
 }
 
 func TestTeam_ChangeRole_Valid(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	targetID := createTestUserWithRole(t, d, "targetuser", "testpass", "worker")
@@ -103,7 +103,7 @@ func TestTeam_ChangeRole_Valid(t *testing.T) {
 	}
 
 	var got string
-	err := d.QueryRow("SELECT role FROM users WHERE id = ?", targetID).Scan(&got)
+	err := d.QueryRow("SELECT role FROM users WHERE id = $1", targetID).Scan(&got)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestTeam_ChangeRole_Valid(t *testing.T) {
 }
 
 func TestTeam_ChangeRole_InvalidRole(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	targetID := createTestUser(t, d, "targetuser", "testpass")
@@ -131,7 +131,7 @@ func TestTeam_ChangeRole_InvalidRole(t *testing.T) {
 }
 
 func TestTeam_ChangeRole_NonexistentUser(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	body := bytes.NewBufferString(`{"role": "viewer"}`)
@@ -147,7 +147,7 @@ func TestTeam_ChangeRole_NonexistentUser(t *testing.T) {
 }
 
 func TestTeam_ChangeRole_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	targetID := createTestUser(t, d, "targetuser", "testpass")
@@ -165,7 +165,7 @@ func TestTeam_ChangeRole_InvalidJSON(t *testing.T) {
 }
 
 func TestTeam_Remove_Valid(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	targetID := createTestUser(t, d, "doomeduser", "testpass")
@@ -180,7 +180,7 @@ func TestTeam_Remove_Valid(t *testing.T) {
 	}
 
 	var count int
-	err := d.QueryRow("SELECT COUNT(*) FROM users WHERE id = ?", targetID).Scan(&count)
+	err := d.QueryRow("SELECT COUNT(*) FROM users WHERE id = $1", targetID).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestTeam_Remove_Valid(t *testing.T) {
 }
 
 func TestTeam_Remove_Nonexistent(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/team/"+uuid.New().String(), nil)
@@ -204,7 +204,7 @@ func TestTeam_Remove_Nonexistent(t *testing.T) {
 }
 
 func TestTeam_Remove_Self(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTeamRouter(t, d)
 
 	// admin token belongs to teamadmin; try removing that same user

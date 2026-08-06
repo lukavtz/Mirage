@@ -16,19 +16,19 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestBuild_UpdateTag_Extra(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', 'original', '{}')`, buildID); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', 'original', '{}')`, buildID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,7 +54,7 @@ func TestBuild_UpdateTag_Extra(t *testing.T) {
 	}
 
 	var tag string
-	if err := d.QueryRow("SELECT build_tag FROM builds WHERE id = ?", buildID).Scan(&tag); err != nil {
+	if err := d.QueryRow("SELECT build_tag FROM builds WHERE id = $1", buildID).Scan(&tag); err != nil {
 		t.Fatal(err)
 	}
 	if tag != "updated-tag" {
@@ -63,9 +63,9 @@ func TestBuild_UpdateTag_Extra(t *testing.T) {
 }
 
 func TestBuild_UpdateTag_MissingID_Extra(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	r := chi.NewRouter()
 	r.Put("/api/build/{id}/tag", handler.UpdateTag)
@@ -81,9 +81,9 @@ func TestBuild_UpdateTag_MissingID_Extra(t *testing.T) {
 }
 
 func TestBuild_UpdateTag_NotFound_Extra(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	r := chi.NewRouter()
 	r.Put("/api/build/{id}/tag", handler.UpdateTag)
@@ -100,13 +100,13 @@ func TestBuild_UpdateTag_NotFound_Extra(t *testing.T) {
 }
 
 func TestBuild_UploadIcon(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', '', '{}')`, buildID); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', '', '{}')`, buildID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -149,13 +149,13 @@ func TestBuild_UploadIcon(t *testing.T) {
 }
 
 func TestBuild_UploadIcon_NoFile(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', '', '{}')`, buildID); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', '', '{}')`, buildID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,14 +179,14 @@ func TestBuild_UploadIcon_NoFile(t *testing.T) {
 }
 
 func TestBuild_UpdateTag_Forbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	uid := createTestUserWithRole(t, d, "buildowner", "pass", "user")
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', '', '{}', ?)`, buildID, uid); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', '', '{}', $2)`, buildID, uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,9 +210,9 @@ func TestBuild_UpdateTag_Forbidden(t *testing.T) {
 }
 
 func TestBuild_C2HostTooLong(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	longHost := strings.Repeat("a", 257)
 	body := `{"c2_host":"` + longHost + `","c2_port":4444}`
@@ -227,9 +227,9 @@ func TestBuild_C2HostTooLong(t *testing.T) {
 }
 
 func TestBuild_C2PortOutOfRange(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	cases := []string{`{"c2_host":"h","c2_port":0}`, `{"c2_host":"h","c2_port":65536}`, `{"c2_host":"h","c2_port":-1}`}
 	for _, body := range cases {
@@ -244,9 +244,9 @@ func TestBuild_C2PortOutOfRange(t *testing.T) {
 }
 
 func TestBuild_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/build", strings.NewReader(`not json`))
 	req.Header.Set("Content-Type", "application/json")
@@ -259,14 +259,14 @@ func TestBuild_InvalidJSON(t *testing.T) {
 }
 
 func TestBuild_Stats_NonAdmin(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	uid := createTestUserWithRole(t, d, "statsowner", "pass", "user")
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', 'tag1', '{}', ?)`, buildID, uid); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', 'tag1', '{}', $2)`, buildID, uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -298,13 +298,13 @@ func TestBuild_Stats_NonAdmin(t *testing.T) {
 }
 
 func TestBuild_UploadIcon_InvalidMultipart(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', '', '{}')`, buildID); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', '', '{}')`, buildID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -323,9 +323,9 @@ func TestBuild_UploadIcon_InvalidMultipart(t *testing.T) {
 }
 
 func TestBuild_UploadIcon_MissingID(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/build//icon", nil)
 	w := httptest.NewRecorder()
@@ -337,16 +337,16 @@ func TestBuild_UploadIcon_MissingID(t *testing.T) {
 }
 
 func TestBuild_UploadIcon_Forbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
-	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
 
 	owner := createTestUserWithRole(t, d, "iconowner", "pass", "user")
 	other := createTestUserWithRole(t, d, "iconother", "pass", "user")
 
 	buildID := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', '', '{}', ?)`, buildID, owner); err != nil {
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', '', '{}', $2)`, buildID, owner); err != nil {
 		t.Fatal(err)
 	}
 

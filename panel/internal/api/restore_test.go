@@ -8,10 +8,11 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestRestore_NoSession(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	body := `{"session_id":"` + uuid.New().String() + `","proxy":"socks5://127.0.0.1:1080"}`
@@ -33,12 +34,12 @@ func TestRestore_NoSession(t *testing.T) {
 }
 
 func TestRestore_NoProxy(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}

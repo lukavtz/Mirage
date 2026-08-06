@@ -1,0 +1,13 @@
+=== test_asn1: ASN.1 DER reader ===
+  PASS: test_read_tag
+  PASS: test_read_length_short
+  PASS: test_read_length_long
+  PASS: test_read_sequence
+  PASS: test_read_octet_string
+  PASS: test_read_integer
+  PASS: test_read_integer_multi
+  PASS: test_read_oid
+  PASS: test_peek_tag
+  PASS: test_truncated_input
+  PASS: test_nested_sequence
+=== test_asn1: 11/11 PASSED ===

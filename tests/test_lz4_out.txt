@@ -1,0 +1,10 @@
+=== test_lz4: LZ4 compression roundtrip ===
+  PASS: test_roundtrip_literal
+  PASS: test_roundtrip_repeated
+  PASS: test_roundtrip_random
+  PASS: test_empty
+  PASS: test_single_byte
+  PASS: test_large_data
+  PASS: test_compress_bound
+  PASS: test_compress_near_capacity
+=== test_lz4: 8/8 PASSED ===

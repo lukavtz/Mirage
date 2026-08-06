@@ -11,13 +11,13 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestUsers_CreateInvite_Defaults(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewUsersHandler(d, "test-secret")
 
 	uid := createTestUser(t, d, "invdefault", "pass")
 
@@ -54,8 +54,8 @@ func TestUsers_CreateInvite_Defaults(t *testing.T) {
 }
 
 func TestUsers_CreateInvite_AllFields(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewUsersHandler(d, "test-secret")
 
 	uid := createTestUser(t, d, "invfull", "pass")
 
@@ -93,8 +93,8 @@ func TestUsers_CreateInvite_AllFields(t *testing.T) {
 }
 
 func TestUsers_CreateInvite_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewUsersHandler(d, "test-secret")
 
 	uid := createTestUser(t, d, "invbad", "pass")
 
@@ -114,8 +114,8 @@ func TestUsers_CreateInvite_InvalidJSON(t *testing.T) {
 }
 
 func TestUsers_CreateInvite_Unauthorized(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewUsersHandler(d, "test-secret")
 
 	r := chi.NewRouter()
 	r.Post("/api/users/invite", handler.CreateInvite)

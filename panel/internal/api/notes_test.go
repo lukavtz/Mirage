@@ -10,16 +10,16 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestNotes_Create(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,18 +59,18 @@ func TestNotes_Create(t *testing.T) {
 }
 
 func TestNotes_List(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	nid := uuid.New().String()
-	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)", nid, sid, "test note")
+	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES ($1, $2, $3)", nid, sid, "test note")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,18 +105,18 @@ func TestNotes_List(t *testing.T) {
 }
 
 func TestNotes_Delete(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	nid := uuid.New().String()
-	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)", nid, sid, "delete me")
+	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES ($1, $2, $3)", nid, sid, "delete me")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,15 +141,15 @@ func TestNotes_Delete(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM notes WHERE id = ?", nid).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM notes WHERE id = $1", nid).Scan(&count)
 	if count != 0 {
 		t.Error("expected note to be deleted")
 	}
 }
 
 func TestNotes_DeleteNotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	r := chi.NewRouter()
 	r.Delete("/api/notes/{id}", handler.Delete)
@@ -172,12 +172,12 @@ func TestNotes_DeleteNotFound(t *testing.T) {
 }
 
 func TestNotes_EmptyList(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}

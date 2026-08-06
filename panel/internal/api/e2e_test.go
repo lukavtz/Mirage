@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"zialfi-panel/internal/testutil"
 	"zialfi-panel/internal/ws"
 )
 
@@ -29,7 +30,7 @@ func realisticStealerReport(t *testing.T) []byte {
 
 // TestE2E_FullPipeline tests the complete flow from data ingestion to search/export.
 func TestE2E_FullPipeline(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
 
@@ -343,7 +344,7 @@ func TestE2E_FullPipeline(t *testing.T) {
 
 // TestE2E_ConcurrentUploads tests handling of simultaneous stealer connections.
 func TestE2E_ConcurrentUploads(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
 	r, _, apiKey := setupE2ETestRouter(t, d, hub)
@@ -384,7 +385,7 @@ func TestE2E_ConcurrentUploads(t *testing.T) {
 
 // TestE2E_LargePayload tests handling of large ZIP archives (simulating heavy data collection).
 func TestE2E_LargePayload(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	hub := ws.NewHub()
 	go hub.Run()
 	r, _, apiKey := setupE2ETestRouter(t, d, hub)
@@ -424,7 +425,7 @@ func TestE2E_LargePayload(t *testing.T) {
 
 // TestE2E_AuthFlow tests the complete authentication lifecycle.
 func TestE2E_AuthFlow(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	// 1. Login
@@ -470,7 +471,7 @@ func TestE2E_AuthFlow(t *testing.T) {
 
 // TestE2E_RateLimiting tests the rate limiter under load.
 func TestE2E_RateLimiting(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	// Try to login many times with wrong password

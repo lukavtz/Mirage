@@ -12,11 +12,11 @@
  *   Hash with rotl32(5) XOR mul, 27 iterations (exact case)
  */
 
+#include <windows.h>
 #include "export_resolve.h"
 #include "hash.h"
 #include "config.h"
 #include <stddef.h>
-#include <windows.h>
 #include "enc_strings.h"
 
 /* ── Inline helpers for encrypted PEB-walk resolution ──────── */

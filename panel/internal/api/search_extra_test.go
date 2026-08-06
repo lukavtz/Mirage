@@ -9,13 +9,13 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestSearch_EmptyQuery_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=", nil)
 	w := httptest.NewRecorder()
@@ -36,8 +36,8 @@ func TestSearch_EmptyQuery_Extra(t *testing.T) {
 }
 
 func TestSearch_NoResults_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=zzzznope", nil)
 	w := httptest.NewRecorder()
@@ -62,19 +62,19 @@ func TestSearch_NoResults_Extra(t *testing.T) {
 }
 
 func TestSearch_Found_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'tester', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'tester', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'example.com', 'alice', 'p@ss', 'chrome')`, pid, sid)
+		VALUES ($1, $2, 'example.com', 'alice', 'p@ss', 'chrome')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,19 +98,19 @@ func TestSearch_Found_Extra(t *testing.T) {
 }
 
 func TestSearchAdvanced_Basic(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'tester', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'tester', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'test.com', 'bob', 'secret123', 'firefox')`, pid, sid)
+		VALUES ($1, $2, 'test.com', 'bob', 'secret123', 'firefox')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,19 +134,19 @@ func TestSearchAdvanced_Basic(t *testing.T) {
 }
 
 func TestSearchAdvanced_WithFilters(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'macos', 'tester', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'macos', 'tester', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'macsite.com', 'carol', 'mypass', 'safari')`, pid, sid)
+		VALUES ($1, $2, 'macsite.com', 'carol', 'mypass', 'safari')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,26 +170,26 @@ func TestSearchAdvanced_WithFilters(t *testing.T) {
 }
 
 func TestSearchAdvanced_Facets(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'linux', 'tester', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'linux', 'tester', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'facet.com', 'dave', 'pass', 'chromium')`, pid, sid)
+		VALUES ($1, $2, 'facet.com', 'dave', 'pass', 'chromium')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	cid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO cookies (id, session_id, name, domain, value)
-		VALUES (?, ?, 'session', 'facet.com', 'xyz')`, cid, sid)
+		VALUES ($1, $2, 'session', 'facet.com', 'xyz')`, cid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,21 +224,21 @@ func TestSearchAdvanced_Facets(t *testing.T) {
 }
 
 func TestSearchAdvanced_OwnerIsolation(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	uid := createTestUserWithRole(t, d, "searchowner", "pass", "user")
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'owneruser', '1.2.3.4', 'US', ?, datetime('now'))`, sid, uid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'owneruser', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, uid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'private.com', 'owner', 'secret', 'chrome')`, pid, sid)
+		VALUES ($1, $2, 'private.com', 'owner', 'secret', 'chrome')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,19 +264,19 @@ func TestSearchAdvanced_OwnerIsolation(t *testing.T) {
 }
 
 func TestSearch_Router(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'routeruser', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'routeruser', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'router.com', 'router', 'pass', 'chrome')`, pid, sid)
+		VALUES ($1, $2, 'router.com', 'router', 'pass', 'chrome')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,19 +301,19 @@ func TestSearch_Router(t *testing.T) {
 }
 
 func TestSearch_TypeFilter_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'tfuser', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'tfuser', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'typefilter.com', 'tf', 'pass', 'chrome')`, pid, sid)
+		VALUES ($1, $2, 'typefilter.com', 'tf', 'pass', 'chrome')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,19 +352,19 @@ func TestSearch_TypeFilter_Extra(t *testing.T) {
 }
 
 func TestSearch_Pagination_Extra(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	// Insert 3 sessions with matching passwords
 	for i := 0; i < 3; i++ {
 		sid := uuid.New().String()
 		if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', 'hw1', 'win10', 'pguser', '1.2.3.4', 'US', datetime('now'))`, sid); err != nil {
+			VALUES ($1, 'b1', 'hw1', 'win10', 'pguser', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid); err != nil {
 			t.Fatal(err)
 		}
 		pid := uuid.New().String()
 		if _, err := d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-			VALUES (?, ?, 'paginate.com', 'pg', 'pass', 'chrome')`, pid, sid); err != nil {
+			VALUES ($1, $2, 'paginate.com', 'pg', 'pass', 'chrome')`, pid, sid); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -396,20 +396,20 @@ func TestSearch_Pagination_Extra(t *testing.T) {
 }
 
 func TestSearch_OwnerIsolation(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSearchHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
 
 	uid := createTestUserWithRole(t, d, "sown", "pass", "user")
 
 	sid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'sownuser', '1.2.3.4', 'US', ?, datetime('now'))`, sid, uid); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'sownuser', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, uid); err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'own.com', 'own', 'secret', 'chrome')`, pid, sid); err != nil {
+		VALUES ($1, $2, 'own.com', 'own', 'secret', 'chrome')`, pid, sid); err != nil {
 		t.Fatal(err)
 	}
 

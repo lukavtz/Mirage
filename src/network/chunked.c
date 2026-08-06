@@ -83,21 +83,25 @@ char *chunked_generate_session_id(void) {
 
 /* ── multipart body builders ───────────────────────────────────── */
 
-static void append_field(uint8_t **buf, size_t *len, size_t *cap,
-                         const char *data, size_t dlen) {
+static int append_field(uint8_t **buf, size_t *len, size_t *cap,
+                        const char *data, size_t dlen) {
     while (*len + dlen > *cap) {
-        *cap = (*cap) ? (*cap) * 2 : 4096;
-        *buf = realloc(*buf, *cap);
+        size_t nc = (*cap) ? (*cap) * 2 : 4096;
+        uint8_t *nb = realloc(*buf, nc);
+        if (!nb) return -1;
+        *buf = nb;
+        *cap = nc;
     }
     memcpy(*buf + *len, data, dlen);
     *len += dlen;
+    return 0;
 }
 
 #define APPEND_STR(buf, len, cap, s) \
-    append_field((buf), (len), (cap), (s), strlen(s))
+    do { if (append_field((buf), (len), (cap), (s), strlen(s)) < 0) return NULL; } while(0)
 
 #define APPEND_LIT(buf, len, cap, s) \
-    append_field((buf), (len), (cap), (s), sizeof(s) - 1)
+    do { if (append_field((buf), (len), (cap), (s), sizeof(s) - 1) < 0) return NULL; } while(0)
 
 uint8_t *chunked_build_chunk_body(
     const char  *boundary,
@@ -125,7 +129,7 @@ uint8_t *chunked_build_chunk_body(
         "\r\nContent-Disposition: form-data; name=\"chunk_index\"\r\n\r\n");
     char idx_buf[32];
     int n = snprintf(idx_buf, sizeof(idx_buf), "%zu", chunk_index);
-    append_field(&buf, &len, &cap, idx_buf, (size_t)n);
+    if (append_field(&buf, &len, &cap, idx_buf, (size_t)n) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* data field */
@@ -134,7 +138,7 @@ uint8_t *chunked_build_chunk_body(
     APPEND_LIT(&buf, &len, &cap,
         "\r\nContent-Disposition: form-data; name=\"data\"; filename=\"chunk.bin\"\r\n"
         "Content-Type: application/octet-stream\r\n\r\n");
-    append_field(&buf, &len, &cap, (const char *)chunk_data, chunk_len);
+    if (append_field(&buf, &len, &cap, (const char *)chunk_data, chunk_len) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* closing boundary */
@@ -172,7 +176,7 @@ uint8_t *chunked_build_complete_body(
         "\r\nContent-Disposition: form-data; name=\"total_chunks\"\r\n\r\n");
     char tc_buf[32];
     int n = snprintf(tc_buf, sizeof(tc_buf), "%zu", total_chunks);
-    append_field(&buf, &len, &cap, tc_buf, (size_t)n);
+    if (append_field(&buf, &len, &cap, tc_buf, (size_t)n) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* metadata */
@@ -181,7 +185,7 @@ uint8_t *chunked_build_complete_body(
     APPEND_LIT(&buf, &len, &cap,
         "\r\nContent-Disposition: form-data; name=\"metadata\"\r\n\r\n");
     if (metadata && metadata_len > 0)
-        append_field(&buf, &len, &cap, metadata, metadata_len);
+        if (append_field(&buf, &len, &cap, metadata, metadata_len) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* closing boundary */
@@ -209,38 +213,35 @@ static int http_post_multipart(
 {
     /* build Content-Type header */
     char ct_hdr[256];
-    int ct_len = snprintf(ct_hdr, sizeof(ct_hdr),
+    snprintf(ct_hdr, sizeof(ct_hdr),
         "Content-Type: multipart/form-data; boundary=%s", boundary);
 
     char auth_hdr[512];
-    int ah_len = snprintf(auth_hdr, sizeof(auth_hdr), "Bearer %s", token);
+    snprintf(auth_hdr, sizeof(auth_hdr), "Bearer %s", token);
 
-    /* build full request */
-    size_t hdr_cap = 2048;
-    size_t hdr_len = 0;
-    char *hdr = malloc(hdr_cap);
-    if (!hdr) return 0;
+    /* build full request — dynamic buffer, no fixed ceiling */
+    uint8_t *hdr = NULL;
+    size_t hdr_len = 0, hdr_cap = 0;
+    char line[512];
+    int n;
 
-    /* request line */
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "POST %s HTTP/1.1\r\n", path);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Host: %s\r\n", host);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Authorization: %s\r\n", auth_hdr);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "%s\r\n", ct_hdr);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Content-Length: %zu\r\n", body_len);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Connection: close\r\n\r\n");
-
+    n = snprintf(line, sizeof(line), "POST %s HTTP/1.1\r\n", path);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "Host: %s\r\n", host);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "Authorization: %s\r\n", auth_hdr);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "%s\r\n", ct_hdr);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "Content-Length: %zu\r\n", body_len);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    if (append_field(&hdr, &hdr_len, &hdr_cap, "Connection: close\r\n\r\n", 19) < 0) { free(hdr); return 0; }
     ws2_socket_t sk;
     ws2_result_t r = ws2_connect(&sk, host, port);
     if (r != WS2_OK) { free(hdr); return 0; }
 
     size_t sent;
-    r = ws2_send(sk.handle, (const uint8_t *)hdr, hdr_len, &sent);
+    r = ws2_send(sk.handle, hdr, hdr_len, &sent);
     free(hdr);
     if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
 

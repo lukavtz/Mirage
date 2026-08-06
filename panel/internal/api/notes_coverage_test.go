@@ -11,18 +11,18 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 // Create coverage: empty content → 400
 func TestNotesCoverage_Create_EmptyContent(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	uid := createTestUser(t, d, "notes-empty-content", "pass")
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, uid, uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
@@ -52,12 +52,12 @@ func TestNotesCoverage_Create_EmptyContent(t *testing.T) {
 
 // Create coverage: invalid JSON → 400
 func TestNotesCoverage_Create_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	uid := createTestUser(t, d, "notes-invalid-json", "pass")
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, uid, uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
@@ -87,8 +87,8 @@ func TestNotesCoverage_Create_InvalidJSON(t *testing.T) {
 
 // Create coverage: nonexistent session with admin claims → 500 (FK violation)
 func TestNotesCoverage_Create_NonexistentSessionAdmin(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	uid := createTestUser(t, d, "notes-nonexistent-admin", "pass")
 
@@ -110,8 +110,8 @@ func TestNotesCoverage_Create_NonexistentSessionAdmin(t *testing.T) {
 
 // Create coverage: nonexistent session with user claims → 403 (sessionOwnedBy false)
 func TestNotesCoverage_Create_NonexistentSessionUser(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	uid := createTestUser(t, d, "notes-nonexistent-user", "pass")
 
@@ -133,12 +133,12 @@ func TestNotesCoverage_Create_NonexistentSessionUser(t *testing.T) {
 
 // Create coverage: user creates note on own session → 201
 func TestNotesCoverage_Create_OwnSessionUser(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	uid := createTestUser(t, d, "notes-own-session", "pass")
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, uid, uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
@@ -174,13 +174,13 @@ func TestNotesCoverage_Create_OwnSessionUser(t *testing.T) {
 
 // Create coverage: user creates note on another user's session → 403
 func TestNotesCoverage_Create_OtherSessionUser(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	otherUID := createTestUser(t, d, "notes-other-owner", "pass")
 	uid := createTestUser(t, d, "notes-other-user", "pass")
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, otherUID, uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
@@ -203,18 +203,18 @@ func TestNotesCoverage_Create_OtherSessionUser(t *testing.T) {
 
 // Delete coverage: admin deletes valid note → 200
 func TestNotesCoverage_Delete_Admin(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	uid := createTestUser(t, d, "notes-del-admin", "pass")
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, uid, uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	nid := uuid.New().String()
-	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)", nid, sid, "delete me")
+	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES ($1, $2, $3)", nid, sid, "delete me")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestNotesCoverage_Delete_Admin(t *testing.T) {
 		t.Error("expected message")
 	}
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM notes WHERE id = ?", nid).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM notes WHERE id = $1", nid).Scan(&count)
 	if count != 0 {
 		t.Error("expected note to be deleted")
 	}
@@ -246,17 +246,17 @@ func TestNotesCoverage_Delete_Admin(t *testing.T) {
 
 // Delete coverage: delete valid note without claims → 200 (sessionOwnedBy returns true for nil claims)
 func TestNotesCoverage_Delete_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, uuid.New().String(), uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	nid := uuid.New().String()
-	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)", nid, sid, "no claims")
+	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES ($1, $2, $3)", nid, sid, "no claims")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,8 +275,8 @@ func TestNotesCoverage_Delete_NoClaims(t *testing.T) {
 
 // Delete coverage: delete nonexistent note → 404
 func TestNotesCoverage_Delete_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	uid := createTestUser(t, d, "notes-del-notfound", "pass")
 
@@ -302,19 +302,19 @@ func TestNotesCoverage_Delete_NotFound(t *testing.T) {
 
 // Delete coverage: user deletes note on another user's session → 403
 func TestNotesCoverage_Delete_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewNotesHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewNotesHandler(d)
 
 	sid := uuid.New().String()
 	otherUID := createTestUser(t, d, "notes-del-other-owner", "pass")
 	uid := createTestUser(t, d, "notes-del-forbidden", "pass")
-	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES (?, ?, ?)",
+	_, err := d.Exec("INSERT INTO sessions (id, owner_id, build_id) VALUES ($1, $2, $3)",
 		sid, otherUID, uuid.New().String())
 	if err != nil {
 		t.Fatal(err)
 	}
 	nid := uuid.New().String()
-	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)", nid, sid, "not yours")
+	_, err = d.Exec("INSERT INTO notes (id, session_id, content) VALUES ($1, $2, $3)", nid, sid, "not yours")
 	if err != nil {
 		t.Fatal(err)
 	}

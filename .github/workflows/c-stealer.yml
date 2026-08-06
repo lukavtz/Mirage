@@ -22,6 +22,16 @@ jobs:
         run: python tools/make_polymorphic.py
       - name: Build
         run: mingw32-make all
+      - name: Run tests
+        run: mingw32-make test-all
+      - name: Static analysis
+        shell: bash
+        run: |
+          which cppcheck 2>/dev/null && cppcheck --enable=all --error-exitcode=1 --suppress=missingIncludeSystem src/ || echo "cppcheck not available, skipping"
+      - name: Verify no plaintext strings
+        shell: bash
+        run: |
+          strings mirage.exe | grep -iE "^(NtDuplicateObject|NtUnmapViewOfSection|wlanapi|WlanOpenHandle|WlanEnumInterfaces|WlanGetProfileList|WlanFreeMemory|WlanCloseHandle)" && echo "FAIL: plaintext strings found" && exit 1 || echo "PASS: no plaintext browser/api strings"
       - name: Check binary size
         shell: pwsh
         run: |

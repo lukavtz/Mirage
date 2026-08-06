@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
 	"golang.org/x/crypto/bcrypt"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 // recordingServer captures every Telegram API request body and path.
@@ -50,22 +49,8 @@ func newRecordingBot(t *testing.T) (*SupportBot, *recordingServer, *sql.DB) {
 
 func newBotDB(t *testing.T) *sql.DB {
 	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "mirage-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
+	return testutil.OpenTestDB(t)
 }
-
 func tgMsg(chatID, fromID int64, username, text string) *tgMessage {
 	return &tgMessage{
 		Chat: tgChat{ID: chatID},
@@ -107,7 +92,7 @@ func TestSupportBot_HandleRegister_CreatesAccount(t *testing.T) {
 	}
 
 	var codes int
-	d.QueryRow("SELECT COUNT(*) FROM recovery_codes WHERE user_id = (SELECT id FROM users WHERE username = ?)", username).Scan(&codes)
+	d.QueryRow("SELECT COUNT(*) FROM recovery_codes WHERE user_id = (SELECT id FROM users WHERE username = $1)", username).Scan(&codes)
 	if codes != 8 {
 		t.Errorf("recovery codes = %d, want 8", codes)
 	}

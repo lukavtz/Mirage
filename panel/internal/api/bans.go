@@ -12,12 +12,11 @@ import (
 )
 
 type BanHandler struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
 
-func NewBanHandler(db *sql.DB, provider db.ProviderType) *BanHandler {
-	return &BanHandler{db: db, provider: provider}
+func NewBanHandler(db *sql.DB) *BanHandler {
+	return &BanHandler{db: db}
 }
 
 type banRecord struct {
@@ -30,7 +29,7 @@ type banRecord struct {
 }
 
 func (h *BanHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(h.db, h.provider, "SELECT id, ip, hwid, reason, created_by, banned_at FROM bans ORDER BY banned_at DESC")
+	rows, err := db.Query(h.db, "SELECT id, ip, hwid, reason, created_by, banned_at FROM bans ORDER BY banned_at DESC")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query bans")
 		return
@@ -76,10 +75,8 @@ func (h *BanHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
-	_, err := db.Exec(h.db, h.provider, 
-		"INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, req.IP, nullIfEmpty(req.HWID), req.Reason, claims.UserID, now,
-	)
+	_, err := db.Exec(h.db, "INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES (?, ?, ?, ?, ?, ?)",
+		id, req.IP, nullIfEmpty(req.HWID), req.Reason, claims.UserID, now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create ban")
 		return
@@ -99,7 +96,7 @@ func (h *BanHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *BanHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := db.Exec(h.db, h.provider, "DELETE FROM bans WHERE id = ?", id)
+	result, err := db.Exec(h.db, "DELETE FROM bans WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete ban")
 		return

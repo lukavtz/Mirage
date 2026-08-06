@@ -12,13 +12,13 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestBot_Create_MissingFields(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/telegram/bots", handler.Create)
@@ -40,8 +40,8 @@ func TestBot_Create_MissingFields(t *testing.T) {
 }
 
 func TestBot_Create_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/telegram/bots", handler.Create)
@@ -57,8 +57,8 @@ func TestBot_Create_InvalidJSON(t *testing.T) {
 }
 
 func TestBot_Update_MissingID(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	// Call handler directly without URL param to hit the missing-id branch
 	req := httptest.NewRequest(http.MethodPut, "/api/telegram/bots/", strings.NewReader(`{"is_active":true}`))
@@ -72,8 +72,8 @@ func TestBot_Update_MissingID(t *testing.T) {
 }
 
 func TestBot_Update_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Put("/api/telegram/bots/{id}", handler.Update)
@@ -89,8 +89,8 @@ func TestBot_Update_InvalidJSON(t *testing.T) {
 }
 
 func TestBot_Update_MissingIsActive(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Put("/api/telegram/bots/{id}", handler.Update)
@@ -106,8 +106,8 @@ func TestBot_Update_MissingIsActive(t *testing.T) {
 }
 
 func TestBot_Update_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Put("/api/telegram/bots/{id}", handler.Update)
@@ -123,8 +123,8 @@ func TestBot_Update_NotFound(t *testing.T) {
 }
 
 func TestBot_Delete_MissingID(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/telegram/bots/", nil)
 	w := httptest.NewRecorder()
@@ -136,8 +136,8 @@ func TestBot_Delete_MissingID(t *testing.T) {
 }
 
 func TestBot_Delete_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Delete("/api/telegram/bots/{id}", handler.Delete)
@@ -152,8 +152,8 @@ func TestBot_Delete_NotFound(t *testing.T) {
 }
 
 func TestBot_Test_MissingID(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/telegram/bots//test", nil)
 	w := httptest.NewRecorder()
@@ -165,8 +165,8 @@ func TestBot_Test_MissingID(t *testing.T) {
 }
 
 func TestBot_Test_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/telegram/bots/{id}/test", handler.Test)
@@ -181,12 +181,12 @@ func TestBot_Test_NotFound(t *testing.T) {
 }
 
 func TestBot_List_MasksTokenForNonAdmin(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewTelegramBotHandler(d)
 
 	botID := uuid.New().String()
 	if _, err := d.Exec(
-		`INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES (?, 'maskbot', '1234567890:ABCDEFGHIJ', 'chat1', 'basic', 1)`,
+		`INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES ($1, 'maskbot', '1234567890:ABCDEFGHIJ', 'chat1', 'basic', TRUE)`,
 		botID,
 	); err != nil {
 		t.Fatal(err)

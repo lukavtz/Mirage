@@ -11,16 +11,14 @@ import (
 	"time"
 
 	"zialfi-panel/internal/services"
-	"zialfi-panel/internal/db"
 )
 
 type LogsHandler struct {
 	processor *services.LogProcessor
-	provider     db.ProviderType
 }
 
-func NewLogsHandler(processor *services.LogProcessor, provider db.ProviderType) *LogsHandler {
-	return &LogsHandler{processor: processor, provider: provider}
+func NewLogsHandler(processor *services.LogProcessor) *LogsHandler {
+	return &LogsHandler{processor: processor}
 }
 
 func (h *LogsHandler) Ingest(w http.ResponseWriter, r *http.Request) {

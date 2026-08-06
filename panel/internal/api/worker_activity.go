@@ -15,22 +15,20 @@ func logActivity(d *sql.DB, userID, action, targetID string) {
 	if targetID != "" {
 		tid = targetID
 	}
-	_, err := d.Exec(
+	_, err := db.Exec(d,
 		"INSERT INTO worker_activity (user_id, action, target_id) VALUES (?, ?, ?)",
-		userID, action, tid,
-	)
+		userID, action, tid)
 	if err != nil {
 		slog.Error("failed to log worker activity", "action", action, "err", err)
 	}
 }
 
 type WorkerActivityHandler struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
 
-func NewWorkerActivityHandler(d *sql.DB, provider db.ProviderType) *WorkerActivityHandler {
-	return &WorkerActivityHandler{db: d, provider: provider}
+func NewWorkerActivityHandler(d *sql.DB) *WorkerActivityHandler {
+	return &WorkerActivityHandler{db: d}
 }
 
 type activityEntry struct {
@@ -77,13 +75,13 @@ func (h *WorkerActivityHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	var total int
 	countQ := "SELECT COUNT(*) FROM worker_activity" + where
-	db.QueryRow(h.db, h.provider, countQ, args...).Scan(&total)
+	db.QueryRow(h.db, countQ, args...).Scan(&total)
 
 	offset := (page - 1) * limit
 	query := "SELECT id, user_id, action, target_id, created_at FROM worker_activity" + where + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
 	qargs := append(args, limit, offset)
 
-	rows, err := db.Query(h.db, h.provider, query, qargs...)
+	rows, err := db.Query(h.db, query, qargs...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query activity")
 		return

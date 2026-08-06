@@ -9,8 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestParseUserAgent(t *testing.T) {
@@ -36,16 +36,16 @@ func TestParseUserAgent(t *testing.T) {
 }
 
 func TestSessionMgmt_List(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSessionMgmtHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSessionMgmtHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/auth/sessions", h.List)
 	r.Delete("/api/auth/sessions/{id}", h.Terminate)
 	r.Delete("/api/auth/sessions", h.TerminateAll)
 
 	uid := "sm-user"
-	if _, err := d.Exec("INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip, last_active_at, created_at) VALUES (?, ?, 'hash', 'Chrome', 'Windows', 'Chrome', '1.2.3.4', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
-		"sess1", uid, "hash"); err != nil {
+	if _, err := d.Exec("INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip, last_active_at, created_at) VALUES ($1, $2, 'hash', 'Chrome', 'Windows', 'Chrome', '1.2.3.4', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')",
+		"sess1", uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -73,13 +73,13 @@ func TestSessionMgmt_List(t *testing.T) {
 }
 
 func TestSessionMgmt_Terminate(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSessionMgmtHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSessionMgmtHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/auth/sessions/{id}", h.Terminate)
 
 	uid := "sm-user2"
-	if _, err := d.Exec("INSERT INTO auth_sessions (id, user_id, token_hash) VALUES (?, ?, ?)", "sessA", uid, "hash"); err != nil {
+	if _, err := d.Exec("INSERT INTO auth_sessions (id, user_id, token_hash) VALUES ($1, $2, $3)", "sessA", uid, "hash"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -110,14 +110,14 @@ func TestSessionMgmt_Terminate(t *testing.T) {
 }
 
 func TestSessionMgmt_TerminateAll(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSessionMgmtHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSessionMgmtHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/auth/sessions", h.TerminateAll)
 
 	uid := "sm-user3"
 	for _, sid := range []string{"s1", "s2", "s3"} {
-		if _, err := d.Exec("INSERT INTO auth_sessions (id, user_id, token_hash) VALUES (?, ?, ?)", sid, uid, "hash"); err != nil {
+		if _, err := d.Exec("INSERT INTO auth_sessions (id, user_id, token_hash) VALUES ($1, $2, $3)", sid, uid, "hash"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -131,7 +131,7 @@ func TestSessionMgmt_TerminateAll(t *testing.T) {
 		t.Fatalf("terminate all: expected 200, got %d", w.Code)
 	}
 	var cnt int
-	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = ?", uid).Scan(&cnt)
+	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = $1", uid).Scan(&cnt)
 	if cnt != 1 {
 		t.Fatalf("terminate all: expected 1 remaining (current), got %d", cnt)
 	}
@@ -144,7 +144,7 @@ func TestSessionMgmt_TerminateAll(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("terminate all 2: expected 200, got %d", w.Code)
 	}
-	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = ?", uid).Scan(&cnt)
+	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = $1", uid).Scan(&cnt)
 	if cnt != 0 {
 		t.Fatalf("terminate all 2: expected 0 remaining, got %d", cnt)
 	}

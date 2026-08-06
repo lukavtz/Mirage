@@ -103,3 +103,12 @@ const ws2_api_t *mirage_ws2_api(void) {
     g_ws2.ready = 1;
     return &g_ws2;
 }
+
+#ifdef ZIALFI_TEST_MODE
+void mirage_ws2_api_install(const ws2_api_t *mock) {
+    if (mock) {
+        g_ws2 = *mock;
+        g_ws2.ready = 1;
+    }
+}
+#endif

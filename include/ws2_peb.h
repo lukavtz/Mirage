@@ -58,6 +58,10 @@ typedef struct {
 
 const ws2_api_t *mirage_ws2_api(void);
 
+#ifdef ZIALFI_TEST_MODE
+void mirage_ws2_api_install(const ws2_api_t *mock);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

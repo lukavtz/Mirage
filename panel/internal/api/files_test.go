@@ -11,10 +11,10 @@ import (
 
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 // makeZipWithFile builds an in-memory ZIP with system_info.txt plus a file.
@@ -53,7 +53,7 @@ func storeSessionArchive(t *testing.T, sessionID string, zipData []byte) {
 }
 
 func TestFileDownload_HappyPath(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, apiKey := setupE2ETestRouter(t, d, nil)
 
 	zipData := makeZipWithFile(t, "credentials.txt", "topsecret")
@@ -65,7 +65,7 @@ func TestFileDownload_HappyPath(t *testing.T) {
 
 	// Find the stolen_files row id.
 	var fileID string
-	if err := d.QueryRow("SELECT id FROM stolen_files WHERE session_id = ?", sessionID).Scan(&fileID); err != nil {
+	if err := d.QueryRow("SELECT id FROM stolen_files WHERE session_id = $1", sessionID).Scan(&fileID); err != nil {
 		t.Fatalf("stolen_files row missing: %v", err)
 	}
 
@@ -91,7 +91,7 @@ func TestFileDownload_HappyPath(t *testing.T) {
 }
 
 func TestFileDownload_Unauthorized(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _, _ := setupE2ETestRouter(t, d, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions/x/files/y/download", nil)
 	w := httptest.NewRecorder()
@@ -102,7 +102,7 @@ func TestFileDownload_Unauthorized(t *testing.T) {
 }
 
 func TestFileDownload_NotFound_NoRow(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token, _ := setupE2ETestRouter(t, d, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions/nonexistent/files/f/download", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -114,9 +114,9 @@ func TestFileDownload_NotFound_NoRow(t *testing.T) {
 }
 
 func TestFileDownload_TenantIsolation(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	owner := createTestUserWithRole(t, d, "ownera", "pw", "user")
 	other := createTestUserWithRole(t, d, "otherb", "pw", "user")
@@ -129,12 +129,12 @@ func TestFileDownload_TenantIsolation(t *testing.T) {
 	storeSessionArchive(t, sid, zipData)
 
 	var fileID string
-	if err := d.QueryRow("SELECT id FROM stolen_files WHERE session_id = ?", sid).Scan(&fileID); err != nil {
+	if err := d.QueryRow("SELECT id FROM stolen_files WHERE session_id = $1", sid).Scan(&fileID); err != nil {
 		t.Fatal(err)
 	}
 
 	// Other tenant must get 404 (not 403) — no session existence leak.
-	tokenOther, _, err := auth.GenerateToken(other, "user", "test-secret", "")
+	tokenOther, _, err := auth.GenerateToken(other, "user", "test-secret", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestFileDownload_TenantIsolation(t *testing.T) {
 }
 
 func TestSanitizeFilename(t *testing.T) {
-	h := api.NewFilesHandler(nil, db.ProviderSQLite)
+	h := api.NewFilesHandler(nil)
 	// sanitizeFilename is unexported; test via the handler's behavior is
 	// covered by TenantIsolation. Just verify the package compiles.
 	_ = h

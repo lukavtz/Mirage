@@ -9,14 +9,14 @@ import (
 
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestTOTP_Setup_Success(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "totp_setup_ok", "pass123")
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	h := api.NewTOTPHandler(d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/setup", nil)
 	claims := &auth.Claims{UserID: uid, Role: "admin"}
@@ -37,8 +37,8 @@ func TestTOTP_Setup_Success(t *testing.T) {
 }
 
 func TestTOTP_Setup_Unauthenticated(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTOTPHandler(d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/setup", nil)
 	w := httptest.NewRecorder()
@@ -50,8 +50,8 @@ func TestTOTP_Setup_Unauthenticated(t *testing.T) {
 }
 
 func TestTOTP_Verify_Unauthenticated(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTOTPHandler(d)
 
 	body := strings.NewReader(`{"passcode":"123456"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/verify", body)
@@ -64,9 +64,9 @@ func TestTOTP_Verify_Unauthenticated(t *testing.T) {
 }
 
 func TestTOTP_Verify_NotSetup(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "totp_verify_notsetup", "pass123")
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	h := api.NewTOTPHandler(d)
 
 	body := strings.NewReader(`{"passcode":"123456"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/verify", body)
@@ -86,8 +86,8 @@ func TestTOTP_Verify_NotSetup(t *testing.T) {
 }
 
 func TestTOTP_Disable_Unauthenticated(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTOTPHandler(d)
 
 	body := strings.NewReader(`{"password":"whatever"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/disable", body)
@@ -100,9 +100,9 @@ func TestTOTP_Disable_Unauthenticated(t *testing.T) {
 }
 
 func TestTOTP_Disable_InvalidPassword(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "totp_disable_badpw", "correct_password")
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	h := api.NewTOTPHandler(d)
 
 	body := strings.NewReader(`{"password":"wrong_password"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/disable", body)
@@ -122,14 +122,14 @@ func TestTOTP_Disable_InvalidPassword(t *testing.T) {
 }
 
 func TestTOTP_Required_WithUsername(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "totp_required_user", "pass123")
 	// Enable TOTP for this user
-	_, err := d.Exec("UPDATE users SET totp_enabled = 1 WHERE id = ?", uid)
+	_, err := d.Exec("UPDATE users SET totp_enabled = TRUE WHERE id = $1", uid)
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	h := api.NewTOTPHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/2fa/required?username=totp_required_user", nil)
 	w := httptest.NewRecorder()
@@ -148,8 +148,8 @@ func TestTOTP_Required_WithUsername(t *testing.T) {
 }
 
 func TestTOTP_Required_WithoutUsername(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTOTPHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTOTPHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/auth/2fa/required", nil)
 	w := httptest.NewRecorder()

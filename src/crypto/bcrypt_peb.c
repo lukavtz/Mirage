@@ -16,6 +16,9 @@ static bcrypt_api_t g_bcrypt;
 
 const bcrypt_api_t *mirage_bcrypt_api(void) {
     if (g_bcrypt.ready) return &g_bcrypt;
+#ifdef ZIALFI_TEST_MODE
+    /* allow external install */
+#endif
 
     /* Resolve bcrypt.dll via PEB-walk */
     char dll[32];
@@ -85,3 +88,12 @@ const bcrypt_api_t *mirage_bcrypt_api(void) {
     g_bcrypt.ready = 1;
     return &g_bcrypt;
 }
+
+#ifdef ZIALFI_TEST_MODE
+void mirage_bcrypt_api_install(const bcrypt_api_t *mock) {
+    if (mock) {
+        g_bcrypt = *mock;
+        g_bcrypt.ready = 1;
+    }
+}
+#endif

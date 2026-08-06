@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
-	"golang.org/x/crypto/bcrypt"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"zialfi-panel/internal/db"
 )
 
 type SupportBot struct {
@@ -97,7 +98,7 @@ func (b *SupportBot) handleBuy(msg *tgMessage) {
 	}
 
 	id := uuid.New().String()
-	_, err := b.db.Exec(
+	_, err := db.Exec(b.db,
 		`INSERT INTO sales_leads (id, telegram_id, username, tier, status) VALUES (?, ?, ?, ?, 'new')`,
 		id, fmt.Sprintf("%d", msg.From.ID), msg.From.Username, tier,
 	)
@@ -123,8 +124,9 @@ func (b *SupportBot) handleLicense(msg *tgMessage) {
 
 	key := strings.TrimSpace(parts[1])
 	var userID, tier, expiresAt string
-	err := b.db.QueryRow(
-		"SELECT user_id, tier, COALESCE(expires_at, '') FROM purchases WHERE license_key = ?", key,
+	err := db.QueryRow(
+		b.db,
+		"SELECT user_id, tier, COALESCE(expires_at::text, '') FROM purchases WHERE license_key = ?", key,
 	).Scan(&userID, &tier, &expiresAt)
 	if err != nil {
 		b.send(msg.Chat.ID, "License key not found.")
@@ -138,11 +140,10 @@ func (b *SupportBot) handleLicense(msg *tgMessage) {
 	b.send(msg.Chat.ID, text)
 }
 
-
 func (b *SupportBot) handleRegister(msg *tgMessage) {
 	// Check if this Telegram user already has an account
 	var existingUser string
-	err := b.db.QueryRow("SELECT u.username FROM users u JOIN recovery_codes rc ON rc.user_id = u.id WHERE rc.code_hash = ? LIMIT 1", fmt.Sprintf("%d", msg.From.ID)).Scan(&existingUser)
+	err := db.QueryRow(b.db, "SELECT u.username FROM users u JOIN recovery_codes rc ON rc.user_id = u.id WHERE rc.code_hash = ? LIMIT 1", fmt.Sprintf("%d", msg.From.ID)).Scan(&existingUser)
 	if err == nil {
 		b.send(msg.Chat.ID, "You already have an account: "+existingUser+"\nUse /help for available commands.")
 		return
@@ -161,7 +162,7 @@ func (b *SupportBot) handleRegister(msg *tgMessage) {
 		return
 	}
 
-	_, err = b.db.Exec(
+	_, err = db.Exec(b.db,
 		"INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, 'worker')",
 		userID, username, passwordHash,
 	)
@@ -179,7 +180,7 @@ func (b *SupportBot) handleRegister(msg *tgMessage) {
 
 		codeHash := sha256.Sum256([]byte(code))
 		codeID := uuid.New().String()
-		b.db.Exec(
+		db.Exec(b.db,
 			"INSERT INTO recovery_codes (id, user_id, code_hash) VALUES (?, ?, ?)",
 			codeID, userID, hex.EncodeToString(codeHash[:]),
 		)
@@ -212,7 +213,7 @@ func randomString(n int) string {
 }
 
 func hashPassword(password string) (string, error) {
-hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return "", err
 	}

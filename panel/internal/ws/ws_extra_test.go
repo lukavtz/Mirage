@@ -61,7 +61,7 @@ func TestServeWs_DisallowedOrigin(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	token, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "")
+	token, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestServeWs_MissingOrigin(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	token, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "")
+	token, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestServeWs_AllowedOrigin(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	token, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "")
+	token, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestServeWs_NotWebSocket(t *testing.T) {
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
-	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,7 +2,8 @@
  * nt_types.h — Windows NT structure definitions for Mirage-C
  *
  * Uses MinGW-compatible types to avoid conflicts with windows.h.
- * When windows.h is included, NT types are skipped via #ifndef _WIN32.
+ * When windows.h is included, conflicting types are skipped via #ifndef _WIN32.
+ * IMPORTANT: on Windows, include <windows.h> BEFORE nt_types.h.
  */
 
 #ifndef MIRAGE_NT_TYPES_H
@@ -43,12 +44,15 @@ typedef struct _UNICODE_STRING {
 } UNICODE_STRING, *PUNICODE_STRING;
 #endif
 
+#ifndef _LIST_ENTRY_DEFINED
 typedef struct _LIST_ENTRY {
     struct _LIST_ENTRY* Flink;
     struct _LIST_ENTRY* Blink;
 } LIST_ENTRY, *PLIST_ENTRY;
+#define _LIST_ENTRY_DEFINED
+#endif
 
-/* ── PEB structures (always defined) ──────────────────────── */
+/* ── PEB structures ──────────────────────────────────────── */
 typedef struct _PEB_LDR_DATA {
     ULONG Length;
     BOOLEAN Initialized;
@@ -88,76 +92,76 @@ typedef struct _LUID { DWORD LowPart; LONG HighPart; } LUID, *PLUID;
 
 typedef union _LARGE_INTEGER {
     struct { DWORD LowPart; LONG HighPart; };
-    long long QuadPart;
+    int64_t QuadPart;
 } LARGE_INTEGER, *PLARGE_INTEGER;
 
 typedef struct _IMAGE_DOS_HEADER {
-    WORD   e_magic;
-    WORD   e_cblp;
-    WORD   e_cp;
-    WORD   e_crlc;
-    WORD   e_cparhdr;
-    WORD   e_minalloc;
-    WORD   e_maxalloc;
-    WORD   e_ss;
-    WORD   e_sp;
-    WORD   e_csum;
-    WORD   e_ip;
-    WORD   e_cs;
-    WORD   e_lfarlc;
-    WORD   e_ovno;
-    WORD   e_res[4];
-    WORD   e_oemid;
-    WORD   e_oeminfo;
-    WORD   e_res2[10];
-    LONG   e_lfanew;
+    WORD  e_magic;
+    WORD  e_cblp;
+    WORD  e_cp;
+    WORD  e_crlc;
+    WORD  e_cparhdr;
+    WORD  e_minalloc;
+    WORD  e_maxalloc;
+    WORD  e_ss;
+    WORD  e_sp;
+    WORD  e_csum;
+    WORD  e_ip;
+    WORD  e_cs;
+    WORD  e_lfarlc;
+    WORD  e_ovno;
+    WORD  e_res[4];
+    WORD  e_oemid;
+    WORD  e_oeminfo;
+    WORD  e_res2[10];
+    LONG  e_lfanew;
 } IMAGE_DOS_HEADER, *PIMAGE_DOS_HEADER;
 
 typedef struct _IMAGE_FILE_HEADER {
-    WORD    Machine;
-    WORD    NumberOfSections;
-    DWORD   TimeDateStamp;
-    DWORD   PointerToSymbolTable;
-    DWORD   NumberOfSymbols;
-    WORD    SizeOfOptionalHeader;
-    WORD    Characteristics;
+    WORD  Machine;
+    WORD  NumberOfSections;
+    DWORD TimeDateStamp;
+    DWORD PointerToSymbolTable;
+    DWORD NumberOfSymbols;
+    WORD  SizeOfOptionalHeader;
+    WORD  Characteristics;
 } IMAGE_FILE_HEADER, *PIMAGE_FILE_HEADER;
 
 typedef struct _IMAGE_DATA_DIRECTORY {
-    DWORD   VirtualAddress;
-    DWORD   Size;
+    DWORD VirtualAddress;
+    DWORD Size;
 } IMAGE_DATA_DIRECTORY, *PIMAGE_DATA_DIRECTORY;
 
 typedef struct _IMAGE_OPTIONAL_HEADER64 {
-    WORD    Magic;
-    BYTE    MajorLinkerVersion;
-    BYTE    MinorLinkerVersion;
-    DWORD   SizeOfCode;
-    DWORD   SizeOfInitializedData;
-    DWORD   SizeOfUninitializedData;
-    DWORD   AddressOfEntryPoint;
-    DWORD   BaseOfCode;
+    WORD  Magic;
+    BYTE  MajorLinkerVersion;
+    BYTE  MinorLinkerVersion;
+    DWORD SizeOfCode;
+    DWORD SizeOfInitializedData;
+    DWORD SizeOfUninitializedData;
+    DWORD AddressOfEntryPoint;
+    DWORD BaseOfCode;
     uint64_t ImageBase;
-    DWORD   SectionAlignment;
-    DWORD   FileAlignment;
-    WORD    MajorOperatingSystemVersion;
-    WORD    MinorOperatingSystemVersion;
-    WORD    MajorImageVersion;
-    WORD    MinorImageVersion;
-    WORD    MajorSubsystemVersion;
-    WORD    MinorSubsystemVersion;
-    DWORD   Win32VersionValue;
-    DWORD   SizeOfImage;
-    DWORD   SizeOfHeaders;
-    DWORD   CheckSum;
-    WORD    Subsystem;
-    WORD    DllCharacteristics;
+    DWORD SectionAlignment;
+    DWORD FileAlignment;
+    WORD  MajorOperatingSystemVersion;
+    WORD  MinorOperatingSystemVersion;
+    WORD  MajorImageVersion;
+    WORD  MinorImageVersion;
+    WORD  MajorSubsystemVersion;
+    WORD  MinorSubsystemVersion;
+    DWORD Win32VersionValue;
+    DWORD SizeOfImage;
+    DWORD SizeOfHeaders;
+    DWORD CheckSum;
+    WORD  Subsystem;
+    WORD  DllCharacteristics;
     uint64_t SizeOfStackReserve;
     uint64_t SizeOfStackCommit;
     uint64_t SizeOfHeapReserve;
     uint64_t SizeOfHeapCommit;
-    DWORD   LoaderFlags;
-    DWORD   NumberOfRvaAndSizes;
+    DWORD LoaderFlags;
+    DWORD NumberOfRvaAndSizes;
     IMAGE_DATA_DIRECTORY DataDirectory[16];
 } IMAGE_OPTIONAL_HEADER64, *PIMAGE_OPTIONAL_HEADER64;
 
@@ -168,30 +172,30 @@ typedef struct _IMAGE_NT_HEADERS64 {
 } IMAGE_NT_HEADERS64, *PIMAGE_NT_HEADERS64;
 
 typedef struct _IMAGE_SECTION_HEADER {
-    BYTE    Name[8];
-    DWORD   VirtualSize;
-    DWORD   VirtualAddress;
-    DWORD   SizeOfRawData;
-    DWORD   PointerToRawData;
-    DWORD   PointerToRelocations;
-    DWORD   PointerToLinenumbers;
-    WORD    NumberOfRelocations;
-    WORD    NumberOfLinenumbers;
-    DWORD   Characteristics;
+    BYTE  Name[8];
+    union { DWORD PhysicalAddress; DWORD VirtualSize; } Misc;
+    DWORD VirtualAddress;
+    DWORD SizeOfRawData;
+    DWORD PointerToRawData;
+    DWORD PointerToRelocations;
+    DWORD PointerToLinenumbers;
+    WORD  NumberOfRelocations;
+    WORD  NumberOfLinenumbers;
+    DWORD Characteristics;
 } IMAGE_SECTION_HEADER, *PIMAGE_SECTION_HEADER;
 
 typedef struct _IMAGE_EXPORT_DIRECTORY {
-    DWORD   Characteristics;
-    DWORD   TimeDateStamp;
-    WORD    MajorVersion;
-    WORD    MinorVersion;
-    DWORD   Name;
-    DWORD   Base;
-    DWORD   NumberOfFunctions;
-    DWORD   NumberOfNames;
-    DWORD   AddressOfFunctions;
-    DWORD   AddressOfNames;
-    DWORD   AddressOfNameOrdinals;
+    DWORD Characteristics;
+    DWORD TimeDateStamp;
+    WORD  MajorVersion;
+    WORD  MinorVersion;
+    DWORD Name;
+    DWORD Base;
+    DWORD NumberOfFunctions;
+    DWORD NumberOfNames;
+    DWORD AddressOfFunctions;
+    DWORD AddressOfNames;
+    DWORD AddressOfNameOrdinals;
 } IMAGE_EXPORT_DIRECTORY, *PIMAGE_EXPORT_DIRECTORY;
 
 #endif /* _WIN32 */
@@ -222,7 +226,7 @@ typedef struct _KEY_VALUE_PARTIAL_INFORMATION {
 } KEY_VALUE_PARTIAL_INFORMATION, *PKEY_VALUE_PARTIAL_INFORMATION;
 
 typedef struct _KEY_BASIC_INFORMATION {
-    int64_t  LastWriteTime;    /* LARGE_INTEGER as raw 64-bit */
+    int64_t  LastWriteTime;
     ULONG    TitleIndex;
     ULONG    NameLength;
     WCHAR    Name[1];
@@ -242,7 +246,7 @@ enum KEY_INFORMATION_CLASS {
 
 #define STATUS_SUCCESS          ((NTSTATUS)0x00000000)
 #define STATUS_NO_MORE_ENTRIES  ((NTSTATUS)0x8000001A)
-#define STATUS_BUFFER_OVERFLOW  ((NTSTATUS)0x80000005)
+#define STATUS_BUFFER_OVERFLOW  ((NTSTATUS)0x00000005)
 #define STATUS_BUFFER_TOO_SMALL ((NTSTATUS)0xC0000023)
 
 enum KEY_VALUE_INFORMATION_CLASS {

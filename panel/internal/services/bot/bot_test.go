@@ -6,12 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"sync"
 	"testing"
 
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 // recordingAPI stands in for api.telegram.org and records every call.
@@ -73,20 +72,7 @@ func (a *recordingAPI) anyBody(needle string) (map[string]any, bool) {
 
 func openBotDB(t *testing.T) *sql.DB {
 	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "mirage-bot-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
+	return testutil.OpenTestDB(t)
 }
 
 func newTestBot(t *testing.T) (*Bot, *recordingAPI, *sql.DB) {
@@ -107,7 +93,7 @@ func newTestBot(t *testing.T) (*Bot, *recordingAPI, *sql.DB) {
 
 func TestBot_New_ReadsSettings(t *testing.T) {
 	d := openBotDB(t)
-	if _, err := d.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('telegram_token','db-token'), ('bot_admin_chat_id','424242'), ('panel_url','https://panel.example')"); err != nil {
+	if _, err := d.Exec("INSERT INTO settings (key, value) VALUES ('telegram_token','db-token'), ('bot_admin_chat_id','424242'), ('panel_url','https://panel.example') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value"); err != nil {
 		t.Fatal(err)
 	}
 	b := New(d)

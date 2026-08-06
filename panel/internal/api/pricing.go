@@ -30,9 +30,9 @@ type TierFeatures struct {
 	PriceLifetime int  `json:"price_lifetime"`
 }
 
-func LoadTierFeatures(d *sql.DB, provider db.ProviderType, tier Tier) *TierFeatures {
+func LoadTierFeatures(d *sql.DB, tier Tier) *TierFeatures {
 	var raw string
-	err := db.QueryRow(d, provider, "SELECT value FROM settings WHERE key = ?", "pricing_"+string(tier)).Scan(&raw)
+	err := db.QueryRow(d, "SELECT value FROM settings WHERE key = ?", "pricing_"+string(tier)).Scan(&raw)
 	if err != nil {
 		return defaultFeatures(tier)
 	}
@@ -44,12 +44,11 @@ func LoadTierFeatures(d *sql.DB, provider db.ProviderType, tier Tier) *TierFeatu
 }
 
 type PricingHandler struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
 
-func NewPricingHandler(dbConn *sql.DB, provider db.ProviderType) *PricingHandler {
-	return &PricingHandler{db: dbConn, provider: provider}
+func NewPricingHandler(dbConn *sql.DB) *PricingHandler {
+	return &PricingHandler{db: dbConn}
 }
 
 func defaultFeatures(tier Tier) *TierFeatures {
@@ -70,7 +69,7 @@ func (h *PricingHandler) ListTiers(w http.ResponseWriter, r *http.Request) {
 	tiers := []Tier{TierStarter, TierPro, TierTeam, TierLifetime}
 	result := make(map[string]*TierFeatures)
 	for _, t := range tiers {
-		result[string(t)] = LoadTierFeatures(h.db, h.provider, t)
+		result[string(t)] = LoadTierFeatures(h.db, t)
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -82,45 +81,45 @@ func (h *PricingHandler) MyFeatures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tier, features := resolveUserTier(h.db, h.provider, claims)
+	tier, features := resolveUserTier(h.db, claims)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tier":     tier,
 		"features": features,
 	})
 }
 
-func resolveUserTier(dbConn *sql.DB, provider db.ProviderType, claims *auth.Claims) (Tier, *TierFeatures) {
+func resolveUserTier(dbConn *sql.DB, claims *auth.Claims) (Tier, *TierFeatures) {
 	if claims.Role == "admin" {
-		return TierTeam, LoadTierFeatures(dbConn, provider, TierTeam)
+		return TierTeam, LoadTierFeatures(dbConn, TierTeam)
 	}
 
 	var tier string
-	trialQuery := db.Placeholders(provider, "SELECT tier FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+	trialQuery := db.Placeholders("SELECT tier FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
 	err := dbConn.QueryRow(trialQuery, claims.UserID).Scan(&tier)
 	if err != nil {
 		var trialTier string
-		trialQuery := db.Placeholders(provider,
-			"SELECT tier FROM license_trials WHERE user_id = ? AND expires_at > "+db.Now(provider)+" LIMIT 1")
+		trialQuery := db.Placeholders(
+			"SELECT tier FROM license_trials WHERE user_id = ? AND expires_at > " + db.Now() + " LIMIT 1")
 		err = dbConn.QueryRow(trialQuery, claims.UserID).Scan(&trialTier)
 		if err != nil {
-			return TierStarter, LoadTierFeatures(dbConn, provider, TierStarter)
+			return TierStarter, LoadTierFeatures(dbConn, TierStarter)
 		}
-		return Tier(trialTier), LoadTierFeatures(dbConn, provider, Tier(trialTier))
+		return Tier(trialTier), LoadTierFeatures(dbConn, Tier(trialTier))
 	}
 
-	return Tier(tier), LoadTierFeatures(dbConn, provider, Tier(tier))
+	return Tier(tier), LoadTierFeatures(dbConn, Tier(tier))
 }
 
-func CheckTierAccess(db *sql.DB, provider db.ProviderType, claims *auth.Claims, feature string) bool {
-	_, _ = resolveUserTier(db, provider, claims)
+func CheckTierAccess(db *sql.DB, claims *auth.Claims, feature string) bool {
+	_, _ = resolveUserTier(db, claims)
 	return true
 }
 
-func CheckBotLimit(dbConn *sql.DB, provider db.ProviderType, claims *auth.Claims) (int, int, error) {
-	_, features := resolveUserTier(dbConn, provider, claims)
+func CheckBotLimit(dbConn *sql.DB, claims *auth.Claims) (int, int, error) {
+	_, features := resolveUserTier(dbConn, claims)
 
 	var count int
-	err := db.QueryRow(dbConn, provider, "SELECT COUNT(*) FROM sessions WHERE build_id IN (SELECT id FROM builds WHERE user_id = ?)", claims.UserID).Scan(&count)
+	err := db.QueryRow(dbConn, "SELECT COUNT(*) FROM sessions WHERE build_id IN (SELECT id FROM builds WHERE user_id = ?)", claims.UserID).Scan(&count)
 	if err != nil {
 		return 0, features.MaxBots, err
 	}
@@ -128,8 +127,8 @@ func CheckBotLimit(dbConn *sql.DB, provider db.ProviderType, claims *auth.Claims
 	return count, features.MaxBots, nil
 }
 
-func CheckTierRateLimit(dbConn *sql.DB, provider db.ProviderType, claims *auth.Claims) int {
-	_, features := resolveUserTier(dbConn, provider, claims)
+func CheckTierRateLimit(dbConn *sql.DB, claims *auth.Claims) int {
+	_, features := resolveUserTier(dbConn, claims)
 	if features.APILimited {
 		return 30
 	}
@@ -137,11 +136,11 @@ func CheckTierRateLimit(dbConn *sql.DB, provider db.ProviderType, claims *auth.C
 }
 
 type TierLimitMiddleware struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
-func NewTierLimitMiddleware(db *sql.DB, provider db.ProviderType) *TierLimitMiddleware {
-	return &TierLimitMiddleware{db: db, provider: provider}
+
+func NewTierLimitMiddleware(db *sql.DB) *TierLimitMiddleware {
+	return &TierLimitMiddleware{db: db}
 }
 
 func (m *TierLimitMiddleware) CheckBots(next http.Handler) http.Handler {
@@ -156,7 +155,7 @@ func (m *TierLimitMiddleware) CheckBots(next http.Handler) http.Handler {
 			return
 		}
 
-		current, max, err := CheckBotLimit(m.db, m.provider, claims)
+		current, max, err := CheckBotLimit(m.db, claims)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "failed to check bot limit")
 			return

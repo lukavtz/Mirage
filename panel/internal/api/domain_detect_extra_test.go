@@ -11,12 +11,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestDomainDetect_Create_Success(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewDomainDetectHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewDomainDetectHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/detect/rules", handler.Create)
@@ -44,8 +44,8 @@ func TestDomainDetect_Create_Success(t *testing.T) {
 }
 
 func TestDomainDetect_Create_MissingFields(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewDomainDetectHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewDomainDetectHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/detect/rules", handler.Create)
@@ -63,8 +63,8 @@ func TestDomainDetect_Create_MissingFields(t *testing.T) {
 }
 
 func TestDomainDetect_Create_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewDomainDetectHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewDomainDetectHandler(d)
 
 	r := chi.NewRouter()
 	r.Post("/api/detect/rules", handler.Create)
@@ -80,11 +80,11 @@ func TestDomainDetect_Create_InvalidJSON(t *testing.T) {
 }
 
 func TestDomainDetect_Delete_Success(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewDomainDetectHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewDomainDetectHandler(d)
 
 	id := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO domain_detect (id, domain, tag, color) VALUES (?, 'd.com', 'tag', '#fff')", id); err != nil {
+	if _, err := d.Exec("INSERT INTO domain_detect (id, domain, tag, color) VALUES ($1, 'd.com', 'tag', '#fff')", id); err != nil {
 		t.Fatal(err)
 	}
 
@@ -101,8 +101,8 @@ func TestDomainDetect_Delete_Success(t *testing.T) {
 }
 
 func TestDomainDetect_Delete_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewDomainDetectHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewDomainDetectHandler(d)
 
 	r := chi.NewRouter()
 	r.Delete("/api/detect/rules/{id}", handler.Delete)

@@ -15,6 +15,10 @@
 #include <stdlib.h>
 #include "messengers.h"
 
+/* Use real path helper from messengers.c */
+extern void messenger_get_path(char *buf, size_t bufsz, const char *appdata,
+                               const char *subdir);
+
 static void test_messenger_result_struct(void) {
     MessengerResult r = {0};
     assert(r.files == NULL);

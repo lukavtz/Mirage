@@ -11,13 +11,13 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestRegisterEdgeCases(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewUsersHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/register", h.Register)
 
@@ -34,8 +34,8 @@ func TestRegisterEdgeCases(t *testing.T) {
 }
 
 func TestChatDelete(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewChatHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewChatHandler(d, nil)
 	r := chi.NewRouter()
 	r.Delete("/api/chat/{id}", h.Delete)
 	r.Post("/api/chat", h.Send)
@@ -51,7 +51,9 @@ func TestChatDelete(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("chat send: expected 201, got %d", w.Code)
 	}
-	var sent struct{ ID string `json:"id"` }
+	var sent struct {
+		ID string `json:"id"`
+	}
 	json.Unmarshal(w.Body.Bytes(), &sent)
 
 	// delete
@@ -65,8 +67,8 @@ func TestChatDelete(t *testing.T) {
 }
 
 func TestMarketplaceStartTrial(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/trial", h.StartTrial)
 
@@ -91,15 +93,15 @@ func TestMarketplaceStartTrial(t *testing.T) {
 }
 
 func TestExportNetscapeFull(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/sessions/{id}/export", h.ExportSession)
 
 	uid := "ex-user"
 	sid := uuid.New().String()
-	d.Exec("INSERT INTO sessions (id, build_id, owner_id) VALUES (?, ?, ?)", sid, "b1", uid)
-	d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, ?, ?, ?, ?)",
+	d.Exec("INSERT INTO sessions (id, build_id, owner_id) VALUES ($1, $2, $3)", sid, "b1", uid)
+	d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES ($1, $2, $3, $4, $5, $6)",
 		uuid.New().String(), sid, "https://example.com", "alice", "secret", "chrome")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sessions/"+sid+"/export?format=netscape", nil)
@@ -124,4 +126,3 @@ func TestExportNetscapeFull(t *testing.T) {
 }
 
 var _ = uuid.New
-var _ = db.ProviderSQLite

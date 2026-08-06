@@ -13,8 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
 func makeTestPE(t *testing.T) []byte {
@@ -56,10 +56,10 @@ func makeTestPE(t *testing.T) []byte {
 
 func setupBuildHandler(t *testing.T) (*api.BuildHandler, *sql.DB) {
 	t.Helper()
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
 	stealer := makeTestPE(t)
-	handler := api.NewBuildHandler(svc, stealer, nil, d, db.ProviderSQLite)
+	handler := api.NewBuildHandler(svc, stealer, nil, d)
 	return handler, d
 }
 
@@ -162,7 +162,7 @@ func TestBuild_Download(t *testing.T) {
 	}
 
 	var downloadCount int
-	d.QueryRow("SELECT download_count FROM builds WHERE id = ?", buildID).Scan(&downloadCount)
+	d.QueryRow("SELECT download_count FROM builds WHERE id = $1", buildID).Scan(&downloadCount)
 	if downloadCount != 1 {
 		t.Errorf("expected download_count=1, got %d", downloadCount)
 	}
@@ -260,7 +260,7 @@ func TestBuild_UpdateTag(t *testing.T) {
 	}
 
 	var tag string
-	d.QueryRow("SELECT build_tag FROM builds WHERE id = ?", buildID).Scan(&tag)
+	d.QueryRow("SELECT build_tag FROM builds WHERE id = $1", buildID).Scan(&tag)
 	if tag != "updated-campaign" {
 		t.Errorf("build_tag = %q, want %q", tag, "updated-campaign")
 	}
@@ -283,7 +283,7 @@ func TestBuild_Stats(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	buildID := resp["id"].(string)
 
-	d.Exec("UPDATE builds SET download_count = 5 WHERE id = ?", buildID)
+	d.Exec("UPDATE builds SET download_count = 5 WHERE id = $1", buildID)
 
 	statsReq := httptest.NewRequest(http.MethodGet, "/api/build/stats", nil)
 	statsW := httptest.NewRecorder()
@@ -342,12 +342,11 @@ func TestBuild_ListByTag(t *testing.T) {
 	}
 }
 
-
 func insertBuildWithUser(t *testing.T, d *sql.DB, userID string) string {
 	t.Helper()
 	buildID := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
-		VALUES (?, 'hash', 4, x'01020304', 'sha', 'tag', '{}', ?)`, buildID, userID)
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', 'tag', '{}', $2)`, buildID, userID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,9 +354,9 @@ func insertBuildWithUser(t *testing.T, d *sql.DB, userID string) string {
 }
 
 func TestBuildList_OwnerIsolation(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	tokenA, userA := workerToken(t, d, "builda")
 	tokenB, userB := workerToken(t, d, "buildb")
@@ -366,8 +365,8 @@ func TestBuildList_OwnerIsolation(t *testing.T) {
 	buildB := insertBuildWithUser(t, d, userB)
 
 	for _, tc := range []struct {
-		token    string
-		wantID   string
+		token  string
+		wantID string
 	}{
 		{tokenA, buildA},
 		{tokenB, buildB},
@@ -394,9 +393,9 @@ func TestBuildList_OwnerIsolation(t *testing.T) {
 }
 
 func TestBuildDownload_OwnerForbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r := chi.NewRouter()
-	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
 
 	_, userA := workerToken(t, d, "builda")
 	tokenB, _ := workerToken(t, d, "buildb")

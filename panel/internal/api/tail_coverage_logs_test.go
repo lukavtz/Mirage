@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strconv"
 	"testing"
+	"zialfi-panel/internal/testutil"
 )
 
 // chunkRequest posts one chunk part for the given session/index/IP.
@@ -33,7 +34,7 @@ func chunkRequest(t *testing.T, r http.Handler, apiKey, sessionID, index string,
 }
 
 func TestLogIngest_UA_Metadata(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -57,7 +58,7 @@ func TestLogIngest_UA_Metadata(t *testing.T) {
 }
 
 func TestLogIngest_UA_NoMetadata(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -80,7 +81,7 @@ func TestLogIngest_UA_NoMetadata(t *testing.T) {
 }
 
 func TestLogIngest_InvalidForm(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", bytes.NewBufferString(`{}`))
@@ -94,7 +95,7 @@ func TestLogIngest_InvalidForm(t *testing.T) {
 }
 
 func TestLogIngest_GarbageArchive(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -114,7 +115,7 @@ func TestLogIngest_GarbageArchive(t *testing.T) {
 }
 
 func TestChunk_InvalidForm(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/chunk", bytes.NewBufferString(`{}`))
@@ -128,7 +129,7 @@ func TestChunk_InvalidForm(t *testing.T) {
 }
 
 func TestChunk_MissingDataFile(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
@@ -149,7 +150,7 @@ func TestChunk_MissingDataFile(t *testing.T) {
 }
 
 func TestChunk_TooManySessionsPerIP(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	ip := "203.0.113.201"
@@ -167,7 +168,7 @@ func TestChunk_TooManySessionsPerIP(t *testing.T) {
 }
 
 func TestChunk_TooManyChunks(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	w := chunkRequest(t, r, apiKey, "chunk-overflow", "1024", []byte("data"), "203.0.113.202")
@@ -177,7 +178,7 @@ func TestChunk_TooManyChunks(t *testing.T) {
 }
 
 func TestCompleteChunked_MissingFields(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/complete", bytes.NewBufferString("session_id=x"))
@@ -191,7 +192,7 @@ func TestCompleteChunked_MissingFields(t *testing.T) {
 }
 
 func TestCompleteChunked_InvalidTotal(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/complete", bytes.NewBufferString("session_id=x&total_chunks=0"))
@@ -205,7 +206,7 @@ func TestCompleteChunked_InvalidTotal(t *testing.T) {
 }
 
 func TestCompleteChunked_NoChunks(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/complete", bytes.NewBufferString("session_id=nonexistent&total_chunks=1"))
@@ -219,7 +220,7 @@ func TestCompleteChunked_NoChunks(t *testing.T) {
 }
 
 func TestCompleteChunked_CountMismatch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	ip := "203.0.113.203"
@@ -238,7 +239,7 @@ func TestCompleteChunked_CountMismatch(t *testing.T) {
 }
 
 func TestCompleteChunked_MissingChunk(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	ip := "203.0.113.204"
@@ -258,7 +259,7 @@ func TestCompleteChunked_MissingChunk(t *testing.T) {
 }
 
 func TestCompleteChunked_SuccessWithUA(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	ip := "203.0.113.205"
@@ -290,7 +291,7 @@ func TestCompleteChunked_SuccessWithUA(t *testing.T) {
 }
 
 func TestCompleteChunked_GarbageArchive(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, apiKey := setupLogsTestRouter(t, d)
 
 	ip := "203.0.113.206"

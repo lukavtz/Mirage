@@ -6,8 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -19,12 +19,11 @@ import (
 // file's metadata (name, size) lives in the DB. Tenant-scoped: non-admins
 // only access their own sessions (404, not 403, to avoid leaking existence).
 type FilesHandler struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
 
-func NewFilesHandler(d *sql.DB, provider db.ProviderType) *FilesHandler {
-	return &FilesHandler{db: d, provider: provider}
+func NewFilesHandler(d *sql.DB) *FilesHandler {
+	return &FilesHandler{db: d}
 }
 
 // Download serves GET /api/sessions/{id}/files/{fid}/download.
@@ -36,16 +35,14 @@ func (h *FilesHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
+	if !sessionOwnedBy(h.db, r, sessionID) {
 		http.NotFound(w, r)
 		return
 	}
 
 	var filename string
 	var size int64
-	err := db.QueryRow(h.db, h.provider,
-		"SELECT filename, size FROM stolen_files WHERE id = ? AND session_id = ?", fileID, sessionID,
-	).Scan(&filename, &size)
+	err := db.QueryRow(h.db, "SELECT filename, size FROM stolen_files WHERE id = ? AND session_id = ?", fileID, sessionID).Scan(&filename, &size)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return

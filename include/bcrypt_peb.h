@@ -56,6 +56,10 @@ typedef struct {
  */
 const bcrypt_api_t *mirage_bcrypt_api(void);
 
+#ifdef ZIALFI_TEST_MODE
+void mirage_bcrypt_api_install(const bcrypt_api_t *mock);
+#endif
+
 #ifdef __cplusplus
 }
 #endif

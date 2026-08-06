@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 // TestAutoTag_OwnerForbidden verifies a worker cannot run AutoTag on a session
 // owned by another user: 403 and no tags written.
 func TestAutoTag_OwnerForbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	tokenA, ownerA := workerToken(t, d, "owner-a")
@@ -21,14 +22,14 @@ func TestAutoTag_OwnerForbidden(t *testing.T) {
 	sid := uuid.New().String()
 	insertSessionWithOwner(t, d, sid, ownerA)
 
-	_, err := d.Exec("INSERT INTO domain_detect (id, domain, tag, color) VALUES (?, ?, ?, ?)",
+	_, err := d.Exec("INSERT INTO domain_detect (id, domain, tag, color) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), "example.com", "Test", "#00FF00")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com/login', 'alice', 'secret', 'chrome')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'https://example.com/login', 'alice', 'secret', 'chrome')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestAutoTag_OwnerForbidden(t *testing.T) {
 	}
 
 	var count int
-	if err := d.QueryRow("SELECT COUNT(*) FROM session_tags WHERE session_id = ?", sid).Scan(&count); err != nil {
+	if err := d.QueryRow("SELECT COUNT(*) FROM session_tags WHERE session_id = $1", sid).Scan(&count); err != nil {
 		t.Fatal(err)
 	}
 	if count != 0 {

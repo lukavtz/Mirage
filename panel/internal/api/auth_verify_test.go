@@ -11,13 +11,13 @@ import (
 	"github.com/pquerna/otp/totp"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestVerifyLogin_MissingCode(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// Invalid JSON body triggers the 400 path in VerifyLogin
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/2fa/verify-login", bytes.NewReader([]byte(`not json`)))
@@ -38,11 +38,11 @@ func TestVerifyLogin_MissingCode(t *testing.T) {
 }
 
 func TestVerifyLogin_InvalidCode(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "verify_fail", "pass123")
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
-	_, err := d.Exec("UPDATE users SET totp_enabled = 1, totp_secret = ? WHERE id = ?", "JBSWY3DPEHPK3PXP", uid)
+	_, err := d.Exec("UPDATE users SET totp_enabled = TRUE, totp_secret = $1 WHERE id = $2", "JBSWY3DPEHPK3PXP", uid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,10 +78,10 @@ func TestVerifyLogin_InvalidCode(t *testing.T) {
 }
 
 func TestVerifyLogin_SetupThenVerify(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "totp_full", "pass123")
-	authHandler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
-	totpHandler := api.NewTOTPHandler(d, db.ProviderSQLite)
+	authHandler := api.NewAuthHandler(d, "test-secret")
+	totpHandler := api.NewTOTPHandler(d)
 
 	loginBody := `{"username":"totp_full","password":"pass123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(loginBody)))
@@ -109,7 +109,7 @@ func TestVerifyLogin_SetupThenVerify(t *testing.T) {
 	}
 
 	var secret string
-	if err := d.QueryRow("SELECT totp_secret FROM users WHERE id = ?", uid).Scan(&secret); err != nil || secret == "" {
+	if err := d.QueryRow("SELECT totp_secret FROM users WHERE id = $1", uid).Scan(&secret); err != nil || secret == "" {
 		t.Fatal("expected non-empty totp_secret")
 	}
 
@@ -171,9 +171,9 @@ func TestVerifyLogin_SetupThenVerify(t *testing.T) {
 }
 
 func TestVerifyLogin_ExpiredToken(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "expireduser", "pass123")
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// A garbage token is not in the temp tokens map -> 401
 	vbody := `{"totp_token":"not-a-real-token","passcode":"123456"}`

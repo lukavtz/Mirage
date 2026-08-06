@@ -4,43 +4,18 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupBanHWIDDB(t *testing.T) *sql.DB {
 	t.Helper()
-	f, err := os.CreateTemp("", "mirage-ban-hwid-test-*.db")
-	if err != nil {
+	d := testutil.OpenTestDB(t)
+	if _, err := d.Exec("INSERT INTO bans (id, ip, hwid, reason) VALUES ('b1', '192.168.1.100', 'hwid-123', 'test ban')"); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
-
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		d.Close()
-		os.Remove(f.Name())
-	})
-
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = d.Exec("INSERT INTO bans (id, ip, reason) VALUES ('b1', '192.168.1.100', 'test ban')")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, err = d.Exec("INSERT INTO bans (id, ip, hwid, reason) VALUES ('b2', '10.9.9.9', 'hwid-123', 'hwid ban')")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	return d
 }
 

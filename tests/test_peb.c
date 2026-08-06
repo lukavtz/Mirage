@@ -14,43 +14,13 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-/* Replicate the hash + XOR logic from peb.c for testing */
+/* Use real hash functions from src/types/hash.c */
 #include "config.h"
-
-static uint32_t rotl32(uint32_t x, int n) {
-    return (x << n) | (x >> (32 - n));
-}
-
-static uint32_t hash_name(const uint8_t *str, size_t len, uint32_t iterations) {
-    uint32_t hash = MIRAGE_SEED;
-    for (size_t i = 0; i < len; i++) {
-        uint8_t c = str[i];
-        if (c >= 'A' && c <= 'Z') c += 32; /* tolower */
-        for (int j = 0; j < (int)iterations; j++) {
-            hash = rotl32(hash, 5) ^ c;
-            hash = hash * 0x1B873593 + 0x85EBCA6B;
-        }
-    }
-    return hash;
-}
-
-static uint32_t encrypted_hash_module(const char *str) {
-    size_t len = strlen(str);
-    uint8_t *buf = malloc(len);
-    assert(buf);
-
-    /* XOR encrypt with STRING_KEY_ENC */
-    for (size_t i = 0; i < len; i++)
-        buf[i] = (uint8_t)str[i] ^ MIRAGE_STRING_KEY_ENC[i % 16];
-
-    uint32_t h = hash_name(buf, len, 28);
-    free(buf);
-    return h;
-}
+#include "hash.h"
 
 static void test_hash_deterministic(void) {
-    uint32_t h1 = encrypted_hash_module("ntdll.dll");
-    uint32_t h2 = encrypted_hash_module("ntdll.dll");
+    uint32_t h1 = mirage_encrypted_hash_module("ntdll.dll");
+    uint32_t h2 = mirage_encrypted_hash_module("ntdll.dll");
     assert(h1 == h2);
 
     printf("  PASS: test_hash_deterministic\n");
@@ -58,18 +28,18 @@ static void test_hash_deterministic(void) {
 
 static void test_hash_same_case_same_hash(void) {
     /* Same string → same hash */
-    uint32_t h1 = encrypted_hash_module("NTDLL.DLL");
-    uint32_t h2 = encrypted_hash_module("NTDLL.DLL");
+    uint32_t h1 = mirage_encrypted_hash_module("NTDLL.DLL");
+    uint32_t h2 = mirage_encrypted_hash_module("NTDLL.DLL");
     assert(h1 == h2);
 
     printf("  PASS: test_hash_same_case_same_hash\n");
 }
 
 static void test_hash_different_modules(void) {
-    uint32_t h1 = encrypted_hash_module("ntdll.dll");
-    uint32_t h2 = encrypted_hash_module("kernel32.dll");
-    uint32_t h3 = encrypted_hash_module("user32.dll");
-    uint32_t h4 = encrypted_hash_module("ws2_32.dll");
+    uint32_t h1 = mirage_encrypted_hash_module("ntdll.dll");
+    uint32_t h2 = mirage_encrypted_hash_module("kernel32.dll");
+    uint32_t h3 = mirage_encrypted_hash_module("user32.dll");
+    uint32_t h4 = mirage_encrypted_hash_module("ws2_32.dll");
 
     assert(h1 != h2);
     assert(h2 != h3);
@@ -81,9 +51,9 @@ static void test_hash_different_modules(void) {
 
 static void test_hash_matches_known_value(void) {
     /* ntdll.dll hash — computed once and stored as reference */
-    uint32_t known = encrypted_hash_module("ntdll.dll");
+    uint32_t known = mirage_encrypted_hash_module("ntdll.dll");
     /* Re-compute and verify same value */
-    uint32_t recomputed = encrypted_hash_module("ntdll.dll");
+    uint32_t recomputed = mirage_encrypted_hash_module("ntdll.dll");
     assert(known == recomputed);
 
     /* Verify it's not zero (sanity check) */
@@ -94,7 +64,7 @@ static void test_hash_matches_known_value(void) {
 
 static void test_hash_empty_string(void) {
     /* Empty string should still produce a valid hash (just the seed processed 0 times = seed) */
-    uint32_t h = hash_name((const uint8_t *)"", 0, 28);
+    uint32_t h = mirage_hash_string((const uint8_t *)"", 0, 28);
     /* Empty string with 0 iterations of the inner loop: hash = MIRAGE_SEED */
     assert(h == MIRAGE_SEED);
 
@@ -109,13 +79,11 @@ static void test_xor_encrypt_decrypt_roundtrip(void) {
     uint8_t *decrypted = malloc(len);
     assert(encrypted && decrypted);
 
-    /* XOR encrypt */
-    for (size_t i = 0; i < len; i++)
-        encrypted[i] = (uint8_t)original[i] ^ MIRAGE_STRING_KEY_ENC[i % 16];
+    /* XOR encrypt using real function */
+    mirage_xor_encrypt((const uint8_t *)original, encrypted, len);
 
-    /* XOR decrypt (same operation) */
-    for (size_t i = 0; i < len; i++)
-        decrypted[i] = encrypted[i] ^ MIRAGE_STRING_KEY_ENC[i % 16];
+    /* XOR decrypt using real function */
+    mirage_xor_decrypt(encrypted, decrypted, len);
 
     assert(memcmp(decrypted, original, len) == 0);
 
@@ -138,8 +106,8 @@ static void test_hash_28_iterations(void) {
     for (size_t i = 0; i < len; i++)
         buf[i] = (uint8_t)name[i] ^ MIRAGE_STRING_KEY_ENC[i % 16];
 
-    uint32_t h28 = hash_name(buf, len, 28);
-    uint32_t h27 = hash_name(buf, len, 27);
+    uint32_t h28 = mirage_hash_string(buf, len, 28);
+    uint32_t h27 = mirage_hash_string(buf, len, 27);
     assert(h28 != h27);
 
     free(buf);
@@ -157,7 +125,7 @@ static void test_module_list_ordering(void) {
 
     uint32_t hashes[4];
     for (size_t i = 0; i < n; i++)
-        hashes[i] = encrypted_hash_module(modules[i]);
+        hashes[i] = mirage_encrypted_hash_module(modules[i]);
 
     /* All hashes should be unique */
     for (size_t i = 0; i < n; i++)

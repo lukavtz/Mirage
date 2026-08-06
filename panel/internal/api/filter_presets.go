@@ -10,11 +10,10 @@ import (
 
 type FilterPresetsHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
 }
 
-func NewFilterPresetsHandler(db *sql.DB, provider db.ProviderType) *FilterPresetsHandler {
-	return &FilterPresetsHandler{db: db, provider: provider}
+func NewFilterPresetsHandler(db *sql.DB) *FilterPresetsHandler {
+	return &FilterPresetsHandler{db: db}
 }
 
 type FilterPreset struct {
@@ -23,7 +22,7 @@ type FilterPreset struct {
 }
 
 func (h *FilterPresetsHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(h.db, h.provider, "SELECT name, domains FROM filter_presets ORDER BY created_at")
+	rows, err := db.Query(h.db, "SELECT name, domains FROM filter_presets ORDER BY created_at")
 	if err == nil {
 		defer rows.Close()
 		presets := make([]FilterPreset, 0)

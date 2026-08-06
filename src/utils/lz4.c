@@ -85,8 +85,10 @@ int lz4_compress(const char *src, char *dst, int src_size, int dst_cap) {
         int literal_len = (int)(match - anchor);
         int offset = (int)(match - ref_match);
 
-        /* Output */
-        if (op + 4 + literal_len + 8 >= op_end) return 0;
+        /* Output — exact worst-case: token(1) + lit_ext + literal_len + offset(2) + ml_ext */
+        int lit_ext = (literal_len >= ML_MASK) ? 1 + (literal_len - ML_MASK) / 255 : 0;
+        int ml_ext  = (match_len  >= ML_MASK) ? 1 + (match_len  - ML_MASK) / 255 : 0;
+        if (op + 1 + lit_ext + literal_len + 2 + ml_ext > op_end) return 0;
 
         int ll = literal_len < ML_MASK ? literal_len : ML_MASK;
         int ml = match_len < ML_MASK ? match_len : ML_MASK;

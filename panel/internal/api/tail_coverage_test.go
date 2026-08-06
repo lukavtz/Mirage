@@ -14,9 +14,9 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
 func withClaims(req *http.Request, uid, role string) *http.Request {
@@ -28,15 +28,15 @@ func withClaims(req *http.Request, uid, role string) *http.Request {
 func insertExportSession(t *testing.T, d *sql.DB, uid string) string {
 	t.Helper()
 	sid := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at) VALUES (?, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', ?, datetime('now'))", sid, uid); err != nil {
+	if _, err := d.Exec("INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at) VALUES ($1, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)", sid, uid); err != nil {
 		t.Fatal(err)
 	}
 	return sid
 }
 
 func TestExport_JSON_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
@@ -49,14 +49,14 @@ func TestExport_JSON_NoClaims(t *testing.T) {
 }
 
 func TestExport_JSON_LockedByOther(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
 	uid := createTestUser(t, d, "explock", "pass")
 	sid := insertExportSession(t, d, uid)
-	if _, err := d.Exec("INSERT INTO session_locks (session_id, locked_by) VALUES (?, ?)", sid, "someone-else"); err != nil {
+	if _, err := d.Exec("INSERT INTO session_locks (session_id, locked_by) VALUES ($1, $2)", sid, "someone-else"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -70,8 +70,8 @@ func TestExport_JSON_LockedByOther(t *testing.T) {
 }
 
 func TestExport_JSON_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
@@ -86,8 +86,8 @@ func TestExport_JSON_NotFound(t *testing.T) {
 }
 
 func TestExport_JSON_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
@@ -105,14 +105,14 @@ func TestExport_JSON_Forbidden(t *testing.T) {
 }
 
 func TestExport_JSON_RevealMaskedForNonPrivileged(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
 	uid := createTestUser(t, d, "expmask", "pass")
 	sid := insertExportSession(t, d, uid)
-	if _, err := d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, 'https://example.com', 'alice', 'secret', 'chrome')",
+	if _, err := d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES ($1, $2, 'https://example.com', 'alice', 'secret', 'chrome')",
 		uuid.New().String(), sid); err != nil {
 		t.Fatal(err)
 	}
@@ -138,8 +138,8 @@ func TestExport_JSON_RevealMaskedForNonPrivileged(t *testing.T) {
 }
 
 func TestExport_CSV_Full(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
@@ -166,8 +166,8 @@ func TestExport_CSV_Full(t *testing.T) {
 }
 
 func TestExport_CSV_Empty(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
@@ -187,14 +187,14 @@ func TestExport_CSV_Empty(t *testing.T) {
 }
 
 func TestExport_ULP_Full(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
 	uid := createTestUser(t, d, "expulp", "pass")
 	sid := insertExportSession(t, d, uid)
-	if _, err := d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, 'https://example.com', 'alice', 'secret', 'chrome')",
+	if _, err := d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES ($1, $2, 'https://example.com', 'alice', 'secret', 'chrome')",
 		uuid.New().String(), sid); err != nil {
 		t.Fatal(err)
 	}
@@ -212,8 +212,8 @@ func TestExport_ULP_Full(t *testing.T) {
 }
 
 func TestExport_ULP_Empty(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/session/{id}", h.ExportSession)
 
@@ -240,15 +240,15 @@ func seedSessionData(t *testing.T, d *sql.DB, sid string) {
 			t.Fatal(err)
 		}
 	}
-	ins("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES (?, ?, 'https://example.com', 'alice', 'secret', 'chrome')", uuid.New().String(), sid)
-	ins("INSERT INTO cookies (id, session_id, domain, name, value, path) VALUES (?, ?, 'example.com', 'sid', 'abc', '/')", uuid.New().String(), sid)
-	ins("INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder, cvc) VALUES (?, ?, '4111', '12', '28', 'A B', '123')", uuid.New().String(), sid)
-	ins("INSERT INTO wallets (id, session_id, name, path) VALUES (?, ?, 'MetaMask', 'C:/wallet')", uuid.New().String(), sid)
+	ins("INSERT INTO passwords (id, session_id, url, username, password_value, browser) VALUES ($1, $2, 'https://example.com', 'alice', 'secret', 'chrome')", uuid.New().String(), sid)
+	ins("INSERT INTO cookies (id, session_id, domain, name, value, path) VALUES ($1, $2, 'example.com', 'sid', 'abc', '/')", uuid.New().String(), sid)
+	ins("INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder, cvc) VALUES ($1, $2, '4111', '12', '28', 'A B', '123')", uuid.New().String(), sid)
+	ins("INSERT INTO wallets (id, session_id, name, path) VALUES ($1, $2, 'MetaMask', 'C:/wallet')", uuid.New().String(), sid)
 }
 
 func TestExportBulk_InvalidJSON(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/export/bulk", h.ExportBulk)
 
@@ -262,8 +262,8 @@ func TestExportBulk_InvalidJSON(t *testing.T) {
 }
 
 func TestExportBulk_EmptyIDs(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/export/bulk", h.ExportBulk)
 
@@ -277,8 +277,8 @@ func TestExportBulk_EmptyIDs(t *testing.T) {
 }
 
 func TestExportBulk_Formats(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/export/bulk", h.ExportBulk)
 
@@ -308,8 +308,8 @@ func TestExportBulk_Formats(t *testing.T) {
 }
 
 func TestExportBulk_SkipsNonOwnedAndLocked(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/export/bulk", h.ExportBulk)
 
@@ -318,7 +318,7 @@ func TestExportBulk_SkipsNonOwnedAndLocked(t *testing.T) {
 	mine := insertExportSession(t, d, uid)
 	theirs := insertExportSession(t, d, other)
 	locked := insertExportSession(t, d, uid)
-	if _, err := d.Exec("INSERT INTO session_locks (session_id, locked_by) VALUES (?, ?)", locked, "stranger"); err != nil {
+	if _, err := d.Exec("INSERT INTO session_locks (session_id, locked_by) VALUES ($1, $2)", locked, "stranger"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,22 +336,22 @@ func TestExportBulk_SkipsNonOwnedAndLocked(t *testing.T) {
 }
 
 func TestExportUserAgents(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/useragents", h.ExportUserAgents)
 
 	uid := createTestUser(t, d, "expua", "pass")
 	sid1 := insertExportSession(t, d, uid)
 	sid2 := insertExportSession(t, d, uid)
-	if _, err := d.Exec("INSERT INTO system_info (session_id, user_agent) VALUES (?, ?)", sid1, "Mozilla/5.0 Chrome"); err != nil {
+	if _, err := d.Exec("INSERT INTO system_info (session_id, user_agent) VALUES ($1, $2)", sid1, "Mozilla/5.0 Chrome"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO system_info (session_id, user_agent) VALUES (?, ?)", sid2, "Mozilla/5.0 Chrome"); err != nil {
+	if _, err := d.Exec("INSERT INTO system_info (session_id, user_agent) VALUES ($1, $2)", sid2, "Mozilla/5.0 Chrome"); err != nil {
 		t.Fatal(err)
 	}
 	sid3 := insertExportSession(t, d, uid)
-	if _, err := d.Exec("INSERT INTO system_info (session_id, user_agent) VALUES (?, '')", sid3); err != nil {
+	if _, err := d.Exec("INSERT INTO system_info (session_id, user_agent) VALUES ($1, '')", sid3); err != nil {
 		t.Fatal(err)
 	}
 
@@ -372,8 +372,8 @@ func TestExportUserAgents(t *testing.T) {
 }
 
 func TestExportUserAgents_QueryError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewExportHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewExportHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/export/useragents", h.ExportUserAgents)
 
@@ -392,16 +392,16 @@ func TestExportUserAgents_QueryError(t *testing.T) {
 // ---------- Worker activity ----------
 
 func TestWorkerActivity_List(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewWorkerActivityHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewWorkerActivityHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/team/activity", h.List)
 
 	uid := createTestUser(t, d, "wauser", "pass")
-	if _, err := d.Exec("INSERT INTO worker_activity (user_id, action, target_id) VALUES (?, 'session.view', ?)", uid, "s1"); err != nil {
+	if _, err := d.Exec("INSERT INTO worker_activity (user_id, action, target_id) VALUES ($1, 'session.view', $2)", uid, "s1"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO worker_activity (user_id, action, target_id) VALUES (?, 'session.delete', NULL)", uid); err != nil {
+	if _, err := d.Exec("INSERT INTO worker_activity (user_id, action, target_id) VALUES ($1, 'session.delete', NULL)", uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -422,14 +422,14 @@ func TestWorkerActivity_List(t *testing.T) {
 }
 
 func TestWorkerActivity_List_Defaults(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewWorkerActivityHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewWorkerActivityHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/team/activity", h.List)
 
 	uid := createTestUser(t, d, "wadef", "pass")
 	for i := 0; i < 3; i++ {
-		if _, err := d.Exec("INSERT INTO worker_activity (user_id, action) VALUES (?, 'ping')", uid); err != nil {
+		if _, err := d.Exec("INSERT INTO worker_activity (user_id, action) VALUES ($1, 'ping')", uid); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -451,8 +451,8 @@ func TestWorkerActivity_List_Defaults(t *testing.T) {
 }
 
 func TestWorkerActivity_List_QueryError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewWorkerActivityHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewWorkerActivityHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/team/activity", h.List)
 
@@ -471,7 +471,7 @@ func TestWorkerActivity_List_QueryError(t *testing.T) {
 func insertProduct(t *testing.T, d *sql.DB, name string) string {
 	t.Helper()
 	pid := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, 'desc', 1999, 'module')", pid, name); err != nil {
+	if _, err := d.Exec("INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, 'desc', 1999, 'module')", pid, name); err != nil {
 		t.Fatal(err)
 	}
 	return pid
@@ -484,15 +484,15 @@ func insertPurchase(t *testing.T, d *sql.DB, userID, productID, key, tier string
 		activatedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	expiresAt := expires.Format(time.RFC3339)
-	if _, err := d.Exec("INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, activated_at, expires_at, created_at) VALUES (?, ?, ?, ?, ?, '{}', ?, ?, ?)",
+	if _, err := d.Exec("INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, activated_at, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, '{}', $6, $7, $8)",
 		uuid.New().String(), userID, productID, key, tier, activatedAt, expiresAt, time.Now().UTC().Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestMarketplace_Activate_SuccessAndAlreadyActivated(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/activate", h.Activate)
 
@@ -516,8 +516,8 @@ func TestMarketplace_Activate_SuccessAndAlreadyActivated(t *testing.T) {
 }
 
 func TestMarketplace_Activate_Errors(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/activate", h.Activate)
 
@@ -572,8 +572,8 @@ func TestMarketplace_Activate_Errors(t *testing.T) {
 }
 
 func TestMarketplace_RenewLicense_NoClaimsAndExpiredBase(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/renew", h.RenewLicense)
 
@@ -599,8 +599,8 @@ func TestMarketplace_RenewLicense_NoClaimsAndExpiredBase(t *testing.T) {
 }
 
 func TestMarketplace_Upgrade_TeamAndLifetime(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/upgrade", h.UpgradeLicense)
 
@@ -638,8 +638,8 @@ func TestMarketplace_Upgrade_TeamAndLifetime(t *testing.T) {
 }
 
 func TestMarketplace_LicenseStatus_UnknownKey(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/marketplace/license-status", h.LicenseStatus)
 
@@ -668,8 +668,8 @@ func TestMarketplace_LicenseStatus_UnknownKey(t *testing.T) {
 }
 
 func TestMarketplace_MyPurchases_WithData(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/marketplace/purchases", h.MyPurchases)
 
@@ -700,8 +700,8 @@ func TestMarketplace_MyPurchases_WithData(t *testing.T) {
 }
 
 func TestMarketplace_DeleteProduct_Extra(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/marketplace/products/{id}", h.DeleteProduct)
 
@@ -723,8 +723,8 @@ func TestMarketplace_DeleteProduct_Extra(t *testing.T) {
 }
 
 func TestMarketplace_Purchase_Tiers(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/purchase", h.Purchase)
 
@@ -749,14 +749,14 @@ func TestMarketplace_Purchase_Tiers(t *testing.T) {
 }
 
 func TestMarketplace_StartTrial_MachineID(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/trial", h.StartTrial)
 
 	uid := createTestUser(t, d, "trialmach", "pass")
 	// Another user already trialed from this IP.
-	if _, err := d.Exec("INSERT INTO license_trials (id, user_id, ip, machine_id, expires_at) VALUES (?, ?, '203.0.113.10', 'mach-A', ?)",
+	if _, err := d.Exec("INSERT INTO license_trials (id, user_id, ip, machine_id, expires_at) VALUES ($1, $2, '203.0.113.10', 'mach-A', $3)",
 		uuid.New().String(), "someone-else", time.Now().Add(7*24*time.Hour).Format(time.RFC3339)); err != nil {
 		t.Fatal(err)
 	}
@@ -795,15 +795,15 @@ func TestMarketplace_StartTrial_MachineID(t *testing.T) {
 
 func insertTelegramBot(t *testing.T, d *sql.DB, id, name, token, chatID string) {
 	t.Helper()
-	if _, err := d.Exec("INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES (?, ?, ?, ?, 'basic', 1)",
+	if _, err := d.Exec("INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES ($1, $2, $3, $4, 'basic', TRUE)",
 		id, name, token, chatID); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestBot_Update_Success(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Put("/api/telegram/bots/{id}", h.Update)
 
@@ -822,15 +822,15 @@ func TestBot_Update_Success(t *testing.T) {
 		t.Errorf("is_active = %v, want false", resp["is_active"])
 	}
 	var active int
-	d.QueryRow("SELECT is_active FROM telegram_bots WHERE id = ?", bid).Scan(&active)
+	d.QueryRow("SELECT is_active FROM telegram_bots WHERE id = $1", bid).Scan(&active)
 	if active != 0 {
 		t.Errorf("expected is_active=0 in db, got %d", active)
 	}
 }
 
 func TestBot_Update_DBError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Put("/api/telegram/bots/{id}", h.Update)
 
@@ -844,14 +844,14 @@ func TestBot_Update_DBError(t *testing.T) {
 }
 
 func TestBot_Delete_Success(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/telegram/bots/{id}", h.Delete)
 
 	bid := uuid.New().String()
 	insertTelegramBot(t, d, bid, "bot", "123456:ABC", "-100")
-	if _, err := d.Exec("INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES (?, ?, 'country', 'US')",
+	if _, err := d.Exec("INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES ($1, $2, 'country', 'US')",
 		uuid.New().String(), bid); err != nil {
 		t.Fatal(err)
 	}
@@ -863,15 +863,15 @@ func TestBot_Delete_Success(t *testing.T) {
 		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var filters int
-	d.QueryRow("SELECT COUNT(*) FROM bot_filters WHERE bot_id = ?", bid).Scan(&filters)
+	d.QueryRow("SELECT COUNT(*) FROM bot_filters WHERE bot_id = $1", bid).Scan(&filters)
 	if filters != 0 {
 		t.Errorf("expected cascaded filter delete, got %d filters", filters)
 	}
 }
 
 func TestBot_Delete_DBError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/telegram/bots/{id}", h.Delete)
 
@@ -885,14 +885,14 @@ func TestBot_Delete_DBError(t *testing.T) {
 }
 
 func TestBot_ListFilters(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/telegram/bots/{id}/filters", h.ListFilters)
 
 	bid := uuid.New().String()
 	insertTelegramBot(t, d, bid, "bot", "123456:ABC", "-100")
-	if _, err := d.Exec("INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES (?, ?, 'country', 'US')",
+	if _, err := d.Exec("INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES ($1, $2, 'country', 'US')",
 		uuid.New().String(), bid); err != nil {
 		t.Fatal(err)
 	}
@@ -919,8 +919,8 @@ func TestBot_ListFilters(t *testing.T) {
 }
 
 func TestBot_CreateFilter(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/telegram/bots/{id}/filters", h.CreateFilter)
 
@@ -969,15 +969,15 @@ func TestBot_CreateFilter(t *testing.T) {
 }
 
 func TestBot_DeleteFilter(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Delete("/api/telegram/bots/{id}/filters/{filter_id}", h.DeleteFilter)
 
 	bid := uuid.New().String()
 	insertTelegramBot(t, d, bid, "bot", "123456:ABC", "-100")
 	fid := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES (?, ?, 'country', 'US')",
+	if _, err := d.Exec("INSERT INTO bot_filters (id, bot_id, filter_type, filter_value) VALUES ($1, $2, 'country', 'US')",
 		fid, bid); err != nil {
 		t.Fatal(err)
 	}
@@ -1008,8 +1008,8 @@ func TestBot_DeleteFilter(t *testing.T) {
 }
 
 func TestBot_List_TokenMasking(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/telegram/bots", h.List)
 
@@ -1045,8 +1045,8 @@ func TestBot_List_TokenMasking(t *testing.T) {
 }
 
 func TestBot_List_QueryError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTelegramBotHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTelegramBotHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/telegram/bots", h.List)
 
@@ -1063,8 +1063,8 @@ func TestBot_List_QueryError(t *testing.T) {
 // ---------- Users: Register ----------
 
 func TestUsers_Register_Valid(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewUsersHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/register", h.Register)
 
@@ -1092,15 +1092,15 @@ func TestUsers_Register_Valid(t *testing.T) {
 }
 
 func TestUsers_Register_Errors(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewUsersHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/register", h.Register)
 
 	if _, err := d.Exec("INSERT INTO invite_codes (code, role, tier, max_uses) VALUES ('INVITE-EXP', 'worker', 'starter', 5)"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO invite_codes (code, role, tier, max_uses, expires_at) VALUES ('INVITE-OLD', 'worker', 'starter', 5, ?)",
+	if _, err := d.Exec("INSERT INTO invite_codes (code, role, tier, max_uses, expires_at) VALUES ('INVITE-OLD', 'worker', 'starter', 5, $1)",
 		time.Now().Add(-24*time.Hour).Format("2006-01-02 15:04:05")); err != nil {
 		t.Fatal(err)
 	}
@@ -1133,8 +1133,8 @@ func TestUsers_Register_Errors(t *testing.T) {
 }
 
 func TestUsers_Register_UsernameTaken(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewUsersHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewUsersHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Post("/api/auth/register", h.Register)
 
@@ -1160,8 +1160,8 @@ func TestUsers_Register_UsernameTaken(t *testing.T) {
 // ---------- Referrals ----------
 
 func TestReferral_GetCode_Generates(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewReferralHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/referrals/code", h.GetCode)
 
@@ -1180,7 +1180,7 @@ func TestReferral_GetCode_Generates(t *testing.T) {
 		t.Fatal("expected generated code")
 	}
 	var stored string
-	if err := d.QueryRow("SELECT referral_code FROM users WHERE id = ?", uid).Scan(&stored); err != nil || stored == "" {
+	if err := d.QueryRow("SELECT referral_code FROM users WHERE id = $1", uid).Scan(&stored); err != nil || stored == "" {
 		t.Fatalf("expected referral_code persisted, got %q err %v", stored, err)
 	}
 
@@ -1205,16 +1205,16 @@ func TestReferral_GetCode_Generates(t *testing.T) {
 }
 
 func TestReferral_Stats_WithRefers(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewReferralHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/referrals/stats", h.Stats)
 
 	uid := createTestUser(t, d, "refstats", "pass")
-	if _, err := d.Exec("UPDATE users SET referral_code = 'REFCODE' WHERE id = ?", uid); err != nil {
+	if _, err := d.Exec("UPDATE users SET referral_code = 'REFCODE' WHERE id = $1", uid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO purchases (id, user_id, product_id, license_key, referred_by, created_at) VALUES (?, ?, 'p1', 'lk1', ?, datetime('now'))",
+	if _, err := d.Exec("INSERT INTO purchases (id, user_id, product_id, license_key, referred_by, created_at) VALUES ($1, $2, 'p1', 'lk1', $3, CURRENT_TIMESTAMP)",
 		uuid.New().String(), "other-user", uid); err != nil {
 		t.Fatal(err)
 	}
@@ -1242,17 +1242,17 @@ func TestReferral_Stats_WithRefers(t *testing.T) {
 }
 
 func TestReferral_Apply_AlreadyApplied(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewReferralHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewReferralHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/referrals/apply", h.Apply)
 
 	uid := createTestUser(t, d, "refdup", "pass")
 	referrer := createTestUser(t, d, "refreferrer", "pass")
-	if _, err := d.Exec("UPDATE users SET referral_code = 'R1' WHERE id = ?", referrer); err != nil {
+	if _, err := d.Exec("UPDATE users SET referral_code = 'R1' WHERE id = $1", referrer); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO referrals (referrer_id, referred_user_id, code, applied_at) VALUES (?, ?, 'R1', datetime('now'))",
+	if _, err := d.Exec("INSERT INTO referrals (referrer_id, referred_user_id, code, applied_at) VALUES ($1, $2, 'R1', CURRENT_TIMESTAMP)",
 		referrer, uid); err != nil {
 		t.Fatal(err)
 	}
@@ -1269,8 +1269,8 @@ func TestReferral_Apply_AlreadyApplied(t *testing.T) {
 // ---------- Settings ----------
 
 func TestSettings_Get_WithData(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSettingsHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Get("/api/settings", h.Get)
 
@@ -1278,7 +1278,7 @@ func TestSettings_Get_WithData(t *testing.T) {
 		t.Fatal(err)
 	}
 	uid := createTestUser(t, d, "setget", "pass")
-	if _, err := d.Exec("INSERT INTO audit_log (id, user_id, action, details, ip, created_at) VALUES (?, ?, 'x', 'y', '1.2.3.4', datetime('now'))",
+	if _, err := d.Exec("INSERT INTO audit_log (id, user_id, action, details, ip, created_at) VALUES ($1, $2, 'x', 'y', '1.2.3.4', CURRENT_TIMESTAMP)",
 		uuid.New().String(), uid); err != nil {
 		t.Fatal(err)
 	}
@@ -1300,8 +1300,8 @@ func TestSettings_Get_WithData(t *testing.T) {
 }
 
 func TestSettings_Get_QueryError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSettingsHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSettingsHandler(d, "test-secret")
 	r := chi.NewRouter()
 	r.Get("/api/settings", h.Get)
 
@@ -1317,16 +1317,16 @@ func TestSettings_Get_QueryError(t *testing.T) {
 // ---------- Bans ----------
 
 func TestBan_List_WithData(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewBanHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/bans", h.List)
 
-	if _, err := d.Exec("INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES (?, '1.2.3.4', NULL, 'spam', NULL, datetime('now'))",
+	if _, err := d.Exec("INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES ($1, '1.2.3.4', NULL, 'spam', NULL, CURRENT_TIMESTAMP)",
 		uuid.New().String()); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES (?, '5.6.7.8', 'hw-1', 'malware', 'u1', datetime('now'))",
+	if _, err := d.Exec("INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES ($1, '5.6.7.8', 'hw-1', 'malware', 'u1', CURRENT_TIMESTAMP)",
 		uuid.New().String()); err != nil {
 		t.Fatal(err)
 	}
@@ -1348,8 +1348,8 @@ func TestBan_List_WithData(t *testing.T) {
 }
 
 func TestBan_List_QueryError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewBanHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewBanHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/bans", h.List)
 
@@ -1365,14 +1365,14 @@ func TestBan_List_QueryError(t *testing.T) {
 // ---------- Detect ----------
 
 func TestDetect_Duplicates(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewDuplicateDetectHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewDuplicateDetectHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/detect", h.Detect)
 
 	uid := createTestUser(t, d, "detectdup", "pass")
 	for _, id := range []string{"dup-s1", "dup-s2"} {
-		if _, err := d.Exec("INSERT INTO sessions (id, build_id, hwid, ip, owner_id) VALUES (?, 'b1', 'dup-hw', '9.9.9.9', ?)", id, uid); err != nil {
+		if _, err := d.Exec("INSERT INTO sessions (id, build_id, hwid, ip, owner_id) VALUES ($1, 'b1', 'dup-hw', '9.9.9.9', $2)", id, uid); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1406,8 +1406,8 @@ func TestDetect_Duplicates(t *testing.T) {
 // ---------- Build ----------
 
 func TestBuild_MissingC2Fields(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewBuildHandler(services.NewBuildService(), []byte{}, []byte{}, d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewBuildHandler(services.NewBuildService(), []byte{}, []byte{}, d)
 	r := chi.NewRouter()
 	r.Post("/api/builds", h.Build)
 
@@ -1424,8 +1424,8 @@ func TestBuild_MissingC2Fields(t *testing.T) {
 }
 
 func TestBuild_ServiceError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewBuildHandler(services.NewBuildService(), nil, nil, d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewBuildHandler(services.NewBuildService(), nil, nil, d)
 	r := chi.NewRouter()
 	r.Post("/api/builds", h.Build)
 
@@ -1439,8 +1439,8 @@ func TestBuild_ServiceError(t *testing.T) {
 }
 
 func TestBuild_UpdateTag_DBError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewBuildHandler(services.NewBuildService(), []byte{}, []byte{}, d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewBuildHandler(services.NewBuildService(), []byte{}, []byte{}, d)
 	r := chi.NewRouter()
 	r.Put("/api/builds/{id}/tag", h.UpdateTag)
 
@@ -1457,16 +1457,16 @@ func TestBuild_UpdateTag_DBError(t *testing.T) {
 // ---------- Sessions: DeleteEmpty ----------
 
 func TestSessions_DeleteEmpty(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSessionsHandler(d, nil)
 	r := chi.NewRouter()
 	r.Delete("/api/sessions/empty", h.DeleteEmpty)
 
 	uid := createTestUser(t, d, "delempty", "pass")
-	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id, quality_score) VALUES ('empty-1', 'b1', ?, 0)", uid); err != nil {
+	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id, quality_score) VALUES ('empty-1', 'b1', $1, 0)", uid); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id, quality_score) VALUES ('kept-1', 'b1', ?, 5)", uid); err != nil {
+	if _, err := d.Exec("INSERT INTO sessions (id, build_id, owner_id, quality_score) VALUES ('kept-1', 'b1', $1, 5)", uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1495,8 +1495,8 @@ func TestSessions_DeleteEmpty(t *testing.T) {
 }
 
 func TestSessions_DeleteEmpty_QueryError(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewSessionsHandler(d, nil)
 	r := chi.NewRouter()
 	r.Delete("/api/sessions/empty", h.DeleteEmpty)
 
@@ -1513,8 +1513,8 @@ func TestSessions_DeleteEmpty_QueryError(t *testing.T) {
 // ---------- Marketplace: CreateProduct error paths ----------
 
 func TestMarketplace_CreateProduct_Errors(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Post("/api/marketplace/products", h.CreateProduct)
 

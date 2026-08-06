@@ -4,39 +4,18 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupBanDB(t *testing.T) *sql.DB {
 	t.Helper()
-	f, err := os.CreateTemp("", "mirage-ban-test-*.db")
-	if err != nil {
+	d := testutil.OpenTestDB(t)
+	if _, err := d.Exec("INSERT INTO bans (id, ip, reason) VALUES ('b1', '192.168.1.100', 'test ban')"); err != nil {
 		t.Fatal(err)
 	}
-	f.Close()
-
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		d.Close()
-		os.Remove(f.Name())
-	})
-
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = d.Exec("INSERT INTO bans (id, ip, reason) VALUES ('b1', '192.168.1.100', 'test ban')")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	return d
 }
 

@@ -24,10 +24,16 @@ type Client struct {
 	closeOnce  sync.Once
 }
 
+func (c *Client) close() {
+	c.closeOnce.Do(func() {
+		c.conn.Close()
+	})
+}
+
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		c.close()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -49,7 +55,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.close()
 	}()
 
 	for {

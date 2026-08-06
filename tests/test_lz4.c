@@ -81,6 +81,39 @@ static void test_compress_bound(void) {
     TEST("test_compress_bound");
 }
 
+
+static void test_compress_near_capacity(void) {
+    /* Fill buffer with all-same byte — produces longest possible match */
+    int src_size = 4096;
+    char *src = (char *)malloc(src_size);
+    memset(src, 'A', src_size);
+
+    int bound = lz4_compress_bound(src_size);
+    /* Allocate exact bound + 16 guard bytes */
+    char *comp = (char *)malloc(bound + 16);
+    memset(comp + bound, 0xDD, 16);
+
+    int comp_len = lz4_compress(src, comp, src_size, bound);
+    if (comp_len <= 0) { TEST_FAIL("test_compress_near_capacity (compress)"); free(src); free(comp); return; }
+
+    /* Verify no guard byte corruption */
+    int guard_ok = 1;
+    for (int i = 0; i < 16; i++) {
+        if ((unsigned char)comp[bound + i] != 0xDD) { guard_ok = 0; break; }
+    }
+    if (!guard_ok) { TEST_FAIL("test_compress_near_capacity (guard corruption)"); free(src); free(comp); return; }
+
+    /* Roundtrip */
+    char *decomp = (char *)malloc(src_size);
+    int decomp_len = lz4_decompress_safe(comp, decomp, comp_len, src_size);
+    if (decomp_len != src_size || memcmp(decomp, src, src_size) != 0) {
+        TEST_FAIL("test_compress_near_capacity (roundtrip)");
+    } else {
+        TEST("test_compress_near_capacity");
+    }
+    free(src); free(comp); free(decomp);
+}
+
 int main(void) {
     printf("=== test_lz4: LZ4 compression roundtrip ===\n");
     test_roundtrip_literal();
@@ -90,6 +123,7 @@ int main(void) {
     test_single_byte();
     test_large_data();
     test_compress_bound();
+    test_compress_near_capacity();
     printf("=== test_lz4: %d/%d PASSED ===\n", tests_passed, tests_run);
     return tests_passed == tests_run ? 0 : 1;
 }

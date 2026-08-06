@@ -1,44 +1,24 @@
 package api_test
 
 import (
-	"log/slog"
-	"regexp"
 	"bytes"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
+	"regexp"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/testutil"
 	"zialfi-panel/internal/ws"
 )
-
-func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "mirage-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
-}
 
 func createTestUser(t *testing.T, d *sql.DB, username, password string) string {
 	t.Helper()
@@ -52,7 +32,7 @@ func createTestUserWithRole(t *testing.T, d *sql.DB, username, password, role st
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4)",
 		id, username, hash, role)
 	if err != nil {
 		t.Fatal(err)
@@ -67,7 +47,7 @@ func createTestAPIKey(t *testing.T, d *sql.DB, userID string) string {
 	raw := uuid.New().String() + uuid.New().String()
 	hash := sha256.Sum256([]byte(raw))
 	keyHash := fmt.Sprintf("%x", hash)
-	_, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash) VALUES (?, ?, ?, ?)",
+	_, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), userID, "test-key", keyHash)
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +63,7 @@ func setupLogsTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "logsuser", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, db.ProviderSQLite, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, nil)
 	key := createTestAPIKey(t, d, userID)
 	return r, key
 }
@@ -95,8 +75,8 @@ func setupE2ETestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, strin
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "testuser", "testpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, db.ProviderSQLite, nil)
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
+	api.SetupRoutes(r, d, jwtSecret, "*", hub, nil, nil, nil)
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,10 +85,10 @@ func setupE2ETestRouter(t *testing.T, d *sql.DB, hub *ws.Hub) (chi.Router, strin
 }
 
 func TestLogin_Success(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"testuser","password":"secret123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -134,10 +114,10 @@ func TestLogin_Success(t *testing.T) {
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"testuser","password":"wrongpass"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -160,9 +140,9 @@ func TestLogin_WrongPassword(t *testing.T) {
 }
 
 func TestLogin_NonexistentUser(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"nobody","password":"secret123"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -185,8 +165,8 @@ func TestLogin_NonexistentUser(t *testing.T) {
 }
 
 func TestLogin_RateLimit(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"admin","password":"wrong"}`
 	for i := 0; i < 5; i++ {
@@ -219,14 +199,14 @@ func TestLogin_RateLimit(t *testing.T) {
 }
 
 func TestLogin_BannedIP(t *testing.T) {
-	d := openTestDB(t)
-	_, err := d.Exec("INSERT INTO bans (id, ip, reason) VALUES (?, ?, ?)",
+	d := testutil.OpenTestDB(t)
+	_, err := d.Exec("INSERT INTO bans (id, ip, reason) VALUES ($1, $2, $3)",
 		uuid.New().String(), "192.0.2.1", "manual ban")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"admin","password":"admin"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(body)))
@@ -250,8 +230,8 @@ func TestLogin_BannedIP(t *testing.T) {
 }
 
 func TestLogin_MissingFields(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	tests := []struct {
 		name string
@@ -286,10 +266,10 @@ func TestLogin_MissingFields(t *testing.T) {
 }
 
 func TestForgotPassword_ValidUser(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"testuser"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(body)))
@@ -315,9 +295,9 @@ func TestForgotPassword_ValidUser(t *testing.T) {
 }
 
 func TestForgotPassword_InvalidUser(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	body := `{"username":"nobody"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/forgot-password", bytes.NewReader([]byte(body)))
@@ -343,10 +323,10 @@ func TestForgotPassword_InvalidUser(t *testing.T) {
 }
 
 func TestForgotPassword_EnumerationPrevention(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "realuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// Call with valid user
 	w1 := httptest.NewRecorder()
@@ -376,7 +356,6 @@ func TestForgotPassword_EnumerationPrevention(t *testing.T) {
 	}
 }
 
-
 // requestResetCode calls ForgotPassword and extracts the one-time code from
 // the slog warning the handler logs when Telegram is not configured. The
 // endpoint deliberately does NOT return the code in the response body
@@ -403,10 +382,10 @@ func requestResetCode(t *testing.T, handler *api.AuthHandler, username string) s
 }
 
 func TestResetPassword_ValidToken(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	userID := createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// First, get a reset token (captured from the log — the endpoint
 	// deliberately does not return it, see requestResetCode)
@@ -432,7 +411,7 @@ func TestResetPassword_ValidToken(t *testing.T) {
 
 	// Verify auth_sessions were cleared (check before any new logins)
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = ?", userID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM auth_sessions WHERE user_id = $1", userID).Scan(&count)
 	if count != 0 {
 		t.Errorf("expected 0 auth_sessions after reset, got %d", count)
 	}
@@ -459,10 +438,10 @@ func TestResetPassword_ValidToken(t *testing.T) {
 }
 
 func TestResetPassword_UsedToken(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// Get a reset token (captured from the log)
 	token := requestResetCode(t, handler, "testuser")
@@ -491,16 +470,16 @@ func TestResetPassword_UsedToken(t *testing.T) {
 }
 
 func TestResetPassword_ExpiredToken(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	userID := createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// Insert an already-expired reset token directly
 	resetID := uuid.New().String()
 	tokenBytes := []byte("0123456789abcdef0123456789abcdef") // 32 bytes
 	tokenHash := fmt.Sprintf("%x", sha256.Sum256(tokenBytes))
-	d.Exec("INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+	d.Exec("INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, $4)",
 		resetID, userID, tokenHash, "2020-01-01T00:00:00Z")
 
 	// Try resetting with the expired token
@@ -517,10 +496,10 @@ func TestResetPassword_ExpiredToken(t *testing.T) {
 }
 
 func TestResetPassword_ShortPassword(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	createTestUser(t, d, "testuser", "secret123")
 
-	handler := api.NewAuthHandler(d, "test-secret", db.ProviderSQLite)
+	handler := api.NewAuthHandler(d, "test-secret")
 
 	// Get a reset token (captured from the log)
 	token := requestResetCode(t, handler, "testuser")

@@ -3,7 +3,7 @@ package api_test
 import (
 	"bytes"
 	"encoding/json"
-		"net/http"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 
@@ -11,14 +11,14 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestMarketplaceLicenseStatus(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewMarketplaceHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewMarketplaceHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/marketplace/license", h.LicenseStatus)
 	r.Post("/api/marketplace/purchase", h.Purchase)
@@ -32,12 +32,10 @@ func TestMarketplaceLicenseStatus(t *testing.T) {
 	_ = w.Code
 }
 
-
-
 func TestLogsProcessSSPFull(t *testing.T) {
-	d := openTestDB(t)
-	logProc := services.NewLogProcessor(d, nil, db.ProviderSQLite)
-	h := api.NewSSPHandler(logProc, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	logProc := services.NewLogProcessor(d, nil)
+	h := api.NewSSPHandler(logProc)
 	r := chi.NewRouter()
 	r.Post("/api/log/ssp", h.ProcessSSP)
 
@@ -51,21 +49,23 @@ func TestLogsProcessSSPFull(t *testing.T) {
 }
 
 func TestStatsPublicFull(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewPublicStatsHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewPublicStatsHandler(d)
 	r := chi.NewRouter()
 	r.Get("/api/public/stats", h.GetPublicStats)
 
 	// enable public stats
-	result, err := d.Exec("INSERT OR REPLACE INTO settings (key, value) VALUES ('public_stats_enabled', 'true')")
-	if err != nil { t.Fatal(err) }
+	result, err := d.Exec("INSERT INTO settings (key, value) VALUES ('public_stats_enabled', 'true') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value")
+	if err != nil {
+		t.Fatal(err)
+	}
 	_ = result
 
 	// insert a session and a password
 	sid := uuid.New().String()
-	d.Exec("INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+	d.Exec("INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)",
 		sid, "b1", "hw1", "win10", "user", "1.2.3.4", "US")
-	d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value) VALUES (?, ?, ?, ?, ?)",
+	d.Exec("INSERT INTO passwords (id, session_id, url, username, password_value) VALUES ($1, $2, $3, $4, $5)",
 		uuid.New().String(), sid, "https://x.com", "u", "p")
 
 	req := httptest.NewRequest(http.MethodGet, "/api/public/stats", nil)
@@ -80,4 +80,3 @@ func TestStatsPublicFull(t *testing.T) {
 		t.Fatalf("public stats: bad body %s", w.Body.String())
 	}
 }
-

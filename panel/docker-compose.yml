@@ -24,8 +24,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      DB_PROVIDER: postgres
-      DATABASE_URL: postgres://mirage:${DB_PASSWORD}@postgres:5432/mirage?sslmode=disable
+      DATABASE_URL: ${DATABASE_URL:?set in .env}
       JWT_SECRET: ${JWT_SECRET:?set in .env}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
       LICENSE_SECRET: ${LICENSE_SECRET:-}
@@ -34,6 +33,28 @@ services:
     volumes:
       - panel-data:/app/data
 
+  # Run with: docker compose --profile backup run --rm backup
+  backup:
+    image: postgres:16-alpine
+    profiles: [backup]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set in .env}
+    volumes:
+      - panel-backups:/backups
+    command:
+      - sh
+      - -ec
+      - |
+        dump="/backups/mirage-$$(date -u +%Y%m%dT%H%M%SZ).dump"
+        pg_dump --format=custom --no-owner --file="$$dump" "$$DATABASE_URL"
+        pg_restore --list "$$dump" >/dev/null
+        echo "Backup and restore check complete: $$dump"
+
 volumes:
   pgdata:
   panel-data:
+  panel-backups:

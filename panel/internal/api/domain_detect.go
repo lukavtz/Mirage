@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -12,16 +13,21 @@ import (
 	"zialfi-panel/internal/db"
 )
 
-type DomainDetectHandler struct {
-	d        *sql.DB
-	provider db.ProviderType
+var hexColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+func isValidHexColor(s string) bool {
+	return hexColorRe.MatchString(s)
 }
 
-func NewDomainDetectHandler(d *sql.DB, provider db.ProviderType) *DomainDetectHandler {
-	return &DomainDetectHandler{d: d, provider: provider}
+type DomainDetectHandler struct {
+	d *sql.DB
+}
+
+func NewDomainDetectHandler(d *sql.DB) *DomainDetectHandler {
+	return &DomainDetectHandler{d: d}
 }
 func (h *DomainDetectHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(h.d, h.provider, "SELECT id, domain, tag, color, created_at FROM domain_detect ORDER BY domain")
+	rows, err := db.Query(h.d, "SELECT id, domain, tag, color, created_at FROM domain_detect ORDER BY domain")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query domain detections")
 		return
@@ -58,21 +64,21 @@ func (h *DomainDetectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if req.Color == "" {
 		req.Color = "#5865F2"
 	}
+	if !isValidHexColor(req.Color) {
+		writeError(w, http.StatusBadRequest, "color must be a valid hex color (#RRGGBB)")
+		return
+	}
 
 	id := uuid.New().String()
-	_, err := db.Exec(h.d, h.provider, 
-		"INSERT INTO domain_detect (id, domain, tag, color) VALUES (?, ?, ?, ?)",
-		id, req.Domain, req.Tag, req.Color,
-	)
+	_, err := db.Exec(h.d, "INSERT INTO domain_detect (id, domain, tag, color) VALUES (?, ?, ?, ?)",
+		id, req.Domain, req.Tag, req.Color)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create domain detection")
 		return
 	}
 
 	var item db.DomainDetect
-	db.QueryRow(h.d, h.provider, 
-		"SELECT id, domain, tag, color, created_at FROM domain_detect WHERE id = ?", id,
-	).Scan(&item.ID, &item.Domain, &item.Tag, &item.Color, &item.CreatedAt)
+	db.QueryRow(h.d, "SELECT id, domain, tag, color, created_at FROM domain_detect WHERE id = ?", id).Scan(&item.ID, &item.Domain, &item.Tag, &item.Color, &item.CreatedAt)
 
 	writeJSON(w, http.StatusCreated, item)
 }
@@ -80,7 +86,7 @@ func (h *DomainDetectHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *DomainDetectHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := db.Exec(h.d, h.provider, "DELETE FROM domain_detect WHERE id = ?", id)
+	result, err := db.Exec(h.d, "DELETE FROM domain_detect WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete")
 		return
@@ -98,12 +104,12 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
 	// tenant guard: workers may only auto-tag their own sessions (admins bypass)
-	if !sessionOwnedBy(h.d, h.provider, r, sessionID) {
+	if !sessionOwnedBy(h.d, r, sessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
-	rules, err := db.Query(h.d, h.provider, "SELECT id, domain, tag, color FROM domain_detect")
+	rules, err := db.Query(h.d, "SELECT id, domain, tag, color FROM domain_detect")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query rules")
 		return
@@ -124,8 +130,7 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	passwords, err := db.Query(h.d, h.provider, 
-		"SELECT url FROM passwords WHERE session_id = ?", sessionID)
+	passwords, err := db.Query(h.d, "SELECT url FROM passwords WHERE session_id = ?", sessionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query passwords")
 		return
@@ -158,14 +163,13 @@ func (h *DomainDetectHandler) AutoTag(w http.ResponseWriter, r *http.Request) {
 		// session_tags unique key is (session_id, tag) per migration 015.
 		// PG has no INSERT OR IGNORE; ON CONFLICT (session_id, tag) DO NOTHING
 		// is the dialect-correct equivalent.
-		q := db.Placeholders(h.provider,
+		q := db.Placeholders(
 			"INSERT INTO session_tags (id, session_id, tag, color) VALUES (?, ?, ?, ?) ON CONFLICT (session_id, tag) DO NOTHING")
-		db.Exec(h.d, h.provider, q, tagID, sessionID, tag, color)
+		db.Exec(h.d, q, tagID, sessionID, tag, color)
 	}
 
 	var result []db.SessionTag
-	rows, err := db.Query(h.d, h.provider, 
-		"SELECT id, session_id, tag, color, created_at FROM session_tags WHERE session_id = ? ORDER BY created_at",
+	rows, err := db.Query(h.d, "SELECT id, session_id, tag, color, created_at FROM session_tags WHERE session_id = ? ORDER BY created_at",
 		sessionID)
 	if err == nil {
 		defer rows.Close()

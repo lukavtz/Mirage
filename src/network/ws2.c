@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/time.h>
 #endif
 
 #include <stdlib.h>
@@ -151,6 +152,23 @@ ws2_result_t ws2_connect(ws2_socket_t *out, const char *host, uint16_t port) {
 #endif
     }
 
+    /* Set socket timeouts — 15 seconds */
+#ifdef _WIN32
+    {
+        DWORD timeout_ms = 15000;
+        api->psetsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
+        api->psetsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
+    }
+#else
+    {
+        struct timeval tv;
+        tv.tv_sec = 15;
+        tv.tv_usec = 0;
+        setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    }
+#endif
+
 #ifdef _WIN32
     if (api->pconnect(s, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
 #else
@@ -170,14 +188,22 @@ ws2_result_t ws2_connect(ws2_socket_t *out, const char *host, uint16_t port) {
 
 ws2_result_t ws2_send(HANDLE sock, const uint8_t *data, size_t len, size_t *out_sent) {
     if (!data || len == 0) { if (out_sent) *out_sent = 0; return WS2_OK; }
+    size_t total = 0;
+    while (total < len) {
+        size_t chunk = len - total;
 #ifdef _WIN32
-    const ws2_api_t *api = mirage_ws2_api();
-    int rc = api->psend((SOCKET)sock, (const char *)data, (int)len, 0);
+        if (chunk > 0x7FFFFFFF) chunk = 0x7FFFFFFF;
+        const ws2_api_t *api = mirage_ws2_api();
+        if (!api) { if (out_sent) *out_sent = total; return WS2_ERR_MODULE_NOT_FOUND; }
+        int rc = api->psend((SOCKET)sock, (const char *)(data + total), (int)chunk, 0);
 #else
-    int rc = send((int)sock, data, len, 0);
+        if (chunk > INT_MAX) chunk = INT_MAX;
+        int rc = send((int)sock, data + total, chunk, 0);
 #endif
-    if (rc < 0) return WS2_ERR_SEND_FAILED;
-    if (out_sent) *out_sent = (size_t)rc;
+        if (rc <= 0) { if (out_sent) *out_sent = total; return WS2_ERR_SEND_FAILED; }
+        total += (size_t)rc;
+    }
+    if (out_sent) *out_sent = total;
     return WS2_OK;
 }
 
@@ -188,6 +214,13 @@ ws2_result_t ws2_recv(HANDLE sock, uint8_t *buf, size_t buf_len, size_t *out_rea
     int rc = api->precv((SOCKET)sock, (char *)buf, (int)buf_len, 0);
 #else
     int rc = recv((int)sock, buf, buf_len, 0);
+    if (rc < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (out_read) *out_read = 0;
+            return WS2_OK;
+        }
+        return WS2_ERR_RECV_FAILED;
+    }
 #endif
     if (rc < 0) return WS2_ERR_RECV_FAILED;
     if (out_read) *out_read = (size_t)rc;

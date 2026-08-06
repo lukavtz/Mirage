@@ -9,18 +9,18 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestSessions_MarkViewed_Success(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSessionsHandler(d, nil)
 
 	uid := createTestUser(t, d, "mvuser", "pass")
 	sid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', ?, datetime('now'))`, sid, uid); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -39,8 +39,8 @@ func TestSessions_MarkViewed_Success(t *testing.T) {
 }
 
 func TestSessions_MarkViewed_NotFound(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSessionsHandler(d, nil)
 
 	uid := createTestUser(t, d, "mvmiss", "pass")
 
@@ -59,14 +59,14 @@ func TestSessions_MarkViewed_NotFound(t *testing.T) {
 }
 
 func TestSessions_MarkViewed_Forbidden(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSessionsHandler(d, nil)
 
 	owner := createTestUser(t, d, "mvboss", "pass")
 	other := createTestUserWithRole(t, d, "mvtrespass", "pass", "user")
 	sid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', ?, datetime('now'))`, sid, owner); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, owner); err != nil {
 		t.Fatal(err)
 	}
 
@@ -85,8 +85,8 @@ func TestSessions_MarkViewed_Forbidden(t *testing.T) {
 }
 
 func TestSessions_Unlock_NoClaims(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSessionsHandler(d, nil)
 
 	r := chi.NewRouter()
 	r.Post("/api/sessions/{id}/unlock", handler.Unlock)
@@ -101,17 +101,17 @@ func TestSessions_Unlock_NoClaims(t *testing.T) {
 }
 
 func TestSessions_Unlock_LockedByAnother(t *testing.T) {
-	d := openTestDB(t)
-	handler := api.NewSessionsHandler(d, nil, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSessionsHandler(d, nil)
 
 	owner := createTestUser(t, d, "ulockowner", "pass")
 	other := createTestUserWithRole(t, d, "ulockother", "pass", "user")
 	sid := uuid.New().String()
 	if _, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', ?, datetime('now'))`, sid, owner); err != nil {
+		VALUES ($1, 'b1', 'hw1', 'win10', 'u', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, sid, owner); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := d.Exec("INSERT INTO session_locks (session_id, locked_by) VALUES (?, ?)", sid, owner); err != nil {
+	if _, err := d.Exec("INSERT INTO session_locks (session_id, locked_by) VALUES ($1, $2)", sid, owner); err != nil {
 		t.Fatal(err)
 	}
 

@@ -5,32 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"testing"
 
 	"github.com/google/uuid"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
-
-func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "mirage-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
-}
 
 func createTestUser(t *testing.T, d *sql.DB, username, password string) string {
 	t.Helper()
@@ -39,7 +20,7 @@ func createTestUser(t *testing.T, d *sql.DB, username, password string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4)",
 		id, username, hash, "admin")
 	if err != nil {
 		t.Fatal(err)
@@ -48,13 +29,13 @@ func createTestUser(t *testing.T, d *sql.DB, username, password string) string {
 }
 
 func TestLogAudit_Success(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "audit-log-user", "password123")
 
 	LogAudit(d, uid, "test.action", "test details", "1.2.3.4")
 
 	var count int
-	err := d.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = ?", uid, "test.action").Scan(&count)
+	err := d.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = $1 AND action = $2", uid, "test.action").Scan(&count)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +44,7 @@ func TestLogAudit_Success(t *testing.T) {
 	}
 
 	var details, ip string
-	err = d.QueryRow("SELECT details, ip FROM audit_log WHERE user_id = ? AND action = ?", uid, "test.action").Scan(&details, &ip)
+	err = d.QueryRow("SELECT details, ip FROM audit_log WHERE user_id = $1 AND action = $2", uid, "test.action").Scan(&details, &ip)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +58,7 @@ func TestLogAudit_Success(t *testing.T) {
 
 func TestLogAudit_DBError(t *testing.T) {
 	// Close the DB immediately so any Exec call fails with an error (not panic).
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	d.Close()
 
 	// Should not panic, just log the error via slog.
@@ -86,7 +67,7 @@ func TestLogAudit_DBError(t *testing.T) {
 }
 
 func TestLogWorkerAction_WithTarget(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "worker-audit-user", "password123")
 	targetID := uuid.New().String()
 
@@ -94,7 +75,7 @@ func TestLogWorkerAction_WithTarget(t *testing.T) {
 	LogWorkerAction(d, uid, "worker.action", "worker details", "5.6.7.8", target)
 
 	var count int
-	err := d.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = ? AND target_user_id = ?",
+	err := d.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = $1 AND action = $2 AND target_user_id = $3",
 		uid, "worker.action", targetID).Scan(&count)
 	if err != nil {
 		t.Fatal(err)
@@ -105,13 +86,13 @@ func TestLogWorkerAction_WithTarget(t *testing.T) {
 }
 
 func TestLogWorkerAction_NilTarget(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "worker-nil-target", "password123")
 
 	LogWorkerAction(d, uid, "worker.action.nil", "no target", "9.9.9.9", nil)
 
 	var count int
-	err := d.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = ? AND target_user_id IS NULL",
+	err := d.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = $1 AND action = $2 AND target_user_id IS NULL",
 		uid, "worker.action.nil").Scan(&count)
 	if err != nil {
 		t.Fatal(err)
@@ -134,24 +115,24 @@ func TestJoinConditions_Empty(t *testing.T) {
 }
 
 func TestJoinConditions_Single(t *testing.T) {
-	got := joinConditions([]string{"user_id = ?"})
-	if got != "user_id = ?" {
-		t.Errorf("joinConditions(single) = %q, want %q", got, "user_id = ?")
+	got := joinConditions([]string{"user_id = $1"})
+	if got != "user_id = $1" {
+		t.Errorf("joinConditions(single) = %q, want %q", got, "user_id = $1")
 	}
 }
 
 func TestJoinConditions_Multiple(t *testing.T) {
-	got := joinConditions([]string{"user_id = ?", "action = ?"})
-	want := "user_id = ? AND action = ?"
+	got := joinConditions([]string{"user_id = $1", "action = $2"})
+	want := "user_id = $1 AND action = $2"
 	if got != want {
 		t.Errorf("joinConditions(multiple) = %q, want %q", got, want)
 	}
 }
 
 func TestAuditStats_AdminOK(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "audit-stats-admin", "password123")
-	handler := NewAuditHandler(d, db.ProviderSQLite)
+	handler := NewAuditHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/?worker_id="+uid, nil)
 	claims := &auth.Claims{UserID: uid, Role: "admin"}
@@ -180,8 +161,8 @@ func TestAuditStats_AdminOK(t *testing.T) {
 }
 
 func TestAuditStats_NoAuth(t *testing.T) {
-	d := openTestDB(t)
-	handler := NewAuditHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	handler := NewAuditHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	w := httptest.NewRecorder()
@@ -194,9 +175,9 @@ func TestAuditStats_NoAuth(t *testing.T) {
 }
 
 func TestAuditStats_NotAdmin_DifferentWorker(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	uid := createTestUser(t, d, "audit-stats-user", "password123")
-	handler := NewAuditHandler(d, db.ProviderSQLite)
+	handler := NewAuditHandler(d)
 
 	// Requesting stats for a different worker_id while being a regular user.
 	req := httptest.NewRequest(http.MethodGet, "/?worker_id=some-other-worker", nil)

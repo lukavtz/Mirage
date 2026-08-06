@@ -11,14 +11,14 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func insertTicket(t *testing.T, d *sql.DB, id, userID string) {
 	t.Helper()
 	now := "2026-01-01T00:00:00Z"
-	if _, err := d.Exec("INSERT INTO support_tickets (id, user_id, subject, category, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'open', ?, ?)",
+	if _, err := d.Exec("INSERT INTO support_tickets (id, user_id, subject, category, status, created_at, updated_at) VALUES ($1, $2, $3, $4, 'open', $5, $6)",
 		id, userID, "Test subject", "bug", now, now); err != nil {
 		t.Fatal(err)
 	}
@@ -54,8 +54,8 @@ func ticketRouter(h *api.TicketHandler) *chi.Mux {
 }
 
 func TestTickets_Create(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTicketHandler(d)
 	r := ticketRouter(h)
 
 	w := authedReq(r, "POST", "/tickets", map[string]string{"subject": "Help", "category": "bug"}, "u1", "user")
@@ -88,8 +88,8 @@ func TestTickets_Create(t *testing.T) {
 }
 
 func TestTickets_List(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTicketHandler(d)
 	r := ticketRouter(h)
 	insertTicket(t, d, "t1", "u1")
 	insertTicket(t, d, "t2", "other-user")
@@ -122,8 +122,8 @@ func TestTickets_List(t *testing.T) {
 }
 
 func TestTickets_Get(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTicketHandler(d)
 	r := ticketRouter(h)
 	insertTicket(t, d, "t1", "u1")
 
@@ -148,8 +148,8 @@ func TestTickets_Get(t *testing.T) {
 }
 
 func TestTickets_Reply(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTicketHandler(d)
 	r := ticketRouter(h)
 	insertTicket(t, d, "t1", "owner")
 
@@ -182,8 +182,8 @@ func TestTickets_Reply(t *testing.T) {
 }
 
 func TestTickets_Close(t *testing.T) {
-	d := openTestDB(t)
-	h := api.NewTicketHandler(d, db.ProviderSQLite)
+	d := testutil.OpenTestDB(t)
+	h := api.NewTicketHandler(d)
 	r := ticketRouter(h)
 	insertTicket(t, d, "t1", "owner")
 	insertTicket(t, d, "t2", "someone-else")

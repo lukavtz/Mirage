@@ -254,6 +254,8 @@ int socks5_connect(const char *proxy_host, uint16_t proxy_port,
         return -1;
     }
 
+    /* L13: Always ATYP_DOMAIN — SOCKS5 proxy resolves the domain (DNS at proxy, not client).
+     * This is correct for Tor/SOCKS5 use; if direct-IP privacy is needed, parse to ATYP_IPV4. */
     req[rlen++] = SOCKS5_ATYP_DOMAIN;
     req[rlen++] = (unsigned char)thost_len;
     memcpy(req + rlen, target_host, thost_len);

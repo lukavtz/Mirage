@@ -17,7 +17,7 @@
 
 #ifdef _WIN32
 #include <windows.h>
-#pragma comment(lib, "bcrypt.lib")
+/* L3: #pragma comment(lib) removed — incompatible with mingw no-CRT; libs resolved via PEB walk */
 
 /* PEB-walk includes */
 #include "bcrypt_peb.h"
@@ -248,6 +248,7 @@ int fx_des3_decrypt_cbc(const uint8_t *key24, const uint8_t *iv8,
     if (!bc) return -1;
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     NTSTATUS st;
+    /* L10: 3DES-CBC is deprecated but required — this is Firefox's legacy nssPBE format (pre-key4.db) */
     st = bc->pOpen(&hAlgo, BCRYPT_3DES_ALGORITHM, NULL, 0);
     if (st < 0) return -1;
 
@@ -431,7 +432,8 @@ int fx_decrypt_nss_pbe(const unsigned char *global_salt, size_t gs_len,
     if (fx_asn1_read_octet_string(&outer, &encrypted, &encrypted_len) < 0) return -1;
     if (encrypted_len < 8 || encrypted_len % 8 != 0) return -1;
 
-    /* Key derivation */
+    /* L11: Key derivation uses SHA-1 — inherited from Firefox's nssPBE algorithm.
+     * SHA-1 collision resistance is broken but this matches Firefox's format exactly. */
     unsigned char hp[20], chp[20];
 
     /* hp = SHA1(global_salt + master_pwd) */

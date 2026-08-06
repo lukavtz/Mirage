@@ -37,6 +37,8 @@ static int parse_c2_address(const char *c2_str, size_t len, proxy_result_t *out)
     memcpy(port_buf, c2_str + colon + 1, plen);
     port_buf[plen] = '\0';
 
+    /* L14: strtol trailing-char check omitted — port_buf is all digits (len/char validated above)
+     * and the range check (0, 65535] catches any parse error. Safe as-is. */
     long port = strtol(port_buf, NULL, 10);
     if (port <= 0 || port > 65535) return 0;
 

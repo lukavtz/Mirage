@@ -63,6 +63,8 @@ NTSTATUS mirage_NtSetInformationFile(HANDLE FileHandle, PVOID IoStatusBlock,
 LONG mirage_NtUserGetSystemMetrics(ULONG nIndex);
 
 /* Gadget pool for indirect syscalls */
+/* L5: engine.h declares uintptr_t, mirage_asm.h declares uint64_t.
+ * Both are 8 bytes on x86_64 Win — safe as-is. Migrate both to uintptr_t if targeting x86. */
 extern uintptr_t gadget_pool[64];
 int mirage_init_gadget_pool(void);
 

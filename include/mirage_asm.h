@@ -54,6 +54,8 @@ extern uint32_t ssn_NtDeleteFile;
 extern uint32_t ssn_NtFlushInstructionCache;
 
 /* ── Gadget pool (filled by C code, used by ASM stubs) ────── */
+/* L5: engine.h declares uintptr_t, mirage_asm.h declares uint64_t.
+ * Both are 8 bytes on x86_64 Win — safe as-is. Migrate both to uintptr_t if targeting x86. */
 extern uint64_t gadget_pool[64];
 
 /* ── Syscall stubs (each loads SSN, XOR deobfuscates, jumps) ─ */

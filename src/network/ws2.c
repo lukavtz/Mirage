@@ -245,6 +245,7 @@ ws2_result_t ws2_create_raw(HANDLE *out) {
 #ifdef _WIN32
     const ws2_api_t *api = mirage_ws2_api();
     if (!api) return WS2_ERR_MODULE_NOT_FOUND;
+    /* L6: WS2_SOCK_ERROR checks INVALID_SOCKET (not NULL) — correct for WSASocketW */
     SOCKET s = api->pWSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
                                  NULL, 0, WSA_FLAG_OVERLAPPED);
     if (WS2_SOCK_ERROR(s)) return WS2_ERR_SOCKET_FAILED;

@@ -18,8 +18,7 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <wincrypt.h>
-#pragma comment(lib, "crypt32.lib")
-#pragma comment(lib, "bcrypt.lib")
+/* L3: #pragma comment(lib) removed — incompatible with mingw no-CRT; libs resolved via PEB walk */
 
 /* PEB-walk includes for runtime API resolution */
 #include "bcrypt_peb.h"
@@ -219,6 +218,8 @@ int chrome_decrypt_dpapi_key(const unsigned char *encrypted_key, size_t len,
 #endif
 
 /* ── PBKDF2 key derivation ───────────────────────────────────── */
+/* L9: Chrome uses PBKDF2-SHA1 with only 1 iteration — inherited from Chrome's own design.
+ * Weak by modern standards but must match Chrome's format to decrypt existing data. */
 
 int chrome_derive_key(unsigned char *out32) {
     /* Chrome v10/v11 uses empty password, "saltysalt" salt, 1 iteration */

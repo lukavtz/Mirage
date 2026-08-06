@@ -348,6 +348,8 @@ tls_result_t tls_send(tls_context_t *ctx, const uint8_t *data, size_t len, size_
         size_t chunk = len - total;
         if (chunk > maxm) chunk = maxm;
         /* ponytail: clamp so frame never exceeds buffer */
+        /* L15: Potential unsigned underflow if hdr+trl > sizeof(msg) — safe because
+         * TLS header+trailer are always < 2KB and buffer is 16KB. */
         if (hdr + chunk + trl > sizeof(msg)) chunk = sizeof(msg) - hdr - trl;
 
         size_t frame_len = hdr + chunk + trl;

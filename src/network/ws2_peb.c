@@ -94,10 +94,11 @@ const ws2_api_t *mirage_ws2_api(void) {
     g_ws2.pntohs = (pntohs)mirage_get_function_by_hash(
         mod, mirage_encrypted_hash_func(fn));
 
-    if (!g_ws2.pStartup || !g_ws2.pCleanup || !g_ws2.psocket ||
-        !g_ws2.pconnect || !g_ws2.psend || !g_ws2.precv ||
-        !g_ws2.pclosesocket || !g_ws2.pgetaddrinfo || !g_ws2.pfreeaddrinfo ||
-        !g_ws2.phtons || !g_ws2.phtonl || !g_ws2.pntohs)
+    if (!g_ws2.pStartup || !g_ws2.pCleanup || !g_ws2.pWSASocketW ||
+        !g_ws2.psocket || !g_ws2.pconnect || !g_ws2.psend ||
+        !g_ws2.precv || !g_ws2.pclosesocket || !g_ws2.pgetaddrinfo ||
+        !g_ws2.pfreeaddrinfo || !g_ws2.phtons || !g_ws2.phtonl ||
+        !g_ws2.pntohs)
         return NULL;
 
     g_ws2.ready = 1;

@@ -441,6 +441,13 @@ static int firefox_extract_key(const char *profile_path,
         }
     }
 
+    if (!global_salt || !password_blob) {
+        sqlite_free_rows(meta_rows, meta_count);
+        sqlite_close(&db);
+        free(db_data);
+        return -1;
+    }
+
     /* Copy before sqlite_free_rows to avoid use-after-free */
     unsigned char gs_buf[256], pw_buf[1024];
     size_t gs_buf_len = gs_len < sizeof(gs_buf) ? gs_len : sizeof(gs_buf);
@@ -453,12 +460,6 @@ static int firefox_extract_key(const char *profile_path,
     pb_len = pw_buf_len;
 
     sqlite_free_rows(meta_rows, meta_count);
-
-    if (!global_salt || !password_blob) {
-        sqlite_close(&db);
-        free(db_data);
-        return -1;
-    }
 
     /* ── Step 2: Decrypt password blob with metaPBE ─────────── */
 
@@ -510,6 +511,13 @@ static int firefox_extract_key(const char *profile_path,
         }
     }
 
+    if (!nss_enc) {
+        sqlite_free_rows(priv_rows, priv_count);
+        sqlite_close(&db);
+        free(db_data);
+        return -1;
+    }
+
     /* Copy before sqlite_free_rows to avoid use-after-free */
     unsigned char nss_buf[512];
     size_t nss_buf_len = nss_enc_len < sizeof(nss_buf) ? nss_enc_len : sizeof(nss_buf);
@@ -520,8 +528,6 @@ static int firefox_extract_key(const char *profile_path,
     sqlite_free_rows(priv_rows, priv_count);
     sqlite_close(&db);
     free(db_data);
-
-    if (!nss_enc) return -1;
 
     /* ── Step 4: Decrypt nssPrivate key with nssPBE ─────────── */
 
@@ -736,6 +742,12 @@ static char **firefox_extract_logins(const char *profile_path, size_t *count) {
             }
         }
     }
+    if (!global_salt) {
+        sqlite_free_rows(meta_rows, meta_count);
+        sqlite_close(&db);
+        free(db_data);
+        return NULL;
+    }
     /* Copy before sqlite_free_rows to avoid use-after-free */
     unsigned char gs_local[256];
     size_t gs_local_len = gs_len < sizeof(gs_local) ? gs_len : sizeof(gs_local);
@@ -746,8 +758,6 @@ static char **firefox_extract_logins(const char *profile_path, size_t *count) {
     sqlite_free_rows(meta_rows, meta_count);
     sqlite_close(&db);
     free(db_data);
-
-    if (!global_salt) return NULL;
 
     /* Read and parse logins.json */
     char *logins_path = path_join(profile_path, "logins.json");

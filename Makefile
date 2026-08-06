@@ -118,8 +118,8 @@ TEST_CFLAGS = -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/utils -std=c11
 test-unit: test-crypto test-peb test-chromium test-wallets test-messengers test-network test-evasion
 	@echo "=== ALL UNIT TESTS PASSED ==="
 
-test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c
-	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_crypto tests/test_crypto.c src/crypto/chacha_poly.c
+test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c src/utils/secure_zero.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_crypto tests/test_crypto.c src/crypto/chacha_poly.c src/utils/secure_zero.c
 	./tests/test_crypto
 
 test-sqlite: tests/test_sqlite.c src/parsers/sqlite.c

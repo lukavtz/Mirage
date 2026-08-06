@@ -49,7 +49,7 @@ void sqlite_close(SqliteDb *db) {
 static size_t read_varint(const unsigned char *buf, size_t buf_size, int64_t *value) {
     int64_t v = 0;
     size_t i;
-    for (i = 0; i < 9 && i < buf_size; i++) {
+    for (i = 0; i < 9; i++) {
         if (i >= buf_size) return i; /* H6: boundary check */
         unsigned char b = buf[i];
         if (i < 8) {

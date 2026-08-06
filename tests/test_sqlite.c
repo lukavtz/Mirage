@@ -1,5 +1,5 @@
 /*
- * test_sqlite.c — SQLite parser tests (18 tests)
+ * test_sqlite.c — SQLite parser tests (20 tests)
  */
 #include <stdio.h>
 #include <string.h>
@@ -100,6 +100,18 @@ static void test_open_1024(void) {
     CHECK(d.page_size == 1024, "1024"); sqlite_close(&d);
 }
 
+static void test_open_512(void) {
+    unsigned char b[200] = {0}; memcpy(b, "SQLite format 3\0", 16); b[16] = 2;
+    SqliteDb d; CHECK(sqlite_open(&d, b, 200) == 0, "open");
+    CHECK(d.page_size == 512, "512"); sqlite_close(&d);
+}
+
+static void test_open_4096(void) {
+    unsigned char b[200] = {0}; memcpy(b, "SQLite format 3\0", 16); b[16] = 0x10;
+    SqliteDb d; CHECK(sqlite_open(&d, b, 200) == 0, "open");
+    CHECK(d.page_size == 4096, "4096"); sqlite_close(&d);
+}
+
 static void test_close_noop(void) {
     SqliteDb d; memset(&d, 0, sizeof(d)); sqlite_close(&d);
 }
@@ -171,8 +183,7 @@ static void test_get_cols_not_found(void) {
 }
 
 static void test_free_null(void) {
-    sqlite_free_rows(NULL, 0); /* skip: sqlite_free_rows(NULL, N) with N>0 dereferences NULL */
-    (void)0;
+    sqlite_free_rows(NULL, 0);
     SqliteColumns cols = {0}; sqlite_free_columns(&cols);
     CHECK(cols.names == NULL, "n"); CHECK(cols.count == 0, "c");
 }
@@ -204,6 +215,8 @@ int main(void) {
     test_open_bad_magic();   printf("  PASS: open_bad_magic\n"); fflush(stdout);
     test_open_65536();       printf("  PASS: open_65536\n"); fflush(stdout);
     test_open_1024();        printf("  PASS: open_1024\n"); fflush(stdout);
+    test_open_512();         printf("  PASS: open_512\n"); fflush(stdout);
+    test_open_4096();        printf("  PASS: open_4096\n"); fflush(stdout);
     test_close_noop();       printf("  PASS: close_noop\n"); fflush(stdout);
     test_find_found();       printf("  PASS: find_found\n"); fflush(stdout);
     test_find_not_found();   printf("  PASS: find_not_found\n"); fflush(stdout);
@@ -216,6 +229,5 @@ int main(void) {
     test_page_oob();         printf("  PASS: page_oob\n"); fflush(stdout);
     test_page_zeroed();      printf("  PASS: page_zeroed\n"); fflush(stdout);
     printf("=== test_sqlite: %d/%d PASSED ===\n", g_pass, g_pass + g_fail);
-    fflush(stdout);
     return g_fail == 0 ? 0 : 1;
 }

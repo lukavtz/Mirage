@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 )
@@ -90,28 +89,16 @@ func (rl *rateLimiter) pruneExpired() {
 	}
 }
 
-// ExtractIP returns the client IP from the request, preferring
-// X-Forwarded-For (first entry, if behind a reverse proxy), then
-// X-Real-IP, then RemoteAddr. Non-IP values are rejected; the
-// caller falls back to RemoteAddr on any parse failure.
+// ExtractIP returns the client IP from RemoteAddr only.
+// X-Forwarded-For and X-Real-IP are NOT trusted — they are trivially spoofable
+// and bypass rate limits + IP bans.
 func ExtractIP(r *http.Request) string {
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		// X-Forwarded-For may contain "client, proxy1, proxy2"; take the first.
-		if comma := strings.IndexByte(xff, ','); comma != -1 {
-			xff = strings.TrimSpace(xff[:comma])
-		}
-		if ip := net.ParseIP(xff); ip != nil {
-			return ip.String()
-		}
-	}
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		if ip := net.ParseIP(realIP); ip != nil {
-			return ip.String()
-		}
-	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
 	}
 	return host
 }

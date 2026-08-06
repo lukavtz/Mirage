@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -15,11 +16,12 @@ const (
 )
 
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	userID   string
-	channels []string
+	hub        *Hub
+	conn       *websocket.Conn
+	send       chan []byte
+	userID     string
+	channels   []string
+	closeOnce  sync.Once
 }
 
 func (c *Client) readPump() {

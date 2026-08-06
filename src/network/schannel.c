@@ -178,8 +178,9 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
     TimeStamp  expiry;
     CtxtHandle  ctxt = {0, 0};
 
+    char unisp[32]; enc_decrypt(enc_unisp_name_a, ENC_UNISP_NAME_A_LEN, unisp);
     SECURITY_STATUS ss = fn_Acquire(
-        NULL, "UNISP_NAME_A", SECPKG_CRED_OUTBOUND,
+        NULL, unisp, SECPKG_CRED_OUTBOUND,
         NULL, NULL, NULL, NULL, &cred, &expiry);
     if (ss != SEC_E_OK) return TLS_ERR_CRED_FAILED;
 

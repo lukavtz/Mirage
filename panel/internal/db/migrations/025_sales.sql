@@ -5,5 +5,5 @@ CREATE TABLE IF NOT EXISTS sales_leads (
     tier TEXT NOT NULL,
     status TEXT DEFAULT 'new',
     referral_code TEXT DEFAULT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

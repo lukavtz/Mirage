@@ -625,10 +625,14 @@ static int appbound_decrypt_flags(const unsigned char *decrypted, size_t dec_len
         if (aes_gcm_decrypt_256(aes_key, nonce_iv, 12,
                                  nonce_iv + 12, 32,
                                  nonce_iv + 44, 16,
-                                 key32, 32, &pt_len) != 0)
+                                 key32, 32, &pt_len) != 0) {
+            mirage_secure_zero(ncrypt_out, sizeof(ncrypt_out));
+            mirage_secure_zero(aes_key, sizeof(aes_key));
             return -1;
+        }
 
-        
+        mirage_secure_zero(ncrypt_out, sizeof(ncrypt_out));
+        mirage_secure_zero(aes_key, sizeof(aes_key));
         return 0;
     }
 

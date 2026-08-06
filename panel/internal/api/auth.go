@@ -4,20 +4,20 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
-	"fmt"
-	"log/slog"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/db"
 	mw "zialfi-panel/internal/middleware"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type ipRateLimiter struct {
@@ -57,7 +57,6 @@ type tempTokenEntry struct {
 type AuthHandler struct {
 	db              *sql.DB
 	jwtSecret       string
-	provider        db.ProviderType
 	rateLimiter     *ipRateLimiter
 	forgotPwLimiter *ipRateLimiter
 	failedAttempts  map[string]int
@@ -66,11 +65,10 @@ type AuthHandler struct {
 	tempMu          sync.Mutex
 }
 
-func NewAuthHandler(dbConn *sql.DB, jwtSecret string, provider db.ProviderType) *AuthHandler {
+func NewAuthHandler(dbConn *sql.DB, jwtSecret string) *AuthHandler {
 	h := &AuthHandler{
 		db:              dbConn,
 		jwtSecret:       jwtSecret,
-		provider:        provider,
 		rateLimiter:     newIPRateLimiter(),
 		forgotPwLimiter: newIPRateLimiter(),
 		failedAttempts:  make(map[string]int),
@@ -111,7 +109,7 @@ func (h *AuthHandler) cleanupPasswordResets() {
 	ticker := time.NewTicker(15 * time.Minute)
 	defer ticker.Stop()
 	for range ticker.C {
-		db.Exec(h.db, h.provider, db.Placeholders(h.provider, "DELETE FROM password_resets WHERE expires_at < "+db.Now(h.provider)+" OR used = 1"))
+		db.Exec(h.db, db.Placeholders("DELETE FROM password_resets WHERE expires_at < "+db.Now()+" OR used = 1"))
 	}
 }
 
@@ -119,7 +117,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	ip := extractIP(r)
 
 	var banID string
-	err := db.QueryRow(h.db, h.provider, "SELECT id FROM bans WHERE ip = ?", ip).Scan(&banID)
+	err := db.QueryRow(h.db, "SELECT id FROM bans WHERE ip = ?", ip).Scan(&banID)
 	if err == nil {
 		writeError(w, http.StatusForbidden, "IP is banned")
 		return
@@ -149,10 +147,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id, username, passwordHash, role string
-	err = db.QueryRow(h.db, h.provider, 
-		"SELECT id, username, password_hash, role FROM users WHERE username = ?",
-		req.Username,
-	).Scan(&id, &username, &passwordHash, &role)
+	err = db.QueryRow(h.db, "SELECT id, username, password_hash, role FROM users WHERE username = ?",
+		req.Username).Scan(&id, &username, &passwordHash, &role)
 	if err == sql.ErrNoRows {
 		h.recordFailedAttempt(ip)
 		// ponytail: consistent error message regardless of whether user
@@ -173,7 +169,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var totpEnabled bool
 	var totpSecret string
-	db.QueryRow(h.db, h.provider, "SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret)
+	db.QueryRow(h.db, "SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret)
 	if totpEnabled {
 		tempToken := uuid.New().String()
 		h.tempMu.Lock()
@@ -187,7 +183,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := uuid.New().String()
-	token, expiresAt, err := auth.GenerateTokenWithSession(id, role, sessionID, h.jwtSecret)
+	var tv int
+	db.QueryRow(h.db, "SELECT COALESCE(token_version, 0) FROM users WHERE id = ?", id).Scan(&tv)
+	token, expiresAt, err := auth.GenerateTokenWithSession(id, role, sessionID, h.jwtSecret, tv)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -195,7 +193,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	ua := r.Header.Get("User-Agent")
 	os, browser := ParseUserAgent(ua)
-	db.Exec(h.db, h.provider, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+	db.Exec(h.db, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, id, hashToken(token), "", os, browser, ip)
 
 	score := mw.CheckIP(ip)
@@ -231,7 +229,7 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var secret string
-	err := db.QueryRow(h.db, h.provider, "SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret)
+	err := db.QueryRow(h.db, "SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -244,7 +242,9 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 
 	ip := extractIP(r)
 	sessionID := uuid.New().String()
-	token, expiresAt, err := auth.GenerateTokenWithSession(entry.userID, entry.role, sessionID, h.jwtSecret)
+	var tv int
+	db.QueryRow(h.db, "SELECT COALESCE(token_version, 0) FROM users WHERE id = ?", entry.userID).Scan(&tv)
+	token, expiresAt, err := auth.GenerateTokenWithSession(entry.userID, entry.role, sessionID, h.jwtSecret, tv)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -252,7 +252,7 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 
 	ua := r.Header.Get("User-Agent")
 	os, browser := ParseUserAgent(ua)
-	db.Exec(h.db, h.provider, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+	db.Exec(h.db, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
 		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, entry.userID, hashToken(token), "", os, browser, ip)
 
 	score := mw.CheckIP(ip)
@@ -272,7 +272,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var totpEnabled bool
-	db.QueryRow(h.db, h.provider, "SELECT totp_enabled FROM users WHERE id = ?", claims.UserID).Scan(&totpEnabled)
+	db.QueryRow(h.db, "SELECT totp_enabled FROM users WHERE id = ?", claims.UserID).Scan(&totpEnabled)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user_id":      claims.UserID,
 		"role":         claims.Role,
@@ -303,7 +303,7 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 	const genericMsg = "If the account exists, a reset token has been generated."
 
 	var userID string
-	err := db.QueryRow(h.db, h.provider, "SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
+	err := db.QueryRow(h.db, "SELECT id FROM users WHERE username = ?", req.Username).Scan(&userID)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"message": genericMsg})
 		return
@@ -323,10 +323,8 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	id := uuid.New().String()
 	expiresAt := time.Now().Add(15 * time.Minute)
-	_, err = db.Exec(h.db, h.provider, 
-		"INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
-		id, userID, tokenHash, expiresAt.UTC().Format(time.RFC3339),
-	)
+	_, err = db.Exec(h.db, "INSERT INTO password_resets (id, user_id, token_hash, expires_at) VALUES (?, ?, ?, ?)",
+		id, userID, tokenHash, expiresAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
@@ -334,8 +332,8 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 
 	// Send token via Telegram if configured, otherwise log to console
 	var tgToken, tgChatID string
-	db.QueryRow(h.db, h.provider, "SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&tgToken)
-	db.QueryRow(h.db, h.provider, "SELECT value FROM settings WHERE key = 'telegram_chat_id'").Scan(&tgChatID)
+	db.QueryRow(h.db, "SELECT value FROM settings WHERE key = 'telegram_token'").Scan(&tgToken)
+	db.QueryRow(h.db, "SELECT value FROM settings WHERE key = 'telegram_chat_id'").Scan(&tgChatID)
 
 	if tgToken != "" && tgChatID != "" {
 		text := fmt.Sprintf("🔐 Password reset requested\n\nUser: %s\nCode: %s\nExpires: 15 minutes", req.Username, token)
@@ -383,12 +381,10 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	tokenHash := hex.EncodeToString(hash[:])
 
 	var resetID, userID string
-	var expiresAt string
-	var used int
-	err = db.QueryRow(h.db, h.provider, 
-		"SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?",
-		tokenHash,
-	).Scan(&resetID, &userID, &expiresAt, &used)
+	var expiresAt time.Time
+	var used bool
+	err = db.QueryRow(h.db, "SELECT id, user_id, expires_at, used FROM password_resets WHERE token_hash = ?",
+		tokenHash).Scan(&resetID, &userID, &expiresAt, &used)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusBadRequest, "invalid or expired reset token")
 		return
@@ -397,12 +393,11 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if used != 0 {
+	if used {
 		writeError(w, http.StatusBadRequest, "reset token already used")
 		return
 	}
-	expiry, err := time.Parse(time.RFC3339, expiresAt)
-	if err != nil || time.Now().After(expiry) {
+	if err != nil || time.Now().After(expiresAt) {
 		writeError(w, http.StatusBadRequest, "reset token has expired")
 		return
 	}
@@ -415,13 +410,19 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update password, mark token used, revoke all sessions
-	_, err = db.Exec(h.db, h.provider, "UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userID)
+	_, err = db.Exec(h.db, "UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	db.Exec(h.db, h.provider, "UPDATE password_resets SET used = 1 WHERE id = ?", resetID)
-	db.Exec(h.db, h.provider, "DELETE FROM auth_sessions WHERE user_id = ?", userID)
+	if _, err = db.Exec(h.db, "UPDATE password_resets SET used = TRUE WHERE id = ?", resetID); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if _, err = db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ?", userID); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Password reset successfully"})
 }
@@ -441,7 +442,7 @@ func (h *AuthHandler) recordFailedAttempt(ip string) {
 
 	if shouldBan {
 		id := uuid.New().String()
-		_, _ = db.Exec(h.db, h.provider, "INSERT INTO bans (id, ip, reason) VALUES (?, ?, ?)",
+		_, _ = db.Exec(h.db, "INSERT INTO bans (id, ip, reason) VALUES (?, ?, ?)",
 			id, ip, "auto-ban: too many failed login attempts")
 	}
 }

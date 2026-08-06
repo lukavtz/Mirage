@@ -14,12 +14,10 @@ import (
 
 type ScreenshotsHandler struct {
 	db *sql.DB
-	provider     db.ProviderType
-
 }
 
-func NewScreenshotsHandler(db *sql.DB, provider db.ProviderType) *ScreenshotsHandler {
-	return &ScreenshotsHandler{db: db, provider: provider}
+func NewScreenshotsHandler(db *sql.DB) *ScreenshotsHandler {
+	return &ScreenshotsHandler{db: db}
 }
 
 // Get serves a session's captured screenshot. Tenant-scoped: non-admins only
@@ -32,15 +30,13 @@ func (h *ScreenshotsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !sessionOwnedBy(h.db, h.provider, r, sessionID) {
+	if !sessionOwnedBy(h.db, r, sessionID) {
 		http.NotFound(w, r)
 		return
 	}
 
 	var relPath, mime string
-	err := db.QueryRow(h.db, h.provider, 
-		"SELECT file_path, mime_type FROM screenshots WHERE session_id = ?", sessionID,
-	).Scan(&relPath, &mime)
+	err := db.QueryRow(h.db, "SELECT file_path, mime_type FROM screenshots WHERE session_id = ?", sessionID).Scan(&relPath, &mime)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
@@ -74,7 +70,13 @@ func (h *ScreenshotsHandler) Get(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
 	w.Header().Set("Content-Disposition", "inline; filename=\""+sessionID+".bmp\"")
 	w.Header().Set("Cache-Control", "private, max-age=3600")
-	http.ServeContent(w, r, sessionID+".bmp", info.ModTime(), mustOpen(abs))
+	f := mustOpen(abs)
+	if f == nil {
+		writeError(w, http.StatusInternalServerError, "failed to open screenshot file")
+		return
+	}
+	http.ServeContent(w, r, sessionID+".bmp", info.ModTime(), f)
+	f.Close()
 }
 
 func mustOpen(p string) *os.File {
@@ -95,9 +97,7 @@ func (h *ScreenshotsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var relPath string
-	err := db.QueryRow(h.db, h.provider, 
-		"SELECT file_path FROM screenshots WHERE session_id = ?", sessionID,
-	).Scan(&relPath)
+	err := db.QueryRow(h.db, "SELECT file_path FROM screenshots WHERE session_id = ?", sessionID).Scan(&relPath)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
@@ -107,7 +107,7 @@ func (h *ScreenshotsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := db.Exec(h.db, h.provider, "DELETE FROM screenshots WHERE session_id = ?", sessionID); err != nil {
+	if _, err := db.Exec(h.db, "DELETE FROM screenshots WHERE session_id = ?", sessionID); err != nil {
 		writeError(w, http.StatusInternalServerError, "delete failed")
 		return
 	}

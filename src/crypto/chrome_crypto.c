@@ -9,6 +9,7 @@
 
 #include "chrome_crypto.h"
 #include "config.h"
+#include "secure_zero.h"
 #include "utils/base64.h"
 #include <stdlib.h>
 #include <string.h>
@@ -304,6 +305,7 @@ int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
 
     status = bc->pGenKey(hAlgo, &hKey, NULL, 0,
                          blob, (ULONG)blob_size, 0);
+    mirage_secure_zero(blob, blob_size);
     free(blob);
 
     /* Build auth info (empty for Chrome) and IV struct */

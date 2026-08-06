@@ -6,6 +6,7 @@
  */
 
 #include "chacha_poly.h"
+#include "secure_zero.h"
 #include <string.h>
 
 /* ═══════════════════════════════════════════════════════════════
@@ -347,6 +348,7 @@ int chacha_poly_encrypt(const unsigned char *pt, size_t pt_len,
     /* Finalize */
     poly1305_finish2(&mac, out + pt_len);
 
+    mirage_secure_zero(poly_key, 32);
     return 0;
 }
 
@@ -433,5 +435,6 @@ int chacha_poly_decrypt(const unsigned char *ct, size_t ct_len,
     /* Decrypt */
     chacha20_crypt(out, ct, msg_len, key_words, nonce_words, 1);
 
+    mirage_secure_zero(poly_key, 32);
     return 0;
 }

@@ -10,6 +10,7 @@
 #include "archive_crypt.h"
 #include "chacha_poly.h"
 #include "config.h"
+#include "secure_zero.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -160,6 +161,7 @@ int archive_encrypt(const unsigned char *pt, size_t pt_len,
         return -1;
 
     *out_len = header_len + enc_len;
+    mirage_secure_zero(derived_key, 32);
     return 0;
 }
 
@@ -186,8 +188,10 @@ int archive_decrypt(const unsigned char *ct, size_t ct_len,
     const unsigned char *ciphertext = ct + ARCHIVE_HEADER_LEN;
     size_t ciphertext_len = ct_len - ARCHIVE_HEADER_LEN;
 
-    return chacha_poly_decrypt(ciphertext, ciphertext_len,
+    int rc = chacha_poly_decrypt(ciphertext, ciphertext_len,
                                derived_key, nonce,
                                NULL, 0,
                                out, out_len);
+    mirage_secure_zero(derived_key, 32);
+    return rc;
 }

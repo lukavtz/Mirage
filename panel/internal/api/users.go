@@ -16,12 +16,11 @@ import (
 
 type UsersHandler struct {
 	db        *sql.DB
-	provider     db.ProviderType
 	jwtSecret string
 }
 
-func NewUsersHandler(db *sql.DB, jwtSecret string, provider db.ProviderType) *UsersHandler {
-	return &UsersHandler{db: db, jwtSecret: jwtSecret, provider: provider}
+func NewUsersHandler(db *sql.DB, jwtSecret string) *UsersHandler {
+	return &UsersHandler{db: db, jwtSecret: jwtSecret}
 }
 
 type userListItem struct {
@@ -32,7 +31,7 @@ type userListItem struct {
 }
 
 func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := db.Query(h.db, h.provider, "SELECT id, username, role, created_at FROM users ORDER BY created_at DESC")
+	rows, err := db.Query(h.db, "SELECT id, username, role, created_at FROM users ORDER BY created_at DESC")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query users")
 		return
@@ -81,6 +80,11 @@ func (h *UsersHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 	if req.Role == "" {
 		req.Role = "worker"
 	}
+	allowedRoles := map[string]bool{"admin": true, "worker": true, "viewer": true}
+	if !allowedRoles[req.Role] {
+		writeError(w, http.StatusBadRequest, "invalid role")
+		return
+	}
 	if req.Tier == "" {
 		req.Tier = "starter"
 	}
@@ -105,11 +109,9 @@ func (h *UsersHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := db.Exec(h.db, h.provider, 
-		`INSERT INTO invite_codes (code, role, tier, max_uses, created_by, expires_at)
+	_, err := db.Exec(h.db, `INSERT INTO invite_codes (code, role, tier, max_uses, created_by, expires_at)
 		 VALUES (?, ?, ?, ?, ?, ?)`,
-		code, req.Role, req.Tier, req.MaxUses, claims.UserID, expiresAt,
-	)
+		code, req.Role, req.Tier, req.MaxUses, claims.UserID, expiresAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create invite code")
 		return
@@ -142,10 +144,8 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	var inviteID, role, tier, expiresAt sql.NullString
 	var maxUses, usedCount int
-	err := db.QueryRow(h.db, h.provider, 
-		`SELECT id, role, tier, max_uses, used_count, expires_at
-		 FROM invite_codes WHERE code = ?`, req.InviteCode,
-	).Scan(&inviteID, &role, &tier, &maxUses, &usedCount, &expiresAt)
+	err := db.QueryRow(h.db, `SELECT id, role, tier, max_uses, used_count, expires_at
+		 FROM invite_codes WHERE code = ?`, req.InviteCode).Scan(&inviteID, &role, &tier, &maxUses, &usedCount, &expiresAt)
 	if err == sql.ErrNoRows {
 		writeError(w, http.StatusNotFound, "invalid invite code")
 		return
@@ -183,11 +183,11 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	_, err = tx.Exec(
-		"INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+		db.Placeholders("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)"),
 		userID, req.Username, hash, role.String,
 	)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
+		if strings.Contains(strings.ToLower(err.Error()), "unique") || strings.Contains(strings.ToLower(err.Error()), "duplicate key") {
 			writeError(w, http.StatusConflict, "username already taken")
 			return
 		}
@@ -196,7 +196,7 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = tx.Exec(
-		"UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?",
+		db.Placeholders("UPDATE invite_codes SET used_count = used_count + 1 WHERE id = ?"),
 		inviteID.String,
 	)
 	if err != nil {
@@ -209,7 +209,7 @@ func (h *UsersHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, expiresAtTime, err := auth.GenerateToken(userID, role.String, h.jwtSecret, "")
+	token, expiresAtTime, err := auth.GenerateToken(userID, role.String, h.jwtSecret, "", 0)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate token")
 		return

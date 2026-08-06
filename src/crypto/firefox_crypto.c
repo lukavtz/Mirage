@@ -9,6 +9,7 @@
  */
 
 #include "firefox_crypto.h"
+#include "secure_zero.h"
 #include "utils/base64.h"
 #include <stdlib.h>
 #include <string.h>
@@ -501,6 +502,13 @@ int fx_decrypt_nss_pbe(const unsigned char *global_salt, size_t gs_len,
     }
     if (!pad_ok) return -1;
     dec_len -= pad;
+
+    mirage_secure_zero(hp, sizeof(hp));
+    mirage_secure_zero(chp, sizeof(chp));
+    mirage_secure_zero(k1, sizeof(k1));
+    mirage_secure_zero(k2, sizeof(k2));
+    mirage_secure_zero(k3, sizeof(k3));
+    mirage_secure_zero(des_key, sizeof(des_key));
 
     *out_len = dec_len;
     return 0;

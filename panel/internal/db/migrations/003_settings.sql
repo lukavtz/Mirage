@@ -1,8 +1,10 @@
-CREATE TABLE settings (
+CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO settings (key, value) VALUES ('rate_limit', '100');
-INSERT OR IGNORE INTO settings (key, value) VALUES ('telegram_token', '');
-INSERT OR IGNORE INTO settings (key, value) VALUES ('telegram_chat_id', '');
+INSERT INTO settings (key, value) VALUES
+    ('rate_limit', '100'),
+    ('telegram_token', ''),
+    ('telegram_chat_id', '')
+ON CONFLICT (key) DO NOTHING;

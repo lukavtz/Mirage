@@ -103,11 +103,17 @@ static int u32_to_utf8(unsigned int cp, unsigned char *out) {
         out[0] = (unsigned char)(0xC0 | (cp >> 6));
         out[1] = (unsigned char)(0x80 | (cp & 0x3F));
         return 2;
-    } else {
+    } else if (cp < 0x10000) {
         out[0] = (unsigned char)(0xE0 | (cp >> 12));
         out[1] = (unsigned char)(0x80 | ((cp >> 6) & 0x3F));
         out[2] = (unsigned char)(0x80 | (cp & 0x3F));
         return 3;
+    } else {
+        out[0] = (unsigned char)(0xF0 | (cp >> 18));
+        out[1] = (unsigned char)(0x80 | ((cp >> 12) & 0x3F));
+        out[2] = (unsigned char)(0x80 | ((cp >> 6) & 0x3F));
+        out[3] = (unsigned char)(0x80 | (cp & 0x3F));
+        return 4;
     }
 }
 

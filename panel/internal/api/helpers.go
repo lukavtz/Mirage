@@ -8,6 +8,7 @@ import (
 	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 )
+
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -40,36 +41,37 @@ func claimsUserID(r *http.Request) string {
 // A nil claims value (no auth middleware on the route) means the request is
 // not tenant-scoped; the AuthMiddleware guard is the only barrier then,
 // matching List/Detail behavior.
-func sessionOwnedBy(d *sql.DB, provider db.ProviderType, r *http.Request, sessionID string) bool {
+func sessionOwnedBy(d *sql.DB, r *http.Request, sessionID string) bool {
 	claims := middleware.ClaimsFromContext(r.Context())
 	if claims == nil {
-		return true
+		return false
 	}
 	if claims.Role == "admin" {
 		return true
 	}
 	var ownerID string
-	err := db.QueryRow(d, provider, "SELECT COALESCE(owner_id, '') FROM sessions WHERE id = ?", sessionID).Scan(&ownerID)
+	err := db.QueryRow(d, "SELECT COALESCE(owner_id, '') FROM sessions WHERE id = ?", sessionID).Scan(&ownerID)
 	if err != nil {
 		return false
 	}
 	return ownerID == claims.UserID
 }
+
 // buildOwnedBy reports whether the caller may access the given build.
 // Admins bypass ownership; other roles are limited to their own builds.
 // A nil claims value (no auth middleware on the route) means the request is
 // not tenant-scoped; the AuthMiddleware guard is the only barrier then,
 // matching List/Detail behavior.
-func buildOwnedBy(d *sql.DB, provider db.ProviderType, r *http.Request, buildID string) bool {
+func buildOwnedBy(d *sql.DB, r *http.Request, buildID string) bool {
 	claims := middleware.ClaimsFromContext(r.Context())
 	if claims == nil {
-		return true
+		return false
 	}
 	if claims.Role == "admin" {
 		return true
 	}
 	var userID string
-	err := db.QueryRow(d, provider, "SELECT COALESCE(user_id, '') FROM builds WHERE id = ?", buildID).Scan(&userID)
+	err := db.QueryRow(d, "SELECT COALESCE(user_id, '') FROM builds WHERE id = ?", buildID).Scan(&userID)
 	if err != nil {
 		return false
 	}

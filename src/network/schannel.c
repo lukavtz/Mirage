@@ -192,8 +192,14 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
     int first = 1;
     unsigned char in_buf[0x4000];
     ULONG in_len = 0;
+    int hs_iter = 0;
 
     for (;;) {
+        if (++hs_iter > 50) {
+            fn_DeleteCtx(&ctxt);
+            fn_FreeCred(&cred);
+            return TLS_ERR_HANDSHAKE_FAILED;
+        }
         SecBuffer out_buf;
         out_buf.BufferType = SECBUFFER_TOKEN;
         out_buf.cbBuffer   = 0;
@@ -403,7 +409,12 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
     unsigned char recv_buf[0x4000];
     size_t recv_len = 0;
 
+    int recv_iter = 0;
     for (;;) {
+        if (++recv_iter > 100) {
+            if (out_read) *out_read = 0;
+            return TLS_ERR_DECRYPT_FAILED;
+        }
         size_t n;
         ws2_result_t r = ws2_recv(ctx->sock, recv_buf + recv_len,
                                   sizeof(recv_buf) - recv_len, &n);

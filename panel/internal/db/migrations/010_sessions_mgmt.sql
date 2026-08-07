@@ -7,6 +7,6 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
     browser TEXT DEFAULT '',
     ip TEXT DEFAULT '',
     location TEXT DEFAULT '',
-    last_active_at TEXT DEFAULT (datetime('now')),
-    created_at TEXT DEFAULT (datetime('now'))
+    last_active_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

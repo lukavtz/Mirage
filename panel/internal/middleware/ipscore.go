@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -49,32 +50,51 @@ func CheckIP(ip string) IPScoreResult {
 		return IPScoreResult{}
 	}
 
-	result := IPScoreResult{}
+	var (
+		apiData    ipAPIData
+		ipapi      ipapiData
+		proxycheck proxycheckData
+		wg         sync.WaitGroup
+	)
 
-	var apiData ipAPIData
-	if resp, err := httpClient.Get(fmt.Sprintf("https://ip-api.com/json/%s?fields=country,isp,proxy,hosting", ip)); err == nil {
-		defer resp.Body.Close()
-		json.NewDecoder(resp.Body).Decode(&apiData)
-		result.Country = apiData.Country
-		result.ISP = apiData.ISP
-		result.IsProxy = apiData.Proxy
-		result.IsHosting = apiData.Hosting
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		if resp, err := httpClient.Get(fmt.Sprintf("https://ip-api.com/json/%s?fields=country,isp,proxy,hosting", ip)); err == nil {
+			defer resp.Body.Close()
+			json.NewDecoder(resp.Body).Decode(&apiData)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if resp, err := httpClient.Get(fmt.Sprintf("https://ipapi.co/%s/json/", ip)); err == nil {
+			defer resp.Body.Close()
+			json.NewDecoder(resp.Body).Decode(&ipapi)
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		if resp, err := httpClient.Get(fmt.Sprintf("https://proxycheck.io/v2/%s?key=&vpn=1", ip)); err == nil {
+			defer resp.Body.Close()
+			json.NewDecoder(resp.Body).Decode(&proxycheck)
+		}
+	}()
+
+	wg.Wait()
+
+	result := IPScoreResult{
+		Country:   apiData.Country,
+		ISP:       apiData.ISP,
+		IsProxy:   apiData.Proxy,
+		IsHosting: apiData.Hosting,
 	}
 
-	var ipapi ipapiData
-	if resp, err := httpClient.Get(fmt.Sprintf("https://ipapi.co/%s/json/", ip)); err == nil {
-		defer resp.Body.Close()
-		json.NewDecoder(resp.Body).Decode(&ipapi)
-	}
-
-	var proxycheck proxycheckData
-	if resp, err := httpClient.Get(fmt.Sprintf("https://proxycheck.io/v2/%s?key=&vpn=1", ip)); err == nil {
-		defer resp.Body.Close()
-		json.NewDecoder(resp.Body).Decode(&proxycheck)
-		if entry, ok := proxycheck.IP[ip]; ok {
-			if entry.Proxy == "yes" {
-				result.IsProxy = true
-			}
+	if entry, ok := proxycheck.IP[ip]; ok {
+		if entry.Proxy == "yes" {
+			result.IsProxy = true
 		}
 	}
 

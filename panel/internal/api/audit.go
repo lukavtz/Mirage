@@ -5,13 +5,13 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+
+	"zialfi-panel/internal/db"
 )
 
-func LogAudit(db *sql.DB, userID, action, details, ip string) {
-	_, err := db.Exec(
-		"INSERT INTO audit_log (user_id, action, details, ip) VALUES (?, ?, ?, ?)",
-		userID, action, details, ip,
-	)
+func LogAudit(d *sql.DB, userID, action, details, ip string) {
+	_, err := db.Exec(d, "INSERT INTO audit_log (user_id, action, details, ip) VALUES (?, ?, ?, ?)",
+		userID, action, details, ip)
 	if err != nil {
 		slog.Error("failed to write audit log", "action", action, "err", err)
 	}
@@ -68,13 +68,13 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 	if len(conditions) > 0 {
 		countQuery += " WHERE " + joinConditions(conditions)
 	}
-	h.db.QueryRow(countQuery, args...).Scan(&total)
+	db.QueryRow(h.db, countQuery, args...).Scan(&total)
 
 	query += " ORDER BY created_at DESC LIMIT ? OFFSET ?"
 	offset := (page - 1) * limit
 	qargs := append(args, limit, offset)
 
-	rows, err := h.db.Query(query, qargs...)
+	rows, err := db.Query(h.db, query, qargs...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query audit log")
 		return
@@ -124,14 +124,14 @@ func (h *AuditHandler) Stats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	today := "datetime('now', 'start of day')"
+	today := "date_trunc('day', CURRENT_TIMESTAMP)"
 	var stats auditStats
 
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action LIKE 'session.view%' AND created_at >= "+today, workerID).Scan(&stats.SessionsViewed)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.export' AND created_at >= "+today, workerID).Scan(&stats.Exports)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action IN ('session.lock','session.unlock') AND created_at >= "+today, workerID).Scan(&stats.Locks)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.comment' AND created_at >= "+today, workerID).Scan(&stats.Comments)
-	h.db.QueryRow("SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND created_at >= "+today, workerID).Scan(&stats.Total)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action LIKE 'session.view%' AND created_at >= "+today, workerID).Scan(&stats.SessionsViewed)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.export' AND created_at >= "+today, workerID).Scan(&stats.Exports)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action IN ('session.lock','session.unlock') AND created_at >= "+today, workerID).Scan(&stats.Locks)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND action = 'session.comment' AND created_at >= "+today, workerID).Scan(&stats.Comments)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM audit_log WHERE user_id = ? AND created_at >= "+today, workerID).Scan(&stats.Total)
 
 	writeJSON(w, http.StatusOK, stats)
 }
@@ -147,11 +147,9 @@ func joinConditions(conds []string) string {
 	return result
 }
 
-func LogWorkerAction(db *sql.DB, userID, action, details, ip string, targetUserID *string) {
-	_, err := db.Exec(
-		"INSERT INTO audit_log (user_id, action, details, ip, target_user_id) VALUES (?, ?, ?, ?, ?)",
-		userID, action, details, ip, targetUserID,
-	)
+func LogWorkerAction(d *sql.DB, userID, action, details, ip string, targetUserID *string) {
+	_, err := db.Exec(d, "INSERT INTO audit_log (user_id, action, details, ip, target_user_id) VALUES (?, ?, ?, ?, ?)",
+		userID, action, details, ip, targetUserID)
 	if err != nil {
 		slog.Error("failed to write audit log", "action", action, "err", err)
 	}

@@ -1,7 +1,7 @@
 /*
  * hash.h — Hash functions for Mirage-C
  *
- * Rotl-XOR-Mul hash matching Zig config.SEED = 0x61472f96
+ * Rotl-XOR-Mul hash matching Zig config.SEED (polymorphic)
  * Module hashes use 28 iterations, function hashes use 27.
  * All hashes XOR input bytes with STRING_KEY_ENC before hashing.
  */

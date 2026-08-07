@@ -1,7 +1,7 @@
-CREATE TABLE bans (
+CREATE TABLE IF NOT EXISTS bans (
     id        TEXT PRIMARY KEY,
     ip        TEXT NOT NULL,
     reason    TEXT,
-    banned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    banned_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_bans_ip ON bans(ip);
+CREATE INDEX IF NOT EXISTS idx_bans_ip ON bans(ip);

@@ -10,18 +10,19 @@ import (
 
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID    string `json:"uid"`
-	Role      string `json:"role"`
-	SessionID string `json:"sid,omitempty"`
+	UserID       string `json:"uid"`
+	Role         string `json:"role"`
+	SessionID    string `json:"sid,omitempty"`
+	TokenVersion int    `json:"tv,omitempty"`
 }
 
 const TokenExpiry = 24 * time.Hour
 
-func GenerateToken(userID, role, secret, sessionID string) (token string, expiresAt time.Time, err error) {
-	return GenerateTokenWithSession(userID, role, sessionID, secret)
+func GenerateToken(userID, role, secret, sessionID string, tokenVersion int) (token string, expiresAt time.Time, err error) {
+	return GenerateTokenWithSession(userID, role, sessionID, secret, tokenVersion)
 }
 
-func GenerateTokenWithSession(userID, role, sessionID, secret string) (token string, expiresAt time.Time, err error) {
+func GenerateTokenWithSession(userID, role, sessionID, secret string, tokenVersion int) (token string, expiresAt time.Time, err error) {
 	now := time.Now()
 	expiresAt = now.Add(TokenExpiry)
 
@@ -30,9 +31,10 @@ func GenerateTokenWithSession(userID, role, sessionID, secret string) (token str
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
 		},
-		UserID:    userID,
-		Role:      role,
-		SessionID: sessionID,
+		UserID:       userID,
+		Role:         role,
+		SessionID:    sessionID,
+		TokenVersion: tokenVersion,
 	}
 
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

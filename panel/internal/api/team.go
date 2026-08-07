@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"zialfi-panel/internal/db"
 )
 
 type TeamHandler struct {
@@ -40,7 +42,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	query += " ORDER BY u.created_at DESC"
 
-	rows, err := h.db.Query(query, args...)
+	rows, err := db.Query(h.db, query, args...)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query team")
 		return
@@ -55,6 +57,16 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		m.Status = "offline"
+		if m.LastLogin != nil {
+			var lastActive sql.NullString
+			err := db.QueryRow(h.db, "SELECT MAX(last_active_at) FROM auth_sessions WHERE user_id = ?", m.ID).Scan(&lastActive)
+			if err == nil && lastActive.Valid {
+				parsed, err := time.Parse("2006-01-02 15:04:05", lastActive.String)
+				if err == nil && time.Since(parsed) < 5*time.Minute {
+					m.Status = "online"
+				}
+			}
+		}
 		members = append(members, m)
 	}
 	if err := rows.Err(); err != nil {
@@ -75,13 +87,13 @@ func (h *TeamHandler) ChangeRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	validRoles := map[string]bool{"admin": true, "worker": true, "viewer": true}
+	validRoles := map[string]bool{"admin": true, "checker": true, "worker": true, "viewer": true, "traffer": true}
 	if !validRoles[req.Role] {
 		writeError(w, http.StatusBadRequest, "invalid role")
 		return
 	}
 
-	result, err := h.db.Exec("UPDATE users SET role = ? WHERE id = ?", req.Role, userID)
+	result, err := db.Exec(h.db, "UPDATE users SET role = ? WHERE id = ?", req.Role, userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to update role")
 		return
@@ -115,7 +127,7 @@ func (h *TeamHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.db.Exec("DELETE FROM users WHERE id = ?", userID)
+	result, err := db.Exec(h.db, "DELETE FROM users WHERE id = ?", userID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to remove user")
 		return

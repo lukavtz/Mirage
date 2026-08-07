@@ -12,14 +12,15 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
 	"zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestMarketplace_ListProducts(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		uuid.New().String(), "Test Module", "A test module", 1999, "module",
 	)
 	if err != nil {
@@ -53,7 +54,7 @@ func TestMarketplace_ListProducts(t *testing.T) {
 }
 
 func TestMarketplace_ListProductsEmpty(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	r := chi.NewRouter()
@@ -77,13 +78,13 @@ func TestMarketplace_ListProductsEmpty(t *testing.T) {
 }
 
 func TestMarketplace_Purchase(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "buyer", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Premium Module", "Premium description", 4999, "module",
 	)
 	if err != nil {
@@ -117,14 +118,14 @@ func TestMarketplace_Purchase(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM purchases WHERE user_id = ? AND product_id = ?", uid, pid).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM purchases WHERE user_id = $1 AND product_id = $2", uid, pid).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 purchase, got %d", count)
 	}
 }
 
 func TestMarketplace_PurchaseProductNotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "buyer2", "pass")
@@ -146,13 +147,13 @@ func TestMarketplace_PurchaseProductNotFound(t *testing.T) {
 }
 
 func TestMarketplace_Activate(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "activator", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Test Module", "Test desc", 999, "module",
 	)
 	if err != nil {
@@ -161,7 +162,7 @@ func TestMarketplace_Activate(t *testing.T) {
 
 	licenseKey := "test-license-123"
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key) VALUES (?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), uid, pid, licenseKey,
 	)
 	if err != nil {
@@ -184,20 +185,20 @@ func TestMarketplace_Activate(t *testing.T) {
 	}
 
 	var activatedAt *string
-	d.QueryRow("SELECT activated_at FROM purchases WHERE license_key = ?", licenseKey).Scan(&activatedAt)
+	d.QueryRow("SELECT activated_at FROM purchases WHERE license_key = $1", licenseKey).Scan(&activatedAt)
 	if activatedAt == nil {
 		t.Error("expected activated_at to be set")
 	}
 }
 
 func TestMarketplace_ActivateAlreadyActivated(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "activator2", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Test Module", "Test desc", 999, "module",
 	)
 	if err != nil {
@@ -205,7 +206,7 @@ func TestMarketplace_ActivateAlreadyActivated(t *testing.T) {
 	}
 
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key, activated_at) VALUES (?, ?, ?, ?, datetime('now'))",
+		"INSERT INTO purchases (id, user_id, product_id, license_key, activated_at) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)",
 		uuid.New().String(), uid, pid, "already-active-key",
 	)
 	if err != nil {
@@ -229,13 +230,13 @@ func TestMarketplace_ActivateAlreadyActivated(t *testing.T) {
 }
 
 func TestMarketplace_MyPurchases(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "purchaser", "pass")
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Some Module", "Description", 2999, "module",
 	)
 	if err != nil {
@@ -243,7 +244,7 @@ func TestMarketplace_MyPurchases(t *testing.T) {
 	}
 
 	_, err = d.Exec(
-		"INSERT INTO purchases (id, user_id, product_id, license_key) VALUES (?, ?, ?, ?)",
+		"INSERT INTO purchases (id, user_id, product_id, license_key) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), uid, pid, "my-license-key",
 	)
 	if err != nil {
@@ -276,7 +277,7 @@ func TestMarketplace_MyPurchases(t *testing.T) {
 }
 
 func TestMarketplace_CreateProduct(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	r := chi.NewRouter()
@@ -305,7 +306,7 @@ func TestMarketplace_CreateProduct(t *testing.T) {
 }
 
 func TestMarketplace_CreateProductValidation(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	r := chi.NewRouter()
@@ -323,12 +324,12 @@ func TestMarketplace_CreateProductValidation(t *testing.T) {
 }
 
 func TestMarketplace_DeleteProduct(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	pid := uuid.New().String()
 	_, err := d.Exec(
-		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES (?, ?, ?, ?, ?)",
+		"INSERT INTO products (id, name, description, price_cents, product_type) VALUES ($1, $2, $3, $4, $5)",
 		pid, "Delete Me", "To be deleted", 999, "module",
 	)
 	if err != nil {
@@ -347,14 +348,14 @@ func TestMarketplace_DeleteProduct(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM products WHERE id = ?", pid).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM products WHERE id = $1", pid).Scan(&count)
 	if count != 0 {
 		t.Error("expected product to be deleted")
 	}
 }
 
 func TestMarketplace_DeleteProductNotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	r := chi.NewRouter()
@@ -370,7 +371,7 @@ func TestMarketplace_DeleteProductNotFound(t *testing.T) {
 }
 
 func TestMarketplace_ActivateNotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewMarketplaceHandler(d)
 
 	uid := createTestUser(t, d, "activator3", "pass")

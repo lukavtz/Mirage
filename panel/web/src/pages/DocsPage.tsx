@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import { useI18n } from '@/lib/i18n'
 
 interface DocFile {
   path: string
@@ -31,7 +32,7 @@ function renderMarkdown(md: string): string {
   let html = ''
   const lines = md.split('\n')
   let inTable = false
-  html += '<div class="prose prose-invert max-w-none">'
+  html += '<div class="text-sm text-foreground/90 leading-relaxed max-w-none [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mb-4 [&_h1]:mt-6 [&_h1:first-child]:mt-0 [&_h2]:text-xl [&_h2]:font-semibold [&_h2]:mb-3 [&_h2]:mt-5 [&_h3]:text-lg [&_h3]:font-medium [&_h3]:mb-2 [&_h3]:mt-4 [&_p]:mb-3 [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-xs [&_code]:font-mono [&_pre]:bg-muted [&_pre]:p-4 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:mb-4 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:mb-3 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:mb-3 [&_li]:mb-1 [&_a]:text-primary [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-4 [&_blockquote]:border-primary/30 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-muted-foreground [&_blockquote]:mb-3 [&_strong]:font-semibold [&_em]:italic">'
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]
 
@@ -82,6 +83,7 @@ function renderMarkdown(md: string): string {
 export default function DocsPage() {
   const { path: docPath } = useParams()
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [search, setSearch] = useState('')
 
   const docListQuery = useQuery({
@@ -114,12 +116,12 @@ export default function DocsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Book className="h-4 w-4" />
-            Documentation
+            {t('docs.title')}
           </CardTitle>
           <div className="relative mt-2">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
-              placeholder="Search docs..."
+              placeholder={t('docs.search')}
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="pl-7 h-8 text-xs"
@@ -148,7 +150,7 @@ export default function DocsPage() {
             ))}
           </nav>
           {filtered.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center mt-4">No docs found</p>
+            <p className="text-xs text-muted-foreground text-center mt-4">{t('docs.no_results')}</p>
           )}
         </CardContent>
       </Card>
@@ -172,7 +174,7 @@ export default function DocsPage() {
             <div dangerouslySetInnerHTML={{ __html: renderMarkdown(docContent.content) }} />
           ) : (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Select a document from the sidebar
+              {t('docs.select')}
             </div>
           )}
         </CardContent>

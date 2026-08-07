@@ -1,0 +1,4 @@
+        -:    0:Source:src/utils/base64.c
+        -:    0:Graph:test_crypto_mock-base64.gcno
+        -:    0:Data:test_crypto_mock-base64.gcda
+        -:    0:Runs:1

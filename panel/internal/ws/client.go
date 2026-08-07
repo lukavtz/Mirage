@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -15,17 +16,21 @@ const (
 )
 
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	userID   string
-	channels []string
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	userID    string
+	channels  []string
+	sendClose sync.Once
 }
 
+func (c *Client) close() {
+	_ = c.conn.Close()
+}
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		c.close()
 	}()
 
 	c.conn.SetReadLimit(maxMessageSize)
@@ -47,7 +52,7 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		c.close()
 	}()
 
 	for {

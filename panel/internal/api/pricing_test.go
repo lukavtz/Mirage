@@ -11,10 +11,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestPricing_ListTiers_Public(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewPricingHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/pricing", nil)
@@ -38,7 +39,7 @@ func TestPricing_ListTiers_Public(t *testing.T) {
 }
 
 func TestPricing_MyFeatures_Unauthenticated(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	handler := api.NewPricingHandler(d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/features", nil)
@@ -51,7 +52,7 @@ func TestPricing_MyFeatures_Unauthenticated(t *testing.T) {
 }
 
 func TestPricing_MyFeatures_Authenticated(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupPricingTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/license/features", nil)
@@ -76,7 +77,7 @@ func TestPricing_MyFeatures_Authenticated(t *testing.T) {
 }
 
 func TestReferral_GetCode(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupPricingTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/referrals/code", nil)
@@ -98,7 +99,7 @@ func TestReferral_GetCode(t *testing.T) {
 }
 
 func TestReferral_Apply_InvalidCode(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupPricingTestRouter(t, d)
 
 	body := `{"code":"invalid123"}`
@@ -114,7 +115,7 @@ func TestReferral_Apply_InvalidCode(t *testing.T) {
 }
 
 func TestReferral_Stats(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupPricingTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/referrals/stats", nil)
@@ -140,10 +141,10 @@ func setupPricingTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	uid := createTestUser(t, d, "pricinguser", "pass")
-	token, _, err := auth.GenerateToken(uid, "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken(uid, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, nil)
 	return r, token
 }

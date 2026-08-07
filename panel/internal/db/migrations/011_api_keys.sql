@@ -5,6 +5,6 @@ CREATE TABLE IF NOT EXISTS api_keys (
     key_hash TEXT NOT NULL,
     scope TEXT DEFAULT 'read',
     rate_limit INTEGER DEFAULT 100,
-    created_at TEXT DEFAULT (datetime('now')),
-    last_used_at TEXT DEFAULT NULL
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP WITHOUT TIME ZONE DEFAULT NULL
 );

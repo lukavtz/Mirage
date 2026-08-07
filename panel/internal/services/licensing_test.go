@@ -45,11 +45,17 @@ func TestLicense_InvalidSignature(t *testing.T) {
 
 	key, _ := services.GenerateLicenseKey(tier, duration)
 
-	// Replace a middle character to corrupt the HMAC signature
+	// Replace a middle character to corrupt the HMAC signature.
+	// Pick a replacement that differs from the current rune, otherwise the
+	// tampered key can equal the original and the test spuriously fails.
 	runes := []rune(key)
 	for i := len(runes) / 2; i < len(runes); i++ {
 		if runes[i] != '-' {
-			runes[i] = 'Z'
+			if runes[i] != 'Z' {
+				runes[i] = 'Z'
+			} else {
+				runes[i] = 'Y'
+			}
 			break
 		}
 	}

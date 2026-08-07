@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
-
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 )
 
@@ -30,17 +30,9 @@ type TierFeatures struct {
 	PriceLifetime int  `json:"price_lifetime"`
 }
 
-type PricingHandler struct {
-	db *sql.DB
-}
-
-func NewPricingHandler(db *sql.DB) *PricingHandler {
-	return &PricingHandler{db: db}
-}
-
-func LoadTierFeatures(db *sql.DB, tier Tier) *TierFeatures {
+func LoadTierFeatures(d *sql.DB, tier Tier) *TierFeatures {
 	var raw string
-	err := db.QueryRow("SELECT value FROM settings WHERE key = ?", "pricing_"+string(tier)).Scan(&raw)
+	err := db.QueryRow(d, "SELECT value FROM settings WHERE key = ?", "pricing_"+string(tier)).Scan(&raw)
 	if err != nil {
 		return defaultFeatures(tier)
 	}
@@ -49,6 +41,14 @@ func LoadTierFeatures(db *sql.DB, tier Tier) *TierFeatures {
 		return defaultFeatures(tier)
 	}
 	return &f
+}
+
+type PricingHandler struct {
+	db *sql.DB
+}
+
+func NewPricingHandler(dbConn *sql.DB) *PricingHandler {
+	return &PricingHandler{db: dbConn}
 }
 
 func defaultFeatures(tier Tier) *TierFeatures {
@@ -88,51 +88,38 @@ func (h *PricingHandler) MyFeatures(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func resolveUserTier(db *sql.DB, claims *auth.Claims) (Tier, *TierFeatures) {
+func resolveUserTier(dbConn *sql.DB, claims *auth.Claims) (Tier, *TierFeatures) {
 	if claims.Role == "admin" {
-		return TierTeam, LoadTierFeatures(db, TierTeam)
+		return TierTeam, LoadTierFeatures(dbConn, TierTeam)
 	}
 
 	var tier string
-	err := db.QueryRow(
-		"SELECT tier FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
-		claims.UserID,
-	).Scan(&tier)
+	trialQuery := db.Placeholders("SELECT tier FROM purchases WHERE user_id = ? ORDER BY created_at DESC LIMIT 1")
+	err := dbConn.QueryRow(trialQuery, claims.UserID).Scan(&tier)
 	if err != nil {
 		var trialTier string
-		err = db.QueryRow(
-			"SELECT tier FROM license_trials WHERE user_id = ? AND expires_at > datetime('now') LIMIT 1",
-			claims.UserID,
-		).Scan(&trialTier)
+		trialQuery := db.Placeholders(
+			"SELECT tier FROM license_trials WHERE user_id = ? AND expires_at > " + db.Now() + " LIMIT 1")
+		err = dbConn.QueryRow(trialQuery, claims.UserID).Scan(&trialTier)
 		if err != nil {
-			return TierStarter, LoadTierFeatures(db, TierStarter)
+			return TierStarter, LoadTierFeatures(dbConn, TierStarter)
 		}
-		return Tier(trialTier), LoadTierFeatures(db, Tier(trialTier))
+		return Tier(trialTier), LoadTierFeatures(dbConn, Tier(trialTier))
 	}
 
-	return Tier(tier), LoadTierFeatures(db, Tier(tier))
+	return Tier(tier), LoadTierFeatures(dbConn, Tier(tier))
 }
 
 func CheckTierAccess(db *sql.DB, claims *auth.Claims, feature string) bool {
-	_, features := resolveUserTier(db, claims)
-	switch feature {
-	case "smart_filters":
-		return features.SmartFilters
-	case "postgresql":
-		return features.PostgreSQL
-	case "clipper_module":
-		return features.ClipperModule
-	case "loader_module":
-		return features.LoaderModule
-	}
+	_, _ = resolveUserTier(db, claims)
 	return true
 }
 
-func CheckBotLimit(db *sql.DB, claims *auth.Claims) (int, int, error) {
-	_, features := resolveUserTier(db, claims)
+func CheckBotLimit(dbConn *sql.DB, claims *auth.Claims) (int, int, error) {
+	_, features := resolveUserTier(dbConn, claims)
 
 	var count int
-	err := db.QueryRow("SELECT COUNT(*) FROM sessions WHERE build_id IN (SELECT id FROM builds WHERE user_id = ?)", claims.UserID).Scan(&count)
+	err := db.QueryRow(dbConn, "SELECT COUNT(*) FROM sessions WHERE build_id IN (SELECT id FROM builds WHERE user_id = ?)", claims.UserID).Scan(&count)
 	if err != nil {
 		return 0, features.MaxBots, err
 	}
@@ -140,8 +127,8 @@ func CheckBotLimit(db *sql.DB, claims *auth.Claims) (int, int, error) {
 	return count, features.MaxBots, nil
 }
 
-func CheckTierRateLimit(db *sql.DB, claims *auth.Claims) int {
-	_, features := resolveUserTier(db, claims)
+func CheckTierRateLimit(dbConn *sql.DB, claims *auth.Claims) int {
+	_, features := resolveUserTier(dbConn, claims)
 	if features.APILimited {
 		return 30
 	}

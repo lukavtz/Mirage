@@ -52,7 +52,7 @@ export default function SearchPage() {
     return (
       <>
         {text.slice(0, idx)}
-        <mark className="bg-yellow-500/20 text-foreground rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
+        <mark className="bg-warning/20 text-warning-foreground rounded-sm px-0.5">{text.slice(idx, idx + query.length)}</mark>
         {text.slice(idx + query.length)}
       </>
     )
@@ -60,7 +60,7 @@ export default function SearchPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold">{t('search.title')}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t('search.title')}</h1>
 
       <div className="flex gap-2">
         <div className="relative flex-1">

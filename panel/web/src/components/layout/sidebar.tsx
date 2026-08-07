@@ -1,97 +1,185 @@
-import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import logo from '@/assets/logo.webp'
+import { useState, useEffect, useCallback } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
-import { Button } from '@/components/ui/button'
-import { t } from '@/lib/i18n'
+import { useI18n, type TranslationKey } from '@/lib/i18n'
 import {
-  LayoutDashboard,
-  Database,
-  Hammer,
-  Search,
-  Users,
-  Settings,
-  ChevronLeft,
-  ChevronRight,
-  Terminal,
-  RotateCcw,
-  Book,
+  LayoutDashboard, Database, Bug, Key, Cookie, CreditCard, Wallet, FileText,
+  Scissors, LifeBuoy, Search, Hammer, Settings, KeyRound, Users, UserCog,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react'
 
-const navItems = [
-  { to: '/', labelKey: 'nav.dashboard', icon: LayoutDashboard, end: true },
-  { to: '/sessions', labelKey: 'nav.sessions', icon: Database, end: false },
-  { to: '/build', labelKey: 'nav.build', icon: Hammer, end: false },
-  { to: '/restore', labelKey: 'nav.restore', icon: RotateCcw, end: false },
-  { to: '/search', labelKey: 'nav.search', icon: Search, end: false },
-  { to: '/docs', labelKey: 'nav.docs', icon: Book, end: false },
-  { to: '/users', labelKey: 'nav.users', icon: Users, end: false },
-  { to: '/team', labelKey: 'nav.team', icon: Users, end: false },
-  { to: '/settings', labelKey: 'nav.settings', icon: Settings, end: false },
+import { motion, AnimatePresence } from 'motion/react'
+
+type NavItem = { to: string; label: TranslationKey; icon: typeof LayoutDashboard; end?: boolean }
+
+const navItems: NavItem[] = [
+  { to: '/', label: 'nav.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/sessions', label: 'nav.logs', icon: Database },
+  { to: '/infections', label: 'nav.infections', icon: Bug },
+  { to: '/cookies', label: 'nav.cookies', icon: Cookie },
+  { to: '/passwords', label: 'nav.passwords', icon: Key },
+  { to: '/cards', label: 'nav.cards', icon: CreditCard },
+  { to: '/wallets', label: 'nav.wallets', icon: Wallet },
+  { to: '/files', label: 'nav.files', icon: FileText },
+  { to: '/clippers', label: 'nav.clippers', icon: Scissors },
+  { to: '/support', label: 'nav.support', icon: LifeBuoy },
 ]
 
-export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(() => {
-    const saved = localStorage.getItem('sidebar_collapsed')
-    return saved === 'true'
-  })
+const extraNavItems: NavItem[] = [
+  { to: '/search', label: 'nav.search', icon: Search },
+  { to: '/build', label: 'nav.build', icon: Hammer },
+  { to: '/settings', label: 'nav.settings', icon: Settings },
+  { to: '/api-keys', label: 'nav.api_keys', icon: KeyRound },
+  { to: '/users', label: 'nav.users', icon: Users },
+  { to: '/team', label: 'nav.team', icon: UserCog },
+]
 
-  const toggleCollapsed = () => {
-    setCollapsed(prev => {
-      const next = !prev
-      localStorage.setItem('sidebar_collapsed', String(next))
-      return next
-    })
-  }
+interface SidebarProps {
+  open?: boolean
+  onClose?: () => void
+}
+
+function NavLinkItem({ item, collapsed, open, onClose }: { item: NavItem; collapsed: boolean; open?: boolean; onClose?: () => void }) {
+  const location = useLocation()
+  const { t } = useI18n()
+  const isActive = item.end
+    ? location.pathname === item.to
+    : location.pathname === item.to ||
+      (item.to !== '/' && location.pathname.startsWith(item.to + '/'))
 
   return (
-    <aside
+    <NavLink
+      to={item.to}
+      end={item.end}
+      onClick={() => { if (open && onClose) onClose() }}
+      aria-current={isActive ? 'page' : undefined}
       className={cn(
-        'flex flex-col border-r bg-card transition-all duration-200',
-        collapsed ? 'w-14' : 'w-56',
+        'group relative flex items-center rounded-lg transition-all duration-200 ease-out',
+        collapsed ? 'justify-center h-11 w-full' : 'gap-3 h-11 px-3',
+        isActive
+          ? 'bg-accent text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:scale-[0.98]',
       )}
+      title={collapsed ? t(item.label) : undefined}
     >
+      {isActive && (
+        <motion.span
+          layoutId="sidebar-active-marker"
+          className="absolute left-0 top-2 bottom-2 w-[2px] rounded-full bg-foreground"
+          transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+        />
+      )}
+      <motion.span
+        whileHover={!isActive ? { scale: 1.08 } : undefined}
+        whileTap={{ scale: 0.92 }}
+        transition={{ type: 'spring', stiffness: 500, damping: 26 }}
+        className="flex items-center justify-center"
+      >
+        <item.icon
+          strokeWidth={1.5}
+          className={cn(
+            'h-[18px] w-[18px] shrink-0 transition-colors duration-200',
+            isActive ? 'text-foreground' : 'text-muted-foreground group-hover:text-foreground',
+          )}
+        />
+      </motion.span>
+      {!collapsed && (
+        <span className="text-[13.5px] leading-none font-medium tracking-[-0.005em] truncate">
+          {t(item.label)}
+        </span>
+      )}
+    </NavLink>
+  )
+}
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
+  const { t } = useI18n()
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === 'true')
+
+  const toggle = useCallback(() => {
+    setCollapsed(prev => {
+      localStorage.setItem('sidebar_collapsed', String(!prev))
+      return !prev
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose?.() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [open, onClose])
+
+  const sidebarContent = (
+    <div className="flex flex-col h-full bg-sidebar">
+      {/* Logo */}
       <div className={cn(
-        'flex items-center gap-2 border-b px-3 h-14 shrink-0',
-        collapsed && 'justify-center px-0',
+        'flex items-center shrink-0 h-16 transition-[padding] duration-200',
+        collapsed ? 'justify-center px-0' : 'gap-3 px-5'
       )}>
-        <div className="rounded-lg bg-primary p-1.5">
-          <Terminal className="h-4 w-4 text-primary-foreground" />
+        <img
+          src={logo}
+          alt="Mirage"
+          className={cn('object-contain shrink-0 rounded-md', collapsed ? 'h-12 w-12' : 'h-11 w-11')}
+        />
+        {!collapsed && (
+          <span className="font-display text-[15px] font-medium tracking-[-0.01em] text-foreground">
+            Mirage
+          </span>
+        )}
+      </div>
+      <nav className="flex-1 py-4 overflow-y-auto">
+        <div className="px-3 space-y-1">
+          {navItems.map((item) => (
+            <NavLinkItem key={item.to} item={item} collapsed={collapsed} open={open} onClose={onClose} />
+          ))}
+          <div className="mx-3 my-2 h-px bg-border" />
+          {extraNavItems.map((item) => (
+            <NavLinkItem key={item.to} item={item} collapsed={collapsed} open={open} onClose={onClose} />
+          ))}
         </div>
-        {!collapsed && <span className="font-semibold text-sm tracking-wide">Eidos Panel</span>}
-      </div>
-
-      <nav className="flex-1 space-y-1 p-2">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            title={t(item.labelKey)}
-            className={({ isActive }) => cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-              collapsed && 'justify-center px-2',
-              isActive
-                ? 'bg-primary/10 text-primary font-medium'
-                : 'text-muted-foreground hover:text-primary hover:bg-accent',
-            )}
-          >
-            <item.icon className="h-4 w-4 shrink-0" />
-            {!collapsed && <span>{t(item.labelKey)}</span>}
-          </NavLink>
-        ))}
       </nav>
+      <button
+        onClick={toggle}
+        aria-label={collapsed ? t('common.expand_sidebar') : t('common.collapse_sidebar')}
+        className="hidden lg:flex items-center justify-center h-11 text-muted-foreground hover:text-foreground hover:bg-accent/40 active:scale-[0.98] transition-all duration-200"
+      >
+        {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+      </button>
+    </div>
+  )
+  return (
+    <>
+      {/* Mobile backdrop */}
+      <AnimatePresence>
+        {open && (
+          <motion.button
+            type="button"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.25, ease: [0.2, 0.8, 0.2, 1] }}
+            aria-label={t('common.close')}
+            className="fixed inset-0 bg-black/55 backdrop-blur-sm z-40 lg:hidden cursor-default"
+            onClick={onClose}
+          />
+        )}
+      </AnimatePresence>
 
-      <div className="border-t p-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn('w-full', collapsed && 'px-0')}
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          {!collapsed && <span className="text-xs">Collapse</span>}
-        </Button>
-      </div>
-    </aside>
+      {/* Sidebar */}
+      <motion.aside
+        initial={false}
+        animate={{ width: collapsed ? 56 : 232 }}
+        transition={{ type: 'spring', stiffness: 360, damping: 32 }}
+        className={cn(
+          'flex flex-col shrink-0 h-full overflow-hidden',
+          'fixed inset-y-0 left-0 z-50 lg:relative lg:z-auto',
+          open ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        )}
+      >
+        {sidebarContent}
+      </motion.aside>
+    </>
   )
 }

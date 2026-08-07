@@ -22,6 +22,8 @@ var csrfPublicPaths = []string{
 	"/api/auth/register",
 	"/api/auth/2fa/verify-login",
 	"/api/auth/2fa/required",
+	"/api/auth/forgot-password",
+	"/api/auth/reset-password",
 	"/api/public/stats",
 	"/api/pricing",
 	"/api/log",
@@ -37,14 +39,18 @@ func init() {
 func (s *csrfStore) cleanupLoop() {
 	t := time.NewTicker(15 * time.Minute)
 	for range t.C {
-		s.mu.Lock()
-		now := time.Now()
-		for tok, exp := range s.valid {
-			if now.After(exp) {
-				delete(s.valid, tok)
-			}
+		s.pruneExpired()
+	}
+}
+
+func (s *csrfStore) pruneExpired() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for tok, exp := range s.valid {
+		if now.After(exp) {
+			delete(s.valid, tok)
 		}
-		s.mu.Unlock()
 	}
 }
 

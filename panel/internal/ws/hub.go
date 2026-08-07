@@ -41,7 +41,7 @@ func (h *Hub) Run() {
 					delete(h.channels[ch], client)
 				}
 				delete(h.clients, client)
-				close(client.send)
+				client.sendClose.Do(func() { close(client.send) })
 			}
 
 		case msg := <-h.broadcast:
@@ -49,8 +49,12 @@ func (h *Hub) Run() {
 				select {
 				case client.send <- msg.data:
 				default:
-					close(client.send)
+					// Remove from ALL channels before closing
+					for _, ch := range client.channels {
+						delete(h.channels[ch], client)
+					}
 					delete(h.clients, client)
+					client.sendClose.Do(func() { close(client.send) })
 				}
 			}
 		}
@@ -59,9 +63,4 @@ func (h *Hub) Run() {
 
 func (h *Hub) Broadcast(channel string, message []byte) {
 	h.broadcast <- &channelMessage{channel: channel, data: message}
-}
-
-func (h *Hub) BroadcastChat(msg ChatMessage) {
-	// ponytail: global chat channel, all authenticated users receive all messages
-	h.Broadcast("chat", NewChatEvent(msg))
 }

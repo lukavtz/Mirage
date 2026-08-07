@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     message TEXT NOT NULL,
     parent_id TEXT DEFAULT NULL,
     message_type TEXT DEFAULT 'text',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS support_tickets (
@@ -14,8 +14,8 @@ CREATE TABLE IF NOT EXISTS support_tickets (
     subject TEXT NOT NULL,
     category TEXT NOT NULL,
     status TEXT DEFAULT 'open',
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS ticket_replies (
@@ -23,5 +23,5 @@ CREATE TABLE IF NOT EXISTS ticket_replies (
     ticket_id TEXT NOT NULL,
     user_id TEXT NOT NULL,
     message TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

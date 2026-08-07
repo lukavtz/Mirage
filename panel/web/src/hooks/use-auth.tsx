@@ -4,45 +4,97 @@ import { api } from '@/lib/api'
 interface AuthContextType {
   isAuthenticated: boolean
   isLoading: boolean
-  login: (username: string, password: string) => Promise<void>
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<LoginResult>
+  verifyTotp: (passcode: string) => Promise<void>
   logout: () => void
+  totpRequired: boolean
+  totpToken: string | null
 }
+
+type LoginResult = { ok: true } | { totp_required: true; totp_token: string }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [totpToken, setTotpToken] = useState<string | null>(null)
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem('token') || sessionStorage.getItem('token')
     if (!token) {
       setIsAuthenticated(false)
       setIsLoading(false)
       return
     }
     api.get<{ user_id: string; role: string }>('/api/auth/me')
-      .then(() => setIsAuthenticated(true))
+      .then(() => {
+        setIsAuthenticated(true)
+        api.fetchCsrf()
+      })
       .catch(() => {
         localStorage.removeItem('token')
+        api.clearCsrf()
         setIsAuthenticated(false)
       })
       .finally(() => setIsLoading(false))
   }, [])
 
-  const login = useCallback(async (username: string, password: string) => {
-    const res = await api.post<{ token: string }>('/api/auth/login', { username, password })
-    localStorage.setItem('token', res.token)
-    setIsAuthenticated(true)
+  const login = useCallback(async (username: string, password: string, rememberMe: boolean = true): Promise<LoginResult> => {
+    const res = await api.post<{ token?: string; totp_required?: boolean; totp_token?: string }>(
+      '/api/auth/login',
+      { username, password },
+    )
+    if (res.totp_required && res.totp_token) {
+      setTotpToken(res.totp_token)
+      return { totp_required: true, totp_token: res.totp_token }
+    }
+    if (res.token) {
+      if (rememberMe) {
+      localStorage.setItem('token', res.token)
+    } else {
+      sessionStorage.setItem('token', res.token)
+    }
+      await api.fetchCsrf()
+      setIsAuthenticated(true)
+      setTotpToken(null)
+      return { ok: true }
+    }
+    throw new Error('Unexpected login response')
   }, [])
+
+  const verifyTotp = useCallback(async (passcode: string) => {
+    if (!totpToken) throw new Error('No pending TOTP verification')
+    const res = await api.post<{ token: string }>('/api/auth/2fa/verify-login', {
+      totp_token: totpToken,
+      passcode,
+    })
+    // Use the same storage as the initial login attempt
+    const storage = localStorage.getItem('token') ? localStorage : sessionStorage
+    storage.setItem('token', res.token)
+    await api.fetchCsrf()
+    setIsAuthenticated(true)
+    setTotpToken(null)
+  }, [totpToken])
 
   const logout = useCallback(() => {
     localStorage.removeItem('token')
+    sessionStorage.removeItem('token')
+    api.clearCsrf()
     setIsAuthenticated(false)
+    setTotpToken(null)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout }}>
+    <AuthContext.Provider value={{
+      isAuthenticated,
+      isLoading,
+      login,
+      verifyTotp,
+      logout,
+      totpRequired: totpToken !== null,
+      totpToken,
+    }}>
       {children}
     </AuthContext.Provider>
   )

@@ -11,11 +11,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupBotHandler(t *testing.T) (*api.TelegramBotHandler, *sql.DB) {
 	t.Helper()
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	return api.NewTelegramBotHandler(d), d
 }
 
@@ -23,7 +24,7 @@ func insertTestBot(t *testing.T, db *sql.DB) string {
 	t.Helper()
 	id := uuid.New().String()
 	_, err := db.Exec(
-		`INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES (?, ?, ?, ?, ?, 1)`,
+		`INSERT INTO telegram_bots (id, name, token, chat_id, tier, is_active) VALUES ($1, $2, $3, $4, $5, TRUE)`,
 		id, "test-bot", "test:token", "12345", "basic",
 	)
 	if err != nil {
@@ -101,7 +102,7 @@ func TestBot_Update(t *testing.T) {
 	}
 
 	var isActive bool
-	d.QueryRow("SELECT is_active FROM telegram_bots WHERE id = ?", botID).Scan(&isActive)
+	d.QueryRow("SELECT is_active FROM telegram_bots WHERE id = $1", botID).Scan(&isActive)
 	if isActive {
 		t.Error("expected is_active=false")
 	}
@@ -122,7 +123,7 @@ func TestBot_Delete(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM telegram_bots WHERE id = ?", botID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM telegram_bots WHERE id = $1", botID).Scan(&count)
 	if count != 0 {
 		t.Error("expected bot to be deleted")
 	}
@@ -168,7 +169,7 @@ func TestBot_Filters(t *testing.T) {
 	filterID := resp["id"].(string)
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM bot_filters WHERE id = ?", filterID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM bot_filters WHERE id = $1", filterID).Scan(&count)
 	if count != 1 {
 		t.Fatalf("expected 1 filter, got %d", count)
 	}
@@ -204,7 +205,7 @@ func TestBot_Filters(t *testing.T) {
 		t.Fatalf("expected 200, got %d", delW.Code)
 	}
 
-	d.QueryRow("SELECT COUNT(*) FROM bot_filters WHERE id = ?", filterID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM bot_filters WHERE id = $1", filterID).Scan(&count)
 	if count != 0 {
 		t.Error("expected filter to be deleted")
 	}

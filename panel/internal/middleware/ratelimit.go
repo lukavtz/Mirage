@@ -72,23 +72,37 @@ func (rl *rateLimiter) cleanup() {
 	defer ticker.Stop()
 
 	for range ticker.C {
-		rl.mu.Lock()
-		now := time.Now()
-		for ip, entry := range rl.entries {
-			entry.mu.Lock()
-			if now.After(entry.resetAt) {
-				delete(rl.entries, ip)
-			}
-			entry.mu.Unlock()
-		}
-		rl.mu.Unlock()
+		rl.pruneExpired()
 	}
 }
 
-func extractIP(r *http.Request) string {
+func (rl *rateLimiter) pruneExpired() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	now := time.Now()
+	for ip, entry := range rl.entries {
+		entry.mu.Lock()
+		if now.After(entry.resetAt) {
+			delete(rl.entries, ip)
+		}
+		entry.mu.Unlock()
+	}
+}
+
+// ExtractIP returns the client IP from RemoteAddr only.
+// X-Forwarded-For and X-Real-IP are NOT trusted — they are trivially spoofable
+// and bypass rate limits + IP bans.
+func ExtractIP(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.String()
+	}
 	return host
 }
+
+// extractIP is the unexported alias kept for in-package callers
+// (ratelimit, ban middleware) so the rename touches no call sites.
+func extractIP(r *http.Request) string { return ExtractIP(r) }

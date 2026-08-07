@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 )
 
@@ -39,7 +40,7 @@ func (h *SessionMgmtHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Query(`
+	rows, err := db.Query(h.db, `
 		SELECT id, user_id, device, os, browser, ip, location, last_active_at, created_at
 		FROM auth_sessions WHERE user_id = ? ORDER BY last_active_at DESC`, claims.UserID)
 	if err != nil {
@@ -69,7 +70,7 @@ func (h *SessionMgmtHandler) Terminate(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM auth_sessions WHERE id = ? AND user_id = ?", sessionID, claims.UserID)
+	result, err := db.Exec(h.db, "DELETE FROM auth_sessions WHERE id = ? AND user_id = ?", sessionID, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to terminate session")
 		return
@@ -90,21 +91,21 @@ func (h *SessionMgmtHandler) TerminateAll(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-
 	currentSessionID := claims.SessionID
 
+	var err error
 	if currentSessionID != "" {
-		_, err := h.db.Exec("DELETE FROM auth_sessions WHERE user_id = ? AND id != ?", claims.UserID, currentSessionID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
-			return
-		}
+		_, err = db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ? AND id != ?", claims.UserID, currentSessionID)
 	} else {
-		_, err := h.db.Exec("DELETE FROM auth_sessions WHERE user_id = ?", claims.UserID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
-			return
-		}
+		_, err = db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ?", claims.UserID)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
+		return
+	}
+	if _, err = db.Exec(h.db, "UPDATE users SET token_version = token_version + 1 WHERE id = ?", claims.UserID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "other sessions terminated"})
@@ -115,7 +116,7 @@ func hashToken(token string) string {
 	return fmt.Sprintf("%x", h)
 }
 
-func parseUserAgent(ua string) (os, browser string) {
+func ParseUserAgent(ua string) (os, browser string) {
 	if ua == "" {
 		return "Unknown", "Unknown"
 	}

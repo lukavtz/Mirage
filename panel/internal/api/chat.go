@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/ws"
 )
@@ -42,10 +43,18 @@ func (h *ChatHandler) List(w http.ResponseWriter, r *http.Request) {
 		limit = "50"
 	}
 
-	rows, err := h.db.Query(
-		"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
-		sinceFormatted, limit,
-	)
+	// Private conversation model: a non-admin sees only its own messages plus
+	// admin replies; admins see the full feed. Claims==nil (no auth middleware
+	// on the route, unit tests) keeps the unscoped feed, matching List/Detail.
+	claims := middleware.ClaimsFromContext(r.Context())
+	var rows *sql.Rows
+	if claims != nil && claims.Role != "admin" {
+		rows, err = db.Query(h.db, "SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE (user_id = ? OR user_id IN (SELECT id FROM users WHERE role = 'admin')) AND created_at > ? ORDER BY created_at DESC LIMIT ?",
+			claims.UserID, sinceFormatted, limit)
+	} else {
+		rows, err = db.Query(h.db, "SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE created_at > ? ORDER BY created_at DESC LIMIT ?",
+			sinceFormatted, limit)
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query messages")
 		return
@@ -83,34 +92,45 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "message is required")
 		return
 	}
+	if len(req.Message) > 4096 {
+		writeError(w, http.StatusBadRequest, "message too long (max 4096)")
+		return
+	}
 
 	var username string
-	err := h.db.QueryRow("SELECT username FROM users WHERE id = ?", claims.UserID).Scan(&username)
+	err := db.QueryRow(h.db, "SELECT username FROM users WHERE id = ?", claims.UserID).Scan(&username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to lookup user")
 		return
 	}
 
 	id := uuid.New().String()
-	_, err = h.db.Exec(
-		"INSERT INTO chat_messages (id, user_id, username, message, parent_id) VALUES (?, ?, ?, ?, ?)",
-		id, claims.UserID, username, req.Message, nullIfEmpty(req.ParentID),
-	)
+	_, err = db.Exec(h.db, "INSERT INTO chat_messages (id, user_id, username, message, parent_id) VALUES (?, ?, ?, ?, ?)",
+		id, claims.UserID, username, req.Message, nullIfEmpty(req.ParentID))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save message")
 		return
 	}
 
 	var m ws.ChatMessage
-	err = h.db.QueryRow(
-		"SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE id = ?", id,
-	).Scan(&m.ID, &m.UserID, &m.Username, &m.Message, &m.ParentID, &m.MessageType, &m.CreatedAt)
+	err = db.QueryRow(h.db, "SELECT id, user_id, username, message, COALESCE(parent_id,''), message_type, created_at FROM chat_messages WHERE id = ?", id).Scan(&m.ID, &m.UserID, &m.Username, &m.Message, &m.ParentID, &m.MessageType, &m.CreatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read back message")
 		return
 	}
 
-	h.hub.BroadcastChat(m)
+	// Deliver to the author's own channel (echo) and, for workers, to the
+	// admins' channel. Admin replies are not pushed to clients in real time —
+	// there is no chat UI and no target_user_id yet; clients pick them up on
+	// the next REST List.
+	if h.hub != nil {
+		if claims.Role == "admin" {
+			h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+		} else {
+			h.hub.Broadcast("chat:"+claims.UserID, ws.NewChatEvent(m))
+			h.hub.Broadcast("chat:all", ws.NewChatEvent(m))
+		}
+	}
 
 	writeJSON(w, http.StatusCreated, m)
 }
@@ -118,7 +138,7 @@ func (h *ChatHandler) Send(w http.ResponseWriter, r *http.Request) {
 func (h *ChatHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM chat_messages WHERE id = ?", id)
+	result, err := db.Exec(h.db, "DELETE FROM chat_messages WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete message")
 		return

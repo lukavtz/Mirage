@@ -1,0 +1,35 @@
+=== test_evasion: anti-analysis scoring ===
+  PASS: test_clean_system_score_zero
+  PASS: test_low_ram_detection
+  PASS: test_ram_query_failure
+  PASS: test_few_cpu_cores
+  PASS: test_cpu_query_failure
+  PASS: test_vm_registry_detection
+  PASS: test_timing_anomaly_detection
+  PASS: test_debugger_detection
+  PASS: test_small_screen_detection
+  PASS: test_small_disk_detection
+  PASS: test_disk_query_failure
+  PASS: test_low_uptime_detection
+  PASS: test_uptime_query_failure
+  PASS: test_static_mouse_detection
+  PASS: test_mouse_query_failure
+  PASS: test_geo_cis_detection
+  PASS: test_geo_below_threshold
+  PASS: test_hosting_ip_detection
+  PASS: test_hosting_ip_query_failure
+  PASS: test_threshold_boundary
+  PASS: test_threshold_below
+  PASS: test_threshold_above
+  PASS: test_threshold_zero
+  PASS: test_combined_vm_indicators
+  PASS: test_max_score_all_checks
+  PASS: test_analysis_flags_struct
+  PASS: test_analysis_result_struct
+  PASS: test_cis_russian
+  PASS: test_cis_ukrainian
+  PASS: test_cis_english_not_cis
+  PASS: test_cis_german_not_cis
+  PASS: test_cis_uzbek
+  PASS: test_cis_zero
+=== test_evasion: ALL PASSED ===

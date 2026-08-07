@@ -7,7 +7,7 @@
 #include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
+#include "ws2_peb.h"
 #else
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -16,6 +16,7 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/time.h>
 #endif
 
 #include <stdlib.h>
@@ -27,7 +28,7 @@
 typedef WSADATA ws2_wsa_data_t;
 #define WS2_INVALID_SOCKET  ((HANDLE)(intptr_t)(~0))
 #define WS2_SOCK_ERROR(s)   ((s) == INVALID_SOCKET)
-#define ws2_closesocket(s)  closesocket((SOCKET)(s))
+#define ws2_closesocket(s)  mirage_ws2_api()->pclosesocket((SOCKET)(s))
 #else
 typedef struct { int dummy; } ws2_wsa_data_t;
 #define WS2_INVALID_SOCKET  (-1)
@@ -42,8 +43,10 @@ static int g_ws2_initialized = 0;
 ws2_result_t ws2_init(void) {
     if (g_ws2_initialized) return WS2_OK;
 #ifdef _WIN32
+    const ws2_api_t *api = mirage_ws2_api();
+    if (!api) return WS2_ERR_MODULE_NOT_FOUND;
     ws2_wsa_data_t wsa;
-    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+    if (api->pStartup(MAKEWORD(2, 2), &wsa) != 0)
         return WS2_ERR_INIT_FAILED;
 #endif
     g_ws2_initialized = 1;
@@ -53,7 +56,8 @@ ws2_result_t ws2_init(void) {
 void ws2_cleanup(void) {
     if (!g_ws2_initialized) return;
 #ifdef _WIN32
-    WSACleanup();
+    const ws2_api_t *api = mirage_ws2_api();
+    if (api) api->pCleanup();
 #endif
     g_ws2_initialized = 0;
 }
@@ -95,8 +99,11 @@ ws2_result_t ws2_connect(ws2_socket_t *out, const char *host, uint16_t port) {
     if (r != WS2_OK) return r;
 
 #ifdef _WIN32
-    SOCKET s = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-                          NULL, 0, WSA_FLAG_OVERLAPPED);
+    const ws2_api_t *api = mirage_ws2_api();
+    if (!api) return WS2_ERR_MODULE_NOT_FOUND;
+
+    SOCKET s = api->pWSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+                                 NULL, 0, WSA_FLAG_OVERLAPPED);
     if (WS2_SOCK_ERROR(s)) return WS2_ERR_SOCKET_FAILED;
 #else
     int s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -106,7 +113,11 @@ ws2_result_t ws2_connect(ws2_socket_t *out, const char *host, uint16_t port) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
+#ifdef _WIN32
+    addr.sin_port   = api->phtons(port);
+#else
     addr.sin_port   = htons(port);
+#endif
 
     /* try direct parse first, then getaddrinfo fallback */
     uint32_t ip = ws2_parse_ipv4(host);
@@ -125,52 +136,91 @@ ws2_result_t ws2_connect(ws2_socket_t *out, const char *host, uint16_t port) {
         memcpy(host_buf, host, hlen);
         host_buf[hlen] = '\0';
 
+#ifdef _WIN32
+        if (api->pgetaddrinfo(host_buf, NULL, &hints, &res) != 0 || !res) {
+#else
         if (getaddrinfo(host_buf, NULL, &hints, &res) != 0 || !res) {
+#endif
             ws2_closesocket(s);
             return WS2_ERR_RESOLVE_FAILED;
         }
         addr.sin_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
+#ifdef _WIN32
+        api->pfreeaddrinfo(res);
+#else
         freeaddrinfo(res);
+#endif
     }
 
+    /* Set socket timeouts — 15 seconds */
+#ifdef _WIN32
+    {
+        DWORD timeout_ms = 15000;
+        api->psetsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
+        api->psetsockopt(s, SOL_SOCKET, SO_SNDTIMEO, (const char *)&timeout_ms, sizeof(timeout_ms));
+    }
+#else
+    {
+        struct timeval tv;
+        tv.tv_sec = 15;
+        tv.tv_usec = 0;
+        setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+        setsockopt(s, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
+    }
+#endif
+
+#ifdef _WIN32
+    if (api->pconnect(s, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+#else
     if (connect(s, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
+#endif
         ws2_closesocket(s);
         return WS2_ERR_CONNECT_FAILED;
     }
 
-    out->initialized = 1;
 #ifdef _WIN32
-    /* store as HANDLE */
-    (void)0; /* s already SOCKET, cast to HANDLE at return */
-#endif
-    (void)out; /* suppress unused in POSIX path */
-#ifdef _WIN32
-    /* pack SOCKET into HANDLE-sized slot */
-    *((SOCKET *)out) = s;
+    out->handle = (HANDLE)(ULONG_PTR)s;
 #else
-    *(int *)out = s;
+    out->handle = (HANDLE)(intptr_t)s;
 #endif
     return WS2_OK;
 }
 
 ws2_result_t ws2_send(HANDLE sock, const uint8_t *data, size_t len, size_t *out_sent) {
     if (!data || len == 0) { if (out_sent) *out_sent = 0; return WS2_OK; }
+    size_t total = 0;
+    while (total < len) {
+        size_t chunk = len - total;
 #ifdef _WIN32
-    int rc = send((SOCKET)sock, (const char *)data, (int)len, 0);
+        if (chunk > 0x7FFFFFFF) chunk = 0x7FFFFFFF;
+        const ws2_api_t *api = mirage_ws2_api();
+        if (!api) { if (out_sent) *out_sent = total; return WS2_ERR_MODULE_NOT_FOUND; }
+        int rc = api->psend((SOCKET)sock, (const char *)(data + total), (int)chunk, 0);
 #else
-    int rc = send((int)sock, data, len, 0);
+        if (chunk > INT_MAX) chunk = INT_MAX;
+        int rc = send((int)sock, data + total, chunk, 0);
 #endif
-    if (rc < 0) return WS2_ERR_SEND_FAILED;
-    if (out_sent) *out_sent = (size_t)rc;
+        if (rc <= 0) { if (out_sent) *out_sent = total; return WS2_ERR_SEND_FAILED; }
+        total += (size_t)rc;
+    }
+    if (out_sent) *out_sent = total;
     return WS2_OK;
 }
 
 ws2_result_t ws2_recv(HANDLE sock, uint8_t *buf, size_t buf_len, size_t *out_read) {
     if (!buf || buf_len == 0) { if (out_read) *out_read = 0; return WS2_OK; }
 #ifdef _WIN32
-    int rc = recv((SOCKET)sock, (char *)buf, (int)buf_len, 0);
+    const ws2_api_t *api = mirage_ws2_api();
+    int rc = api->precv((SOCKET)sock, (char *)buf, (int)buf_len, 0);
 #else
     int rc = recv((int)sock, buf, buf_len, 0);
+    if (rc < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            if (out_read) *out_read = 0;
+            return WS2_OK;
+        }
+        return WS2_ERR_RECV_FAILED;
+    }
 #endif
     if (rc < 0) return WS2_ERR_RECV_FAILED;
     if (out_read) *out_read = (size_t)rc;
@@ -180,7 +230,8 @@ ws2_result_t ws2_recv(HANDLE sock, uint8_t *buf, size_t buf_len, size_t *out_rea
 void ws2_close(HANDLE sock) {
     if (sock == NULL) return;
 #ifdef _WIN32
-    closesocket((SOCKET)sock);
+    const ws2_api_t *api = mirage_ws2_api();
+    if (api) api->pclosesocket((SOCKET)sock);
 #else
     close((int)(intptr_t)sock);
 #endif
@@ -192,8 +243,11 @@ ws2_result_t ws2_create_raw(HANDLE *out) {
     ws2_result_t r = ws2_init();
     if (r != WS2_OK) return r;
 #ifdef _WIN32
-    SOCKET s = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
-                          NULL, 0, WSA_FLAG_OVERLAPPED);
+    const ws2_api_t *api = mirage_ws2_api();
+    if (!api) return WS2_ERR_MODULE_NOT_FOUND;
+    /* L6: WS2_SOCK_ERROR checks INVALID_SOCKET (not NULL) — correct for WSASocketW */
+    SOCKET s = api->pWSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP,
+                                 NULL, 0, WSA_FLAG_OVERLAPPED);
     if (WS2_SOCK_ERROR(s)) return WS2_ERR_SOCKET_FAILED;
     *out = (HANDLE)s;
 #else
@@ -208,7 +262,13 @@ ws2_result_t ws2_bind(HANDLE sock, const char *host, uint16_t port) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
+#ifdef _WIN32
+    const ws2_api_t *api = mirage_ws2_api();
+    if (!api) return WS2_ERR_MODULE_NOT_FOUND;
+    addr.sin_port   = api->phtons(port);
+#else
     addr.sin_port   = htons(port);
+#endif
 
     if (host && *host) {
         uint32_t ip = ws2_parse_ipv4(host);
@@ -218,17 +278,29 @@ ws2_result_t ws2_bind(HANDLE sock, const char *host, uint16_t port) {
             struct addrinfo hints, *res;
             memset(&hints, 0, sizeof(hints));
             hints.ai_family = AF_INET;
+#ifdef _WIN32
+            if (api->pgetaddrinfo(host, NULL, &hints, &res) != 0 || !res)
+#else
             if (getaddrinfo(host, NULL, &hints, &res) != 0 || !res)
+#endif
                 return WS2_ERR_RESOLVE_FAILED;
             addr.sin_addr = ((struct sockaddr_in *)res->ai_addr)->sin_addr;
+#ifdef _WIN32
+            api->pfreeaddrinfo(res);
+#else
             freeaddrinfo(res);
+#endif
         }
     } else {
+#ifdef _WIN32
+        addr.sin_addr.s_addr = api->phtonl(INADDR_ANY);
+#else
         addr.sin_addr.s_addr = htonl(INADDR_ANY);
+#endif
     }
 
 #ifdef _WIN32
-    if (bind((SOCKET)sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
+    if (api->pbind((SOCKET)sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
 #else
     if (bind((int)(intptr_t)sock, (struct sockaddr *)&addr, sizeof(addr)) != 0)
 #endif
@@ -238,7 +310,8 @@ ws2_result_t ws2_bind(HANDLE sock, const char *host, uint16_t port) {
 
 ws2_result_t ws2_listen(HANDLE sock, int backlog) {
 #ifdef _WIN32
-    if (listen((SOCKET)sock, backlog) != 0)
+    const ws2_api_t *api = mirage_ws2_api();
+    if (api->plisten((SOCKET)sock, backlog) != 0)
 #else
     if (listen((int)(intptr_t)sock, backlog) != 0)
 #endif
@@ -248,7 +321,8 @@ ws2_result_t ws2_listen(HANDLE sock, int backlog) {
 
 ws2_result_t ws2_accept(HANDLE listener, HANDLE *out_client) {
 #ifdef _WIN32
-    SOCKET c = accept((SOCKET)listener, NULL, NULL);
+    const ws2_api_t *api = mirage_ws2_api();
+    SOCKET c = api->paccept((SOCKET)listener, NULL, NULL);
     if (WS2_SOCK_ERROR(c)) return WS2_ERR_ACCEPT_FAILED;
     *out_client = (HANDLE)c;
 #else
@@ -262,8 +336,9 @@ ws2_result_t ws2_accept(HANDLE listener, HANDLE *out_client) {
 ws2_result_t ws2_set_reuseaddr(HANDLE sock) {
     int optval = 1;
 #ifdef _WIN32
-    if (setsockopt((SOCKET)sock, SOL_SOCKET, SO_REUSEADDR,
-                   (const char *)&optval, sizeof(optval)) != 0)
+    const ws2_api_t *api = mirage_ws2_api();
+    if (api->psetsockopt((SOCKET)sock, SOL_SOCKET, SO_REUSEADDR,
+                          (const char *)&optval, sizeof(optval)) != 0)
 #else
     if (setsockopt((int)(intptr_t)sock, SOL_SOCKET, SO_REUSEADDR,
                    &optval, sizeof(optval)) != 0)
@@ -275,12 +350,15 @@ ws2_result_t ws2_set_reuseaddr(HANDLE sock) {
 uint16_t ws2_get_port(HANDLE sock) {
     struct sockaddr_in sin;
 #ifdef _WIN32
+    const ws2_api_t *api = mirage_ws2_api();
     int len = sizeof(sin);
-    if (getsockname((SOCKET)sock, (struct sockaddr *)&sin, &len) != 0)
+    if (api->pgetsockname((SOCKET)sock, (struct sockaddr *)&sin, &len) != 0)
+        return 0;
+    return api->pntohs(sin.sin_port);
 #else
     socklen_t len = sizeof(sin);
     if (getsockname((int)(intptr_t)sock, (struct sockaddr *)&sin, &len) != 0)
-#endif
         return 0;
     return ntohs(sin.sin_port);
+#endif
 }

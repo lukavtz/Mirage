@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -21,7 +22,7 @@ func NewLogsHandler(processor *services.LogProcessor) *LogsHandler {
 }
 
 func (h *LogsHandler) Ingest(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 55<<20)
 
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
 		var maxErr *http.MaxBytesError
@@ -47,7 +48,17 @@ func (h *LogsHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metadata := r.FormValue("metadata")
-	sessionID, err := h.processor.Process(archive, metadata)
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		m := map[string]string{"user_agent": ua}
+		if metadata != "" {
+			_ = json.Unmarshal([]byte(metadata), &m)
+			m["user_agent"] = ua
+		}
+		if b, err := json.Marshal(m); err == nil {
+			metadata = string(b)
+		}
+	}
+	sessionID, err := h.processor.Process(archive, metadata, claimsUserID(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "processing failed")
 		return
@@ -188,7 +199,17 @@ func (h *LogsHandler) CompleteChunked(w http.ResponseWriter, r *http.Request) {
 	}
 
 	metadata := r.FormValue("metadata")
-	newSessionID, err := h.processor.Process(archive.Bytes(), metadata)
+	if ua := r.Header.Get("User-Agent"); ua != "" {
+		m := map[string]string{"user_agent": ua}
+		if metadata != "" {
+			_ = json.Unmarshal([]byte(metadata), &m)
+			m["user_agent"] = ua
+		}
+		if b, err := json.Marshal(m); err == nil {
+			metadata = string(b)
+		}
+	}
+	newSessionID, err := h.processor.Process(archive.Bytes(), metadata, claimsUserID(r))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "processing failed")
 		return

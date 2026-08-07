@@ -2,7 +2,7 @@
  * hash.c — Hash functions for Mirage-C
  *
  * Exact translation of Zig src/types/hash.zig
- * Seed: 0x61472f96, multiply: 0x1B873593, add: 0x85EBCA6B
+ * Seed: polymorphic (per-build), multiply: 0x1B873593, add: 0x85EBCA6B
  */
 
 #include "hash.h"
@@ -75,6 +75,7 @@ void mirage_xor_decrypt(const uint8_t* in, uint8_t* out, size_t len)
 uint32_t mirage_encrypted_hash_module(const char* str)
 {
     size_t len = strlen(str);
+    if (len > 255) len = 255;
     uint8_t buf[256];
 
     /* XOR-encrypt input */
@@ -88,6 +89,7 @@ uint32_t mirage_encrypted_hash_module(const char* str)
 uint32_t mirage_encrypted_hash_func(const char* str)
 {
     size_t len = strlen(str);
+    if (len > 255) len = 255;
     uint8_t buf[256];
 
     /* XOR-encrypt input */

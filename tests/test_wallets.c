@@ -16,6 +16,9 @@
 #include "wallet_desktop.h"
 #include "browser_paths.h"
 
+/* Stub for PEB walk (ASM function not available in tests) */
+void* getPeb(void) { return NULL; }
+
 static void test_wallet_ext_data_struct(void) {
     /* Verify WalletExtData struct layout and initialization */
     WalletExtData data = {0};

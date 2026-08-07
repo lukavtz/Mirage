@@ -1,6 +1,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { Skeleton } from '@/components/ui/skeleton'
 import { FlagIcon } from '@/components/charts/flag-icon'
+import { useChartGradientId } from '@/lib/chart-tokens'
 
 interface GeoBarProps {
   data: Array<{ country: string; count: number }>
@@ -24,6 +25,8 @@ function CustomYAxisTick({ x, y, payload }: CustomYAxisTickProps) {
 }
 
 export function GeoBar({ data, isLoading }: GeoBarProps) {
+  const gradientId = useChartGradientId('geo')
+
   if (isLoading) {
     return <Skeleton className="h-[300px] w-full" />
   }
@@ -39,7 +42,13 @@ export function GeoBar({ data, isLoading }: GeoBarProps) {
   return (
     <ResponsiveContainer width="100%" height={300}>
       <BarChart data={data} layout="vertical" margin={{ top: 5, right: 40, left: 32, bottom: 0 }}>
-        <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
+        <defs>
+          <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.4} />
+            <stop offset="100%" stopColor="var(--primary)" stopOpacity={0.9} />
+          </linearGradient>
+        </defs>
+        <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} stroke="var(--muted-foreground)" />
         <YAxis
           type="category"
           dataKey="country"
@@ -50,14 +59,15 @@ export function GeoBar({ data, isLoading }: GeoBarProps) {
         />
         <Tooltip
           contentStyle={{
-            background: 'hsl(var(--popover))',
-            border: '1px solid hsl(var(--border))',
+            background: 'var(--popover)',
+            border: '1px solid var(--border)',
             borderRadius: 'var(--radius)',
             fontSize: 13,
           }}
+          cursor={{ fill: 'var(--accent)', opacity: 0.4 }}
           formatter={(value) => Number(value ?? 0).toLocaleString()}
         />
-        <Bar dataKey="count" name="Sessions" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} label={{ position: 'right', fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+        <Bar dataKey="count" name="Sessions" fill={`url(#${gradientId})`} radius={[0, 4, 4, 0]} barSize={20} label={{ position: 'right', fontSize: 11, fill: 'var(--foreground)' }} />
       </BarChart>
     </ResponsiveContainer>
   )

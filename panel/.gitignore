@@ -1,0 +1,9 @@
+# test fixtures produced by the screenshot tests
+internal/api/data/
+.env
+coverage.out
+
+data/.jwt_secret
+data/certs/
+backups/
+offsite-backups/

@@ -1,0 +1,4 @@
+        -:    0:Source:src/utils/secure_zero.c
+        -:    0:Graph:test_firefox_crypto-secure_zero.gcno
+        -:    0:Data:test_firefox_crypto-secure_zero.gcda
+        -:    0:Runs:1

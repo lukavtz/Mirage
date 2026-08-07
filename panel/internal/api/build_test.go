@@ -11,8 +11,12 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
+	"zialfi-panel/internal/testutil"
 )
 
 func makeTestPE(t *testing.T) []byte {
@@ -54,7 +58,7 @@ func makeTestPE(t *testing.T) []byte {
 
 func setupBuildHandler(t *testing.T) (*api.BuildHandler, *sql.DB) {
 	t.Helper()
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
 	stealer := makeTestPE(t)
 	handler := api.NewBuildHandler(svc, stealer, nil, d)
@@ -137,6 +141,7 @@ func TestBuild_Download(t *testing.T) {
 	r.Get("/api/build/{id}/download", handler.Download)
 
 	reqDL := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/build/%s/download", buildID), nil)
+	reqDL = reqDL.WithContext(middleware.ContextWithClaims(reqDL.Context(), &auth.Claims{Role: "admin"}))
 	wDL := httptest.NewRecorder()
 	r.ServeHTTP(wDL, reqDL)
 
@@ -160,7 +165,7 @@ func TestBuild_Download(t *testing.T) {
 	}
 
 	var downloadCount int
-	d.QueryRow("SELECT download_count FROM builds WHERE id = ?", buildID).Scan(&downloadCount)
+	d.QueryRow("SELECT download_count FROM builds WHERE id = $1", buildID).Scan(&downloadCount)
 	if downloadCount != 1 {
 		t.Errorf("expected download_count=1, got %d", downloadCount)
 	}
@@ -200,6 +205,7 @@ func TestBuild_DownloadNotFound(t *testing.T) {
 	r.Get("/api/build/{id}/download", handler.Download)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/build/nonexistent-id/download", nil)
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{Role: "admin"}))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -249,6 +255,7 @@ func TestBuild_UpdateTag(t *testing.T) {
 	r := chi.NewRouter()
 	r.Put("/api/build/{id}/tag", handler.UpdateTag)
 	updateReq := httptest.NewRequest(http.MethodPut, "/api/build/"+buildID+"/tag", strings.NewReader(updateBody))
+	updateReq = updateReq.WithContext(middleware.ContextWithClaims(updateReq.Context(), &auth.Claims{Role: "admin"}))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateW := httptest.NewRecorder()
 	r.ServeHTTP(updateW, updateReq)
@@ -258,7 +265,7 @@ func TestBuild_UpdateTag(t *testing.T) {
 	}
 
 	var tag string
-	d.QueryRow("SELECT build_tag FROM builds WHERE id = ?", buildID).Scan(&tag)
+	d.QueryRow("SELECT build_tag FROM builds WHERE id = $1", buildID).Scan(&tag)
 	if tag != "updated-campaign" {
 		t.Errorf("build_tag = %q, want %q", tag, "updated-campaign")
 	}
@@ -281,7 +288,7 @@ func TestBuild_Stats(t *testing.T) {
 	json.Unmarshal(w.Body.Bytes(), &resp)
 	buildID := resp["id"].(string)
 
-	d.Exec("UPDATE builds SET download_count = 5 WHERE id = ?", buildID)
+	d.Exec("UPDATE builds SET download_count = 5 WHERE id = $1", buildID)
 
 	statsReq := httptest.NewRequest(http.MethodGet, "/api/build/stats", nil)
 	statsW := httptest.NewRecorder()
@@ -337,5 +344,74 @@ func TestBuild_ListByTag(t *testing.T) {
 	}
 	if builds[0]["build_tag"] != "campaign-a" {
 		t.Errorf("build_tag = %v, want campaign-a", builds[0]["build_tag"])
+	}
+}
+
+func insertBuildWithUser(t *testing.T, d *sql.DB, userID string) string {
+	t.Helper()
+	buildID := uuid.New().String()
+	_, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', 'tag', '{}', $2)`, buildID, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return buildID
+}
+
+func TestBuildList_OwnerIsolation(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
+
+	tokenA, userA := workerToken(t, d, "builda")
+	tokenB, userB := workerToken(t, d, "buildb")
+
+	buildA := insertBuildWithUser(t, d, userA)
+	buildB := insertBuildWithUser(t, d, userB)
+
+	for _, tc := range []struct {
+		token  string
+		wantID string
+	}{
+		{tokenA, buildA},
+		{tokenB, buildB},
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/api/build", nil)
+		req.Header.Set("Authorization", "Bearer "+tc.token)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+		}
+		var builds []map[string]any
+		if err := json.Unmarshal(w.Body.Bytes(), &builds); err != nil {
+			t.Fatal(err)
+		}
+		if len(builds) != 1 {
+			t.Fatalf("expected 1 build, got %d", len(builds))
+		}
+		if builds[0]["id"] != tc.wantID {
+			t.Errorf("expected build %s, got %v", tc.wantID, builds[0]["id"])
+		}
+	}
+}
+
+func TestBuildDownload_OwnerForbidden(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	r := chi.NewRouter()
+	api.SetupRoutes(r, d, "test-secret", "*", nil, nil, nil, nil)
+
+	_, userA := workerToken(t, d, "builda")
+	tokenB, _ := workerToken(t, d, "buildb")
+	buildA := insertBuildWithUser(t, d, userA)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/build/"+buildA+"/download", nil)
+	req.Header.Set("Authorization", "Bearer "+tokenB)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
 	}
 }

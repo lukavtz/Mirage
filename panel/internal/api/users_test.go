@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
@@ -22,9 +23,9 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 	r := chi.NewRouter()
 
 	adminID := createTestUser(t, d, "adminuser", "adminpass")
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, nil)
 
-	adminToken, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "")
+	adminToken, _, err := auth.GenerateToken(adminID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,12 +35,12 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+	_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4)",
 		workerID, "workeruser", hash, "worker")
 	if err != nil {
 		t.Fatal(err)
 	}
-	workerToken, _, err := auth.GenerateToken(workerID, "worker", jwtSecret, "")
+	workerToken, _, err := auth.GenerateToken(workerID, "worker", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +49,7 @@ func setupUsersRouter(t *testing.T, d *sql.DB) (chi.Router, string, string) {
 }
 
 func TestUsers_List(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, adminToken, _ := setupUsersRouter(t, d)
 
 	for i := 0; i < 3; i++ {
@@ -57,7 +58,7 @@ func TestUsers_List(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)",
+		_, err = d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4)",
 			id, fmt.Sprintf("user%d", i), hash, "worker")
 		if err != nil {
 			t.Fatal(err)
@@ -98,7 +99,7 @@ func TestUsers_List(t *testing.T) {
 }
 
 func TestUsers_ListForbidden(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _, workerToken := setupUsersRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
@@ -112,7 +113,7 @@ func TestUsers_ListForbidden(t *testing.T) {
 }
 
 func TestUsers_CreateInvite(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, adminToken, _ := setupUsersRouter(t, d)
 
 	body := `{"role":"worker","tier":"starter","max_uses":5}`
@@ -138,14 +139,14 @@ func TestUsers_CreateInvite(t *testing.T) {
 
 	// Verify it was stored in the database
 	var stored string
-	err := d.QueryRow("SELECT code FROM invite_codes WHERE code = ?", code).Scan(&stored)
+	err := d.QueryRow("SELECT code FROM invite_codes WHERE code = $1", code).Scan(&stored)
 	if err != nil {
 		t.Fatalf("invite code not found in database: %v", err)
 	}
 }
 
 func TestUsers_RegisterWithValidCode(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, adminToken, _ := setupUsersRouter(t, d)
 
 	// Create an invite code
@@ -189,7 +190,7 @@ func TestUsers_RegisterWithValidCode(t *testing.T) {
 
 	// Verify used_count was incremented
 	var usedCount int
-	err := d.QueryRow("SELECT used_count FROM invite_codes WHERE code = ?", code).Scan(&usedCount)
+	err := d.QueryRow("SELECT used_count FROM invite_codes WHERE code = $1", code).Scan(&usedCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +200,7 @@ func TestUsers_RegisterWithValidCode(t *testing.T) {
 }
 
 func TestUsers_RegisterExpiredCode(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 
 	// Create admin user for FK constraint
 	adminID := createTestUser(t, d, "inviteadmin", "pass")
@@ -208,7 +209,7 @@ func TestUsers_RegisterExpiredCode(t *testing.T) {
 	code := "EXPIRED-CODE-12345"
 	_, err := d.Exec(
 		`INSERT INTO invite_codes (id, code, role, tier, max_uses, used_count, expires_at, created_by, created_at)
-		 VALUES (?, ?, 'worker', 'starter', 1, 0, ?, ?, datetime('now'))`,
+		 VALUES ($1, $2, 'worker', 'starter', 1, 0, $3, $4, CURRENT_TIMESTAMP)`,
 		uuid.New().String(), code, time.Now().Add(-1*time.Hour).Format("2006-01-02 15:04:05"), adminID,
 	)
 	if err != nil {
@@ -237,7 +238,7 @@ func TestUsers_RegisterExpiredCode(t *testing.T) {
 }
 
 func TestUsers_RegisterUsedUpCode(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 
 	// Create admin user for FK constraint
 	adminID := createTestUser(t, d, "inviteadmin2", "pass")
@@ -245,7 +246,7 @@ func TestUsers_RegisterUsedUpCode(t *testing.T) {
 	code := "USED-UP-CODE-67890"
 	_, err := d.Exec(
 		`INSERT INTO invite_codes (id, code, role, tier, max_uses, used_count, created_by, created_at)
-		 VALUES (?, ?, 'worker', 'starter', 1, 1, ?, datetime('now'))`,
+		 VALUES ($1, $2, 'worker', 'starter', 1, 1, $3, CURRENT_TIMESTAMP)`,
 		uuid.New().String(), code, adminID,
 	)
 	if err != nil {

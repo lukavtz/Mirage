@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"zialfi-panel/internal/testutil"
 )
 
 func createTestZip(t *testing.T, files map[string]string) []byte {
@@ -30,8 +31,8 @@ func createTestZip(t *testing.T, files map[string]string) []byte {
 }
 
 func TestLogIngest_ValidArchive(t *testing.T) {
-	d := openTestDB(t)
-	r, token := setupTestRouter(t, d, nil)
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -46,7 +47,7 @@ func TestLogIngest_ValidArchive(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -63,9 +64,51 @@ func TestLogIngest_ValidArchive(t *testing.T) {
 	}
 }
 
+func TestIngest_BindsOwner(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, _ := mw.CreateFormFile("archive", "logs.zip")
+	zipData := createTestZip(t, map[string]string{
+		"passwords.txt": "https://example.com	user	pass",
+	})
+	fw.Write(zipData)
+	mw.WriteField("metadata", `{"hwid":"hw-owner","os":"win10","username":"alice","ip":"1.2.3.4","country":"US"}`)
+	mw.Close()
+
+	req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	req.Header.Set("X-API-Key", apiKey)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]string
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp["session_id"] == "" {
+		t.Fatal("expected session_id in response")
+	}
+
+	var ownerID string
+	err := d.QueryRow("SELECT COALESCE(owner_id, '') FROM sessions WHERE id = $1", resp["session_id"]).Scan(&ownerID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ownerID == "" {
+		t.Error("expected session to be bound to the API key owner")
+	}
+}
+
 func TestLogIngest_MissingArchive(t *testing.T) {
-	d := openTestDB(t)
-	r, token := setupTestRouter(t, d, nil)
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -74,7 +117,7 @@ func TestLogIngest_MissingArchive(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -90,8 +133,8 @@ func TestLogIngest_MissingArchive(t *testing.T) {
 }
 
 func TestLogIngest_TooLarge(t *testing.T) {
-	d := openTestDB(t)
-	r, token := setupTestRouter(t, d, nil)
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
 
 	largeData := strings.Repeat("A", 101<<20)
 
@@ -103,7 +146,7 @@ func TestLogIngest_TooLarge(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -113,7 +156,7 @@ func TestLogIngest_TooLarge(t *testing.T) {
 }
 
 func TestLogIngest_NoAuth(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, _ := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log", nil)
@@ -133,8 +176,8 @@ func TestLogIngest_NoAuth(t *testing.T) {
 }
 
 func TestChunk_Complete(t *testing.T) {
-	d := openTestDB(t)
-	r, token := setupTestRouter(t, d, nil)
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
 
 	zipData := createTestZip(t, map[string]string{
 		"passwords.txt": "https://example.com\tuser\tpass",
@@ -170,7 +213,7 @@ func TestChunk_Complete(t *testing.T) {
 
 		req := httptest.NewRequest(http.MethodPost, "/api/log/chunk", &buf)
 		req.Header.Set("Content-Type", mw.FormDataContentType())
-		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("X-API-Key", apiKey)
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, req)
 
@@ -182,7 +225,7 @@ func TestChunk_Complete(t *testing.T) {
 	form := "session_id=" + sessionID + "&total_chunks=" + strconv.Itoa(len(chunks)) + "&metadata=" + "{}"
 	req := httptest.NewRequest(http.MethodPost, "/api/log/complete", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -198,13 +241,13 @@ func TestChunk_Complete(t *testing.T) {
 }
 
 func TestChunk_MissingSession(t *testing.T) {
-	d := openTestDB(t)
-	r, token := setupTestRouter(t, d, nil)
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
 
 	form := "session_id=nonexistent&total_chunks=1"
 	req := httptest.NewRequest(http.MethodPost, "/api/log/complete", strings.NewReader(form))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -220,8 +263,8 @@ func TestChunk_MissingSession(t *testing.T) {
 }
 
 func TestChunk_InvalidIndex(t *testing.T) {
-	d := openTestDB(t)
-	r, token := setupTestRouter(t, d, nil)
+	d := testutil.OpenTestDB(t)
+	r, apiKey := setupLogsTestRouter(t, d)
 
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
@@ -233,7 +276,7 @@ func TestChunk_InvalidIndex(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/log/chunk", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("X-API-Key", apiKey)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 

@@ -7,6 +7,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+
+	"zialfi-panel/internal/db"
 )
 
 type BanHandler struct {
@@ -27,7 +29,7 @@ type banRecord struct {
 }
 
 func (h *BanHandler) List(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.db.Query("SELECT id, ip, hwid, reason, created_by, banned_at FROM bans ORDER BY banned_at DESC")
+	rows, err := db.Query(h.db, "SELECT id, ip, hwid, reason, created_by, banned_at FROM bans ORDER BY banned_at DESC")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query bans")
 		return
@@ -73,10 +75,8 @@ func (h *BanHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id := uuid.New().String()
 	now := time.Now().UTC().Format("2006-01-02 15:04:05")
 
-	_, err := h.db.Exec(
-		"INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES (?, ?, ?, ?, ?, ?)",
-		id, req.IP, nullIfEmpty(req.HWID), req.Reason, claims.UserID, now,
-	)
+	_, err := db.Exec(h.db, "INSERT INTO bans (id, ip, hwid, reason, created_by, banned_at) VALUES (?, ?, ?, ?, ?, ?)",
+		id, req.IP, nullIfEmpty(req.HWID), req.Reason, claims.UserID, now)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create ban")
 		return
@@ -96,7 +96,7 @@ func (h *BanHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *BanHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM bans WHERE id = ?", id)
+	result, err := db.Exec(h.db, "DELETE FROM bans WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete ban")
 		return

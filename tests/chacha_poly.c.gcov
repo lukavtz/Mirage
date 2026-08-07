@@ -1,0 +1,4 @@
+        -:    0:Source:src/crypto/chacha_poly.c
+        -:    0:Graph:test_crypto-chacha_poly.gcno
+        -:    0:Data:test_crypto-chacha_poly.gcda
+        -:    0:Runs:1

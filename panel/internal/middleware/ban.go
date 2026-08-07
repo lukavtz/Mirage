@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	dbutil "zialfi-panel/internal/db"
 )
 
 type banEntry struct {
@@ -19,6 +21,13 @@ type DB interface {
 type banChecker struct {
 	db    DB
 	cache sync.Map
+}
+
+func queryBanRow(d DB, query string, args ...any) *sql.Row {
+	if raw, ok := d.(*sql.DB); ok {
+		return dbutil.QueryRow(raw, query, args...)
+	}
+	return d.QueryRow(dbutil.Placeholders(query), args...)
 }
 
 func BanCheck(db DB) func(http.Handler) http.Handler {
@@ -41,12 +50,12 @@ func BanCheck(db DB) func(http.Handler) http.Handler {
 			}
 
 			var exists bool
-			err := bc.db.QueryRow("SELECT EXISTS(SELECT 1 FROM bans WHERE ip = ?)", ip).Scan(&exists)
+			err := queryBanRow(bc.db, "SELECT EXISTS(SELECT 1 FROM bans WHERE ip = ?)", ip).Scan(&exists)
 			banned := err == nil && exists
 
 			if !banned && hwid != "" {
 				var hwidExists bool
-				err := bc.db.QueryRow("SELECT EXISTS(SELECT 1 FROM bans WHERE hwid = ?)", hwid).Scan(&hwidExists)
+				err := queryBanRow(bc.db, "SELECT EXISTS(SELECT 1 FROM bans WHERE hwid = ?)", hwid).Scan(&hwidExists)
 				if err == nil && hwidExists {
 					banned = true
 				}
@@ -54,7 +63,7 @@ func BanCheck(db DB) func(http.Handler) http.Handler {
 
 			bc.cache.Store(ip, banEntry{
 				banned:    banned,
-				expiresAt: time.Now().Add(5 * time.Minute),
+				expiresAt: time.Now().Add(30 * time.Second),
 			})
 
 			if banned {

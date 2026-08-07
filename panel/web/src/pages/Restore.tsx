@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { useI18n } from '@/lib/i18n'
 
 interface CookieItem {
   domain: string
@@ -24,6 +25,7 @@ interface RestoreResult {
 export default function Restore() {
   const [sessionId, setSessionId] = useState('')
   const [proxy, setProxy] = useState('')
+  const { t } = useI18n()
 
   const restoreMutation = useMutation({
     mutationFn: () =>
@@ -38,15 +40,15 @@ export default function Restore() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Cookie Restore</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t('restore.title')}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle>Restore Configuration</CardTitle>
+          <CardTitle>{t('restore.config')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="session-id">Session ID</Label>
+            <Label htmlFor="session-id">{t('restore.session_id')}</Label>
             <Input
               id="session-id"
               placeholder="a1b2c3d4..."
@@ -57,7 +59,7 @@ export default function Restore() {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="proxy">Proxy</Label>
+            <Label htmlFor="proxy">{t('restore.proxy')}</Label>
             <Input
               id="proxy"
               placeholder="socks5://user:pass@host:1080"
@@ -72,7 +74,7 @@ export default function Restore() {
             disabled={restoreMutation.isPending || !sessionId || !proxy}
           >
             {restoreMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-            Start Restore
+            {t('restore.start')}
           </Button>
         </CardContent>
       </Card>
@@ -82,7 +84,7 @@ export default function Restore() {
           <CardContent className="pt-6">
             <div className="flex items-center gap-2 text-destructive">
               <XCircle className="h-5 w-5" />
-              <span>{error.error || 'Restore failed'}</span>
+              <span>{error.error || t('restore.failed')}</span>
             </div>
           </CardContent>
         </Card>
@@ -91,20 +93,20 @@ export default function Restore() {
       {result && (
         <Card>
           <CardHeader>
-            <CardTitle>Progress: {result.count} cookie{result.count !== 1 ? 'ies' : 'y'}</CardTitle>
+            <CardTitle>{t('restore.progress', { n: result.count })}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-1">
               {result.cookies.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-sm font-mono">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-success" />
                   <span className="text-muted-foreground">{c.domain}</span>
                   <span>{c.name}</span>
                 </div>
               ))}
             </div>
             {result.cookies.length === 0 && (
-              <p className="text-muted-foreground text-sm">No cookies found for this session.</p>
+              <p className="text-muted-foreground text-sm">{t('restore.no_cookies')}</p>
             )}
           </CardContent>
         </Card>

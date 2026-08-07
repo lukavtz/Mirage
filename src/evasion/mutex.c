@@ -15,6 +15,9 @@
 
 #ifdef ENABLE_MUTEX
 
+/* Handle kept open for process lifetime — prevents second instance */
+static HANDLE g_mutex_event = NULL;
+
 /* ── STATUS_OBJECT_NAME_COLLISION ─────────────────────────── */
 #define STATUS_OBJECT_NAME_COLLISION ((NTSTATUS)0xC000004E)
 
@@ -82,7 +85,7 @@ int mirage_ensure_mutex(void) {
 
     /* Event created successfully — we are the first instance.
      * Keep the handle open for the lifetime of the process. */
-    mirage_NtClose(event_handle);
+    g_mutex_event = event_handle;  /* Handle intentionally leaked — prevents second instance */
     return 1;
 }
 

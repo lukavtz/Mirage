@@ -7,22 +7,23 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"zialfi-panel/internal/testutil"
 )
 
 func TestSearch_PasswordMatch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	pid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'google.com', 'john', 'secret', 'chrome')`, pid, sid)
+		VALUES ($1, $2, 'google.com', 'john', 'secret', 'chrome')`, pid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,19 +70,19 @@ func TestSearch_PasswordMatch(t *testing.T) {
 }
 
 func TestSearch_CookieMatch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	cid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO cookies (id, session_id, domain, name, value, path)
-		VALUES (?, ?, '.google.com', 'session', 'abc123', '/')`, cid, sid)
+		VALUES ($1, $2, '.google.com', 'session', 'abc123', '/')`, cid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,19 +124,19 @@ func TestSearch_CookieMatch(t *testing.T) {
 }
 
 func TestSearch_CardMatch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	cid := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO cards (id, session_id, number, exp_month, exp_year, holder, cvc)
-		VALUES (?, ?, '4111111111111111', '12', '28', 'John', '123')`, cid, sid)
+		VALUES ($1, $2, '4111111111111111', '12', '28', 'John', '123')`, cid, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,24 +172,24 @@ func TestSearch_CardMatch(t *testing.T) {
 }
 
 func TestSearch_TypeFilter(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'domain.com', 'user', 'pass', 'chrome')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'domain.com', 'user', 'pass', 'chrome')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO cookies (id, session_id, domain, name, value, path)
-		VALUES (?, ?, 'domain.com', 'sid', 'abc', '/')`, uuid.New().String(), sid)
+		VALUES ($1, $2, 'domain.com', 'sid', 'abc', '/')`, uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,12 +234,12 @@ func TestSearch_TypeFilter(t *testing.T) {
 }
 
 func TestSearch_MultiMatch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +250,7 @@ func TestSearch_MultiMatch(t *testing.T) {
 			url = "test.org"
 		}
 		_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-			VALUES (?, ?, ?, 'testuser', 'testpass', 'chrome')`,
+			VALUES ($1, $2, $3, 'testuser', 'testpass', 'chrome')`,
 			uuid.New().String(), sid, url)
 		if err != nil {
 			t.Fatal(err)
@@ -277,7 +278,7 @@ func TestSearch_MultiMatch(t *testing.T) {
 }
 
 func TestSearch_ShortQuery(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=a", nil)
@@ -304,7 +305,7 @@ func TestSearch_ShortQuery(t *testing.T) {
 }
 
 func TestSearch_NoMatch(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search?q=zzznotfound", nil)
@@ -331,19 +332,19 @@ func TestSearch_NoMatch(t *testing.T) {
 }
 
 func TestSearch_Pagination(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	for i := 0; i < 3; i++ {
 		_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-			VALUES (?, ?, 'test.com', 'user', 'pass', 'chrome')`,
+			VALUES ($1, $2, 'test.com', 'user', 'pass', 'chrome')`,
 			uuid.New().String(), sid)
 		if err != nil {
 			t.Fatal(err)
@@ -380,7 +381,7 @@ func TestSearch_Pagination(t *testing.T) {
 }
 
 func TestSearch_EmptyQuery(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/search", nil)
@@ -407,31 +408,31 @@ func TestSearch_EmptyQuery(t *testing.T) {
 }
 
 func TestSearch_CrossSession(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupTestRouter(t, d, nil)
 
 	sid1 := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', datetime('now'))`, sid1)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	sid2 := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw2', 'win11', 'user2', '5.6.7.8', 'GB', datetime('now'))`, sid2)
+		VALUES ($1, 'b1', 'hw2', 'win11', 'user2', '5.6.7.8', 'GB', CURRENT_TIMESTAMP)`, sid2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'google.com', 'alice', 'pass1', 'chrome')`, uuid.New().String(), sid1)
+		VALUES ($1, $2, 'google.com', 'alice', 'pass1', 'chrome')`, uuid.New().String(), sid1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'google.com', 'bob', 'pass2', 'firefox')`, uuid.New().String(), sid2)
+		VALUES ($1, $2, 'google.com', 'bob', 'pass2', 'firefox')`, uuid.New().String(), sid2)
 	if err != nil {
 		t.Fatal(err)
 	}

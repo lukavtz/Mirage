@@ -8,6 +8,6 @@ CREATE TABLE IF NOT EXISTS license_trials (
     machine_id TEXT DEFAULT '',
     tier TEXT DEFAULT 'starter',
     max_sessions INTEGER DEFAULT 50,
-    expires_at TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    expires_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

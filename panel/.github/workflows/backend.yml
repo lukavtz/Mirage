@@ -1,0 +1,60 @@
+name: Backend CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: mirage
+          POSTGRES_USER: mirage
+          POSTGRES_PASSWORD: mirage
+        options: >-
+          --health-cmd "pg_isready -U mirage -d mirage"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    env:
+      TEST_DATABASE_URL: postgres://mirage:mirage@localhost:5432/mirage?sslmode=disable
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Test backend
+        run: go test -count=1 ./internal/...
+
+      - name: Race test backend
+        run: go test -race -count=1 ./internal/...
+
+      - name: Vet backend
+        run: go vet ./...
+
+      - name: Build backend
+        run: go build ./...
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test and build frontend
+        working-directory: web
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm test && npm run build
+
+      - name: Build Docker image
+        run: docker build --tag mirage-panel:ci .

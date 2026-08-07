@@ -4,8 +4,8 @@ CREATE TABLE IF NOT EXISTS telegram_bots (
     token TEXT NOT NULL,
     chat_id TEXT NOT NULL,
     tier TEXT DEFAULT 'basic',
-    is_active INTEGER DEFAULT 1,
-    created_at TEXT DEFAULT (datetime('now'))
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS bot_filters (
@@ -13,5 +13,5 @@ CREATE TABLE IF NOT EXISTS bot_filters (
     bot_id TEXT NOT NULL,
     filter_type TEXT NOT NULL,
     filter_value TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

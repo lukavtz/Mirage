@@ -1,0 +1,61 @@
+        -:    0:Source:C:/msys64/ucrt64/include/corecrt_memory.h
+        -:    0:Graph:test_rt-rt_mem.gcno
+        -:    0:Data:test_rt-rt_mem.gcda
+        -:    0:Runs:1
+        -:    1:/**
+        -:    2: * This file has no copyright assigned and is placed in the Public Domain.
+        -:    3: * This file is part of the mingw-w64 runtime package.
+        -:    4: * No warranty is given; refer to the file DISCLAIMER.PD within this package.
+        -:    5: */
+        -:    6:#ifndef _INC_CORECRT_MEMORY
+        -:    7:#define _INC_CORECRT_MEMORY
+        -:    8:
+        -:    9:#include <crtdefs.h>
+        -:   10:
+        -:   11:#if defined(__LIBMSVCRT__)
+        -:   12:/* When building mingw-w64, this should be blank.  */
+        -:   13:#define _SECIMP
+        -:   14:#else
+        -:   15:#ifndef _SECIMP
+        -:   16:#define _SECIMP __declspec(dllimport)
+        -:   17:#endif /* _SECIMP */
+        -:   18:#endif /* defined(__LIBMSVCRT__) */
+        -:   19:
+        -:   20:#ifdef __cplusplus
+        -:   21:extern "C" {
+        -:   22:#endif
+        -:   23:
+        -:   24:#ifndef _CRT_MEMORY_DEFINED
+        -:   25:#define _CRT_MEMORY_DEFINED
+        -:   26:  _CRTIMP void *__cdecl _memccpy(void *_Dst,const void *_Src,int _Val,size_t _MaxCount);
+        -:   27:#if !defined(__STRICT_ANSI__) || defined(_GNU_SOURCE) || __STDC_VERSION__ + 0 >= 202311L || _XOPEN_SOURCE + 0 >= 600
+        -:   28:  void * __cdecl memccpy(void *_Dst,const void *_Src,int _Val,size_t _Size);
+        -:   29:#endif
+        1:   30:  _CONST_RETURN void *__cdecl memchr(const void *_Buf ,int _Val,size_t _MaxCount);
+        -:   31:  _CRTIMP int __cdecl _memicmp(const void *_Buf1,const void *_Buf2,size_t _Size);
+        -:   32:  _CRTIMP int __cdecl _memicmp_l(const void *_Buf1,const void *_Buf2,size_t _Size,_locale_t _Locale);
+        1:   33:  int __cdecl memcmp(const void *_Buf1,const void *_Buf2,size_t _Size);
+        4:   34:  void * __cdecl memcpy(void * __restrict__ _Dst,const void * __restrict__ _Src,size_t _Size) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   35:  _SECIMP errno_t __cdecl memcpy_s (void *_dest,size_t _numberOfElements,const void *_src,size_t _count);
+        -:   36:  void * __cdecl mempcpy (void *_Dst, const void *_Src, size_t _Size);
+    #####:   37:  void * __cdecl memset(void *_Dst,int _Val,size_t _Size);
+        -:   38:#if !defined(__STRICT_ANSI__) || __STDC_VERSION__ + 0 >= 202311L
+        -:   39:  void * __cdecl memset_explicit(void *_Dst,int _Val,size_t _Size);
+        -:   40:#endif
+        -:   41:
+        -:   42:#ifndef	NO_OLDNAMES
+        -:   43:  void * __cdecl memccpy(void *_Dst,const void *_Src,int _Val,size_t _Size) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:   44:  int __cdecl memicmp(const void *_Buf1,const void *_Buf2,size_t _Size) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:   45:#endif
+        -:   46:#endif
+        -:   47:
+        -:   48:#ifdef __cplusplus
+        -:   49:}
+        -:   50:#endif
+        -:   51:
+        -:   52:#ifdef __cplusplus
+        -:   53:extern "C++" inline void* memchr(void* __s, int __c, size_t __n)
+        -:   54:{ return const_cast<void*>(memchr(const_cast<const void*>(__s), __c, __n)); }
+        -:   55:#endif
+        -:   56:
+        -:   57:#endif

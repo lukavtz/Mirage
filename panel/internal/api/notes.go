@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 )
 
 type NotesHandler struct {
@@ -28,10 +29,13 @@ type Note struct {
 func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
-	rows, err := h.db.Query(
-		"SELECT id, session_id, content, created_by, created_at FROM notes WHERE session_id = ? ORDER BY created_at DESC",
-		sessionID,
-	)
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
+	rows, err := db.Query(h.db, "SELECT id, session_id, content, created_by, created_at FROM notes WHERE session_id = ? ORDER BY created_at DESC",
+		sessionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to query notes")
 		return
@@ -53,6 +57,11 @@ func (h *NotesHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "id")
 
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	var req struct {
 		Content string `json:"content"`
 	}
@@ -64,21 +73,21 @@ func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "content is required")
 		return
 	}
+	if len(req.Content) > 10000 {
+		writeError(w, http.StatusBadRequest, "content too long (max 10000)")
+		return
+	}
 
 	id := uuid.New().String()
-	_, err := h.db.Exec(
-		"INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)",
-		id, sessionID, req.Content,
-	)
+	_, err := db.Exec(h.db, "INSERT INTO notes (id, session_id, content) VALUES (?, ?, ?)",
+		id, sessionID, req.Content)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create note")
 		return
 	}
 
 	var n Note
-	err = h.db.QueryRow(
-		"SELECT id, session_id, content, created_by, created_at FROM notes WHERE id = ?", id,
-	).Scan(&n.ID, &n.SessionID, &n.Content, &n.CreatedBy, &n.CreatedAt)
+	err = db.QueryRow(h.db, "SELECT id, session_id, content, created_by, created_at FROM notes WHERE id = ?", id).Scan(&n.ID, &n.SessionID, &n.Content, &n.CreatedBy, &n.CreatedAt)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to read back note")
 		return
@@ -90,7 +99,18 @@ func (h *NotesHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *NotesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM notes WHERE id = ?", id)
+	var sessionID string
+	err := db.QueryRow(h.db, "SELECT session_id FROM notes WHERE id = ?", id).Scan(&sessionID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "note not found")
+		return
+	}
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
+	result, err := db.Exec(h.db, "DELETE FROM notes WHERE id = ?", id)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete note")
 		return

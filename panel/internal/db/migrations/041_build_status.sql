@@ -1,0 +1,6 @@
+ALTER TABLE builds ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'done';
+ALTER TABLE builds ADD COLUMN IF NOT EXISTS error_message TEXT;
+ALTER TABLE builds ADD COLUMN IF NOT EXISTS poly_seed INTEGER;
+ALTER TABLE builds ADD COLUMN IF NOT EXISTS build_name TEXT;
+
+CREATE INDEX IF NOT EXISTS idx_builds_status ON builds(status) WHERE status != 'done';

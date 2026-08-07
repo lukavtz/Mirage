@@ -131,3 +131,73 @@ func TestRateLimit_ZeroRequests(t *testing.T) {
 		t.Errorf("expected 429 for zero limit, got %d", rec.Code)
 	}
 }
+
+// ExtractIP now uses RemoteAddr only — X-Forwarded-For and X-Real-IP are NOT trusted.
+
+func TestExtractIP_IgnoresXForwardedFor(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50, 70.41.3.18, 150.172.238.178")
+	got := middleware.ExtractIP(req)
+	if got != "10.0.0.1" {
+		t.Errorf("expected RemoteAddr 10.0.0.1, got %q", got)
+	}
+}
+
+func TestExtractIP_IgnoresXForwardedForSingle(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	got := middleware.ExtractIP(req)
+	if got != "10.0.0.1" {
+		t.Errorf("expected RemoteAddr 10.0.0.1, got %q", got)
+	}
+}
+
+func TestExtractIP_IgnoresXRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Real-IP", "198.51.100.77")
+	got := middleware.ExtractIP(req)
+	if got != "10.0.0.1" {
+		t.Errorf("expected RemoteAddr 10.0.0.1, got %q", got)
+	}
+}
+
+func TestExtractIP_IgnoresBothXFFAndRealIP(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "10.0.0.1:54321"
+	req.Header.Set("X-Forwarded-For", "203.0.113.50")
+	req.Header.Set("X-Real-IP", "198.51.100.77")
+	got := middleware.ExtractIP(req)
+	if got != "10.0.0.1" {
+		t.Errorf("expected RemoteAddr 10.0.0.1, got %q", got)
+	}
+}
+
+func TestExtractIP_RemoteAddr(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.42:12345"
+	got := middleware.ExtractIP(req)
+	if got != "192.168.1.42" {
+		t.Errorf("expected 192.168.1.42, got %q", got)
+	}
+}
+
+func TestExtractIP_RemoteAddrNoPort(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "192.168.1.42"
+	got := middleware.ExtractIP(req)
+	if got != "192.168.1.42" {
+		t.Errorf("expected 192.168.1.42, got %q", got)
+	}
+}
+
+func TestExtractIP_IPv6(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "[::1]:12345"
+	got := middleware.ExtractIP(req)
+	if got != "::1" {
+		t.Errorf("expected ::1, got %q", got)
+	}
+}

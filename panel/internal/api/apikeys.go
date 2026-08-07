@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"zialfi-panel/internal/db"
 )
 
 type APIKeyHandler struct {
@@ -68,10 +69,8 @@ func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
 	id := uuid.New().String()
 	rawKey, keyHash := generateAPIKey()
 
-	_, err := h.db.Exec(
-		"INSERT INTO api_keys (id, user_id, name, key_hash, scope, rate_limit) VALUES (?, ?, ?, ?, ?, ?)",
-		id, claims.UserID, req.Name, keyHash, req.Scope, req.RateLimit,
-	)
+	_, err := db.Exec(h.db, "INSERT INTO api_keys (id, user_id, name, key_hash, scope, rate_limit) VALUES (?, ?, ?, ?, ?, ?)",
+		id, claims.UserID, req.Name, keyHash, req.Scope, req.RateLimit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create API key")
 		return
@@ -93,10 +92,8 @@ func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := h.db.Query(
-		"SELECT id, name, scope, rate_limit, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC",
-		claims.UserID,
-	)
+	rows, err := db.Query(h.db, "SELECT id, name, scope, rate_limit, created_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC",
+		claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to list API keys")
 		return
@@ -124,7 +121,7 @@ func (h *APIKeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	id := chi.URLParam(r, "id")
 
-	result, err := h.db.Exec("DELETE FROM api_keys WHERE id = ? AND user_id = ?", id, claims.UserID)
+	result, err := db.Exec(h.db, "DELETE FROM api_keys WHERE id = ? AND user_id = ?", id, claims.UserID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to delete API key")
 		return

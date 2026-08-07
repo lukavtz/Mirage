@@ -55,3 +55,4 @@ tests/test_network
 tests/test_evasion
 tests/test_hash
 tests/test_e2e
+panel/internal/services/data/

@@ -2,7 +2,10 @@ package services
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -11,6 +14,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+	"zialfi-panel/internal/db"
 )
 
 type SupportBot struct {
@@ -93,7 +98,7 @@ func (b *SupportBot) handleBuy(msg *tgMessage) {
 	}
 
 	id := uuid.New().String()
-	_, err := b.db.Exec(
+	_, err := db.Exec(b.db,
 		`INSERT INTO sales_leads (id, telegram_id, username, tier, status) VALUES (?, ?, ?, ?, 'new')`,
 		id, fmt.Sprintf("%d", msg.From.ID), msg.From.Username, tier,
 	)
@@ -119,8 +124,9 @@ func (b *SupportBot) handleLicense(msg *tgMessage) {
 
 	key := strings.TrimSpace(parts[1])
 	var userID, tier, expiresAt string
-	err := b.db.QueryRow(
-		"SELECT user_id, tier, COALESCE(expires_at, '') FROM purchases WHERE license_key = ?", key,
+	err := db.QueryRow(
+		b.db,
+		"SELECT user_id, tier, COALESCE(expires_at::text, '') FROM purchases WHERE license_key = ?", key,
 	).Scan(&userID, &tier, &expiresAt)
 	if err != nil {
 		b.send(msg.Chat.ID, "License key not found.")
@@ -132,6 +138,86 @@ func (b *SupportBot) handleLicense(msg *tgMessage) {
 		text += fmt.Sprintf("\nExpires: `%s`", expiresAt)
 	}
 	b.send(msg.Chat.ID, text)
+}
+
+func (b *SupportBot) handleRegister(msg *tgMessage) {
+	// Check if this Telegram user already has an account
+	var existingUser string
+	err := db.QueryRow(b.db, "SELECT u.username FROM users u JOIN recovery_codes rc ON rc.user_id = u.id WHERE rc.code_hash = ? LIMIT 1", fmt.Sprintf("%d", msg.From.ID)).Scan(&existingUser)
+	if err == nil {
+		b.send(msg.Chat.ID, "You already have an account: "+existingUser+"\nUse /help for available commands.")
+		return
+	}
+
+	// Generate credentials
+	username := "user_" + randomString(8)
+	password := randomString(16)
+
+	// Create user
+	userID := uuid.New().String()
+	passwordHash, err := hashPassword(password)
+	if err != nil {
+		slog.Error("failed to hash password", "err", err)
+		b.send(msg.Chat.ID, "Something went wrong. Please try again later.")
+		return
+	}
+
+	_, err = db.Exec(b.db,
+		"INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, 'worker')",
+		userID, username, passwordHash,
+	)
+	if err != nil {
+		slog.Error("failed to create user", "err", err)
+		b.send(msg.Chat.ID, "Something went wrong. Please try again later.")
+		return
+	}
+
+	// Generate 8 recovery codes
+	codes := make([]string, 8)
+	for i := range codes {
+		code := randomString(10)
+		codes[i] = code
+
+		codeHash := sha256.Sum256([]byte(code))
+		codeID := uuid.New().String()
+		db.Exec(b.db,
+			"INSERT INTO recovery_codes (id, user_id, code_hash) VALUES (?, ?, ?)",
+			codeID, userID, hex.EncodeToString(codeHash[:]),
+		)
+	}
+
+	// Send credentials to user
+	text := fmt.Sprintf(
+		"✅ **Account Created**\n\n"+
+			"**Username:** `%s`\n"+
+			"**Password:** `%s`\n\n"+
+			"**Recovery Codes** (save these securely, each can be used once):\n",
+		username, password,
+	)
+	for i, code := range codes {
+		text += fmt.Sprintf("%d. `%s`\n", i+1, code)
+	}
+	text += "\n⚠️ These codes are the ONLY way to recover your password. Save them now!"
+
+	b.send(msg.Chat.ID, text)
+}
+
+func randomString(n int) string {
+	b := make([]byte, n)
+	rand.Read(b)
+	const charset = "abcdefghijkmnpqrstuvwxyz23456789"
+	for i, v := range b {
+		b[i] = charset[int(v)%len(charset)]
+	}
+	return string(b)
+}
+
+func hashPassword(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		return "", err
+	}
+	return string(hash), nil
 }
 
 func (b *SupportBot) send(chatID int64, text string) {

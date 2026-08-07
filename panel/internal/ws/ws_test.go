@@ -32,7 +32,7 @@ func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 	r := chi.NewRouter()
 	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
-	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,12 +41,8 @@ func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 
 func connectWS(t *testing.T, srv *httptest.Server, token string) *websocket.Conn {
 	t.Helper()
-	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
+	url := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws?token=" + token
 	conn, _, err := testDialer.Dial(url, testHeader())
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +72,7 @@ func TestHub_RunAndBroadcast(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	msg := []byte(`{"type":"test","data":"hello"}`)
-	hub.Broadcast("chat", msg)
+	hub.Broadcast("chat:all", msg)
 
 	var received sync.WaitGroup
 	received.Add(2)
@@ -119,7 +115,7 @@ func TestHub_RegisterUnregister(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	hub.Broadcast("chat", []byte("ping"))
+	hub.Broadcast("chat:all", []byte("ping"))
 	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	_, _, err := conn.ReadMessage()
 	if err != nil {
@@ -129,7 +125,7 @@ func TestHub_RegisterUnregister(t *testing.T) {
 	conn.Close()
 	time.Sleep(100 * time.Millisecond)
 
-	hub.Broadcast("chat", []byte("after-close"))
+	hub.Broadcast("chat:all", []byte("after-close"))
 	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
 	_, _, err = conn.ReadMessage()
 	if err == nil {
@@ -151,13 +147,13 @@ func TestHub_BroadcastSkipsSlowClient(t *testing.T) {
 
 	// flood the send buffer so subsequent sends are dropped
 	for i := 0; i < 65; i++ {
-		hub.Broadcast("chat", []byte("flood"))
+		hub.Broadcast("chat:all", []byte("flood"))
 	}
 
 	// broadcast should not block even though client is slow
 	done := make(chan struct{})
 	go func() {
-		hub.Broadcast("chat", []byte("should-not-block"))
+		hub.Broadcast("chat:all", []byte("should-not-block"))
 		close(done)
 	}()
 
@@ -166,6 +162,28 @@ func TestHub_BroadcastSkipsSlowClient(t *testing.T) {
 		// ok — did not block
 	case <-time.After(2 * time.Second):
 		t.Fatal("broadcast blocked on slow client")
+	}
+}
+
+func TestHub_SlowClientEvictionClosesConnection(t *testing.T) {
+	hub := ws.NewHub()
+	go hub.Run()
+
+	srv, token := setupTestServer(t, hub)
+	defer srv.Close()
+	conn := connectWS(t, srv, token)
+	defer conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 66; i++ {
+		hub.Broadcast("chat:all", []byte("flood"))
+	}
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -190,7 +208,7 @@ func TestHub_ConcurrentBroadcast(t *testing.T) {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			hub.Broadcast("chat", []byte(`{"type":"concurrent","seq":`+strconv.Itoa(n)+`}`))
+			hub.Broadcast("chat:all", []byte(`{"type":"concurrent","seq":`+strconv.Itoa(n)+`}`))
 		}(i)
 	}
 	wg.Wait()
@@ -242,23 +260,13 @@ func TestServeWs_ValidToken(t *testing.T) {
 	srv, token := setupTestServer(t, hub)
 	defer srv.Close()
 
-	conn, _, err := testDialer.Dial(
-		"ws"+strings.TrimPrefix(srv.URL, "http")+"/ws",
-		testHeader(),
-	)
-	if err != nil {
-		t.Fatalf("expected successful upgrade, got: %v", err)
-	}
+	conn := connectWS(t, srv, token)
 	defer conn.Close()
 
-	err = conn.WriteJSON(map[string]string{"type": "auth", "token": token})
-	if err != nil {
-		t.Fatal(err)
-	}
 	time.Sleep(50 * time.Millisecond)
 
 	msg := []byte(`{"type":"test","data":"hello"}`)
-	hub.Broadcast("chat", msg)
+	hub.Broadcast("chat:all", msg)
 
 	conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
 	_, got, err := conn.ReadMessage()
@@ -278,8 +286,8 @@ func TestEvents_StatsEvent(t *testing.T) {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		t.Fatal(err)
 	}
-	if ev.Type != "stats" {
-		t.Errorf("type = %q, want %q", ev.Type, "stats")
+	if ev.Type != "stats_update" {
+		t.Errorf("type = %q, want %q", ev.Type, "stats_update")
 	}
 
 	b, _ := json.Marshal(ev.Data)
@@ -311,5 +319,81 @@ func TestEvents_NewSessionEvent(t *testing.T) {
 	}
 	if got.ID != "abc123" || got.CountryCode != "US" || got.PasswordsCount != 5 {
 		t.Errorf("unexpected payload: %+v", got)
+	}
+}
+
+// readWithTimeout reads one WS message, failing the test on timeout.
+func readWithTimeout(t *testing.T, conn *websocket.Conn) ([]byte, bool) {
+	t.Helper()
+	conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
+	_, got, err := conn.ReadMessage()
+	if err != nil {
+		return nil, false
+	}
+	return got, true
+}
+
+// TestServeWs_WorkerSubscribesPerUser verifies a non-admin client is subscribed
+// only to its own per-user channels, not to other users' or the global ones.
+func TestServeWs_WorkerSubscribesPerUser(t *testing.T) {
+	hub := ws.NewHub()
+	go hub.Run()
+
+	srv, _ := setupTestServer(t, hub)
+	defer srv.Close()
+
+	workerToken, _, err := auth.GenerateToken("user-a", "worker", jwtSecret, "", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn := connectWS(t, srv, workerToken)
+	defer conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// own channel: delivered
+	hub.Broadcast("sessions:user-a", []byte(`{"type":"new_session","id":"own"}`))
+	if got, ok := readWithTimeout(t, conn); !ok || string(got) != `{"type":"new_session","id":"own"}` {
+		t.Errorf("worker should receive own-channel session event, got %q ok=%v", got, ok)
+	}
+
+	// other tenant's channel: must NOT be delivered
+	hub.Broadcast("sessions:user-b", []byte(`{"type":"new_session","id":"other"}`))
+	if got, ok := readWithTimeout(t, conn); ok {
+		t.Errorf("worker must not receive another tenant's session event, got %q", got)
+	}
+
+	// global all-sessions channel: worker is not admin, must NOT receive
+	hub.Broadcast("sessions:all", []byte(`{"type":"new_session","id":"global"}`))
+	if got, ok := readWithTimeout(t, conn); ok {
+		t.Errorf("worker must not receive sessions:all event, got %q", got)
+	}
+}
+
+// TestServeWs_AdminGetsAllSessions verifies an admin client receives the
+// global sessions channel but not per-tenant channels.
+func TestServeWs_AdminGetsAllSessions(t *testing.T) {
+	hub := ws.NewHub()
+	go hub.Run()
+
+	srv, adminToken := setupTestServer(t, hub)
+	defer srv.Close()
+
+	conn := connectWS(t, srv, adminToken)
+	defer conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+
+	// global channel: delivered
+	hub.Broadcast("sessions:all", []byte(`{"type":"new_session","id":"global"}`))
+	if got, ok := readWithTimeout(t, conn); !ok || string(got) != `{"type":"new_session","id":"global"}` {
+		t.Errorf("admin should receive sessions:all event, got %q ok=%v", got, ok)
+	}
+
+	// per-tenant channel: must NOT be delivered to admin
+	hub.Broadcast("sessions:user-a", []byte(`{"type":"new_session","id":"tenant"}`))
+	if got, ok := readWithTimeout(t, conn); ok {
+		t.Errorf("admin must not receive per-tenant session event, got %q", got)
 	}
 }

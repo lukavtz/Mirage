@@ -2,15 +2,22 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { api } from '@/lib/api'
 import { wsClient } from '@/lib/ws'
-import type { StatsResponse } from '@/types'
+import type { StatsResponse, SystemHealth } from '@/types'
 
 export function useDashboard() {
   const queryClient = useQueryClient()
 
-  const query = useQuery<StatsResponse>({
+  const statsQuery = useQuery<StatsResponse>({
     queryKey: ['stats'],
     queryFn: () => api.get<StatsResponse>('/api/stats'),
     refetchInterval: 10_000,
+    refetchOnWindowFocus: false,
+  })
+
+  const healthQuery = useQuery<SystemHealth>({
+    queryKey: ['system-health'],
+    queryFn: () => api.get<SystemHealth>('/api/system/health'),
+    refetchInterval: 30_000,
     refetchOnWindowFocus: false,
   })
 
@@ -26,5 +33,5 @@ export function useDashboard() {
     }
   }, [queryClient])
 
-  return query
+  return { stats: statsQuery, health: healthQuery }
 }

@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS domain_detect (
     domain TEXT NOT NULL UNIQUE,
     tag TEXT NOT NULL,
     color TEXT DEFAULT '#5865F2',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS session_tags (
@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS session_tags (
     session_id TEXT NOT NULL,
     tag TEXT NOT NULL,
     color TEXT DEFAULT '#5865F2',
-    created_at TEXT DEFAULT (datetime('now'))
+    created_at TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

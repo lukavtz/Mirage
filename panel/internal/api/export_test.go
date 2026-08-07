@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/testutil"
 )
 
 func setupExportTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
@@ -22,27 +23,27 @@ func setupExportTestRouter(t *testing.T, d *sql.DB) (chi.Router, string) {
 	jwtSecret := "test-secret"
 	r := chi.NewRouter()
 	userID := createTestUser(t, d, "exportuser", "testpass")
-	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "")
+	token, _, err := auth.GenerateToken(userID, "admin", jwtSecret, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil)
+	api.SetupRoutes(r, d, jwtSecret, "*", nil, nil, nil, nil)
 	return r, token
 }
 
 func TestExport_SessionJSON(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupExportTestRouter(t, d)
 
 	sid := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'build-1', 'hwid-001', 'win10', 'alice', '192.168.1.1', 'US', datetime('now'))`, sid)
+		VALUES ($1, 'build-1', 'hwid-001', 'win10', 'alice', '192.168.1.1', 'US', CURRENT_TIMESTAMP)`, sid)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://example.com', 'alice', 'secret123', 'chrome')`,
+		VALUES ($1, $2, 'https://example.com', 'alice', 'secret123', 'chrome')`,
 		uuid.New().String(), sid)
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +91,7 @@ func TestExport_SessionJSON(t *testing.T) {
 }
 
 func TestExport_NotFound(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupExportTestRouter(t, d)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/export/session/"+uuid.New().String(), nil)
@@ -112,25 +113,25 @@ func TestExport_NotFound(t *testing.T) {
 }
 
 func TestExport_Bulk(t *testing.T) {
-	d := openTestDB(t)
+	d := testutil.OpenTestDB(t)
 	r, token := setupExportTestRouter(t, d)
 
 	sid1 := uuid.New().String()
 	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', datetime('now'))`, sid1)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'user1', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	sid2 := uuid.New().String()
 	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
-		VALUES (?, 'b2', 'hw2', 'win11', 'user2', '5.6.7.8', 'GB', datetime('now'))`, sid2)
+		VALUES ($1, 'b2', 'hw2', 'win11', 'user2', '5.6.7.8', 'GB', CURRENT_TIMESTAMP)`, sid2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
-		VALUES (?, ?, 'https://a.com', 'u1', 'p1', 'chrome')`, uuid.New().String(), sid1)
+		VALUES ($1, $2, 'https://a.com', 'u1', 'p1', 'chrome')`, uuid.New().String(), sid1)
 	if err != nil {
 		t.Fatal(err)
 	}

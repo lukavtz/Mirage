@@ -168,6 +168,7 @@ func SetupRoutes(r chi.Router, sqlDB *sql.DB, jwtSecret string, _ string, hub *w
 			r.Get("/stats", buildHandler.Stats)
 			r.Get("/{id}/download", buildHandler.Download)
 			r.Put("/{id}/tag", buildHandler.UpdateTag)
+			r.Get("/{id}/status", buildHandler.Status)
 		})
 		r.Get("/api/sessions/{id}/notes", notesHandler.List)
 		r.Post("/api/sessions/{id}/notes", notesHandler.Create)

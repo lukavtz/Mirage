@@ -71,6 +71,7 @@ SRCS = src/main.c \
        src/evasion/stack_spoof.c \
        src/evasion/mutex.c \
        src/evasion/unhook.c \
+       src/evasion/sleep_obfusc.c \
        src/cleanup/persistence.c \
        src/cleanup/self_delete.c
 ASM_SRCS = asm/mirage_stubs_v2.asm asm/stack_spoof_stubs.asm

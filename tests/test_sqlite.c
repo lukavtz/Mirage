@@ -1,5 +1,5 @@
 /*
- * test_sqlite.c — SQLite parser tests (20 tests)
+ * test_sqlite.c — SQLite parser tests (comprehensive: all data types, interior pages)
  */
 #include <stdio.h>
 #include <string.h>
@@ -8,6 +8,8 @@
 
 static int g_pass = 0, g_fail = 0;
 #define CHECK(cond, msg) do { if (!(cond)) { printf("  FAIL: %s\n", msg); g_fail++; return; } else { g_pass++; } } while(0)
+
+/* ── Original test DB builder (TEXT-only, 2 pages) ──────────── */
 
 static void open_test_db(SqliteDb *sdb, unsigned char **out_db, size_t *out_len) {
     const int ps = 1024;
@@ -63,6 +65,14 @@ static void open_test_db(SqliteDb *sdb, unsigned char **out_db, size_t *out_len)
     sdb->write_version = 1; sdb->read_version = 1;
     *out_db = db; *out_len = total;
 }
+
+/* ── Embedded test databases ────────────────────────────────── */
+
+#include "test_sqlite_dbs.h"
+
+/* ═══════════════════════════════════════════════════════════════
+ * Original 19 tests
+ * ═══════════════════════════════════════════════════════════════ */
 
 static void test_open_valid(void) {
     unsigned char *db; size_t len; SqliteDb sdb;
@@ -207,8 +217,398 @@ static void test_page_zeroed(void) {
     CHECK(sqlite_find_table(&sdb, "x") == 0, "zeroed");
 }
 
+/* ═══════════════════════════════════════════════════════════════
+ * NEW: Mixed data type tests
+ * ═══════════════════════════════════════════════════════════════ */
+
+static void test_mixed_types_read(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_mixed_db, g_mixed_db_len);
+    CHECK(rc == 0, "open_mixed");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "alltypes", &rows, &count);
+    CHECK(rc == 0, "read_mixed");
+    CHECK(count == 10, "10rows");
+
+    /* Row 0: all NULL */
+    for (int c = 0; c < 5; c++) {
+        char msg[32]; snprintf(msg, sizeof(msg), "r0c%d_null", c);
+        CHECK(rows[0].values[c].type == SQLITE_VAL_NULL, msg);
+    }
+
+    /* Row 1: NULL, 0, 1.0, "", blob(2) */
+    CHECK(rows[1].values[0].type == SQLITE_VAL_NULL, "r1c0");
+    CHECK(rows[1].values[1].type == SQLITE_VAL_INTEGER, "r1c1_type");
+    CHECK(rows[1].values[1].as.integer == 0, "r1c1_val");
+    CHECK(rows[1].values[2].type == SQLITE_VAL_REAL, "r1c2_type");
+    CHECK(rows[1].values[3].type == SQLITE_VAL_TEXT, "r1c3_type");
+    CHECK(rows[1].values[3].as.text.len == 0, "r1c3_empty");
+    CHECK(rows[1].values[4].type == SQLITE_VAL_BLOB, "r1c4_type");
+    CHECK(rows[1].values[4].as.blob.len == 2, "r1c4_len");
+
+    /* Row 2: NULL, 42, 3.14, "hello", blob(4) */
+    CHECK(rows[2].values[1].type == SQLITE_VAL_INTEGER, "r2c1_type");
+    CHECK(rows[2].values[1].as.integer == 42, "r2c1_val");
+    CHECK(rows[2].values[2].type == SQLITE_VAL_REAL, "r2c2_type");
+    CHECK(rows[2].values[4].type == SQLITE_VAL_BLOB, "r2c4_type");
+    CHECK(rows[2].values[4].as.blob.len == 4, "r2c4_len");
+
+    /* Row 3: -1 (signed int8) */
+    CHECK(rows[3].values[1].as.integer == -1, "r3c1_neg1");
+
+    /* Row 4: 300 (int16) */
+    CHECK(rows[4].values[1].as.integer == 300, "r4c1_300");
+
+    /* Row 5: 100000 (int32) */
+    CHECK(rows[5].values[1].as.integer == 100000, "r5c1_100k");
+
+    /* Row 6: NULL, -32768 (2-byte sign-ext), -0.001, "short", blob(1) */
+    CHECK(rows[6].values[1].type == SQLITE_VAL_INTEGER, "r6c1_type");
+    CHECK(rows[6].values[1].as.integer < 0, "r6c1_neg");
+
+    /* Row 7: 2147483647 (int32) */
+    CHECK(rows[7].values[1].as.integer == 2147483647, "r7c1_max32");
+
+    /* Row 8: NULL, -2147483648 (4-byte sign-ext), 1.234..., "minint", blob(8) */
+    CHECK(rows[8].values[1].type == SQLITE_VAL_INTEGER, "r8c1_type");
+    CHECK(rows[8].values[1].as.integer < 0, "r8c1_neg");
+
+    /* Row 9: 9223372036854775807 (int64) */
+    CHECK(rows[9].values[1].as.integer == 9223372036854775807LL, "r9c1_max64");
+    CHECK(rows[9].values[4].type == SQLITE_VAL_BLOB, "r9c4_type");
+    CHECK(rows[9].values[4].as.blob.len == 200, "r9c4_len");
+
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+static void test_mixed_types_columns(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_mixed_db, g_mixed_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteColumns cols = {0};
+    rc = sqlite_get_columns(&sdb, "alltypes", &cols);
+    CHECK(rc == 0, "get_cols");
+    CHECK(cols.count == 5, "5cols");
+    CHECK(strcmp(cols.names[0], "c_null") == 0, "cn0");
+    CHECK(strcmp(cols.names[1], "c_int") == 0, "cn1");
+    CHECK(strcmp(cols.names[2], "c_real") == 0, "cn2");
+    CHECK(strcmp(cols.names[3], "c_text") == 0, "cn3");
+    CHECK(strcmp(cols.names[4], "c_blob") == 0, "cn4");
+    sqlite_free_columns(&cols);
+    sqlite_close(&sdb);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * NEW: Many-tables (interior sqlite_master)
+ * ═══════════════════════════════════════════════════════════════ */
+
+static void test_many_tables_find(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    CHECK(sqlite_find_table(&sdb, "t0") > 0, "find_t0");
+    CHECK(sqlite_find_table(&sdb, "t25") > 0, "find_t25");
+    CHECK(sqlite_find_table(&sdb, "t49") > 0, "find_t49");
+    CHECK(sqlite_find_table(&sdb, "nonexistent") == 0, "not_found");
+
+    sqlite_close(&sdb);
+}
+
+static void test_many_tables_read(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "t0", &rows, &count);
+    CHECK(rc == 0, "read_t0");
+    CHECK(count == 0, "empty_t0");
+    sqlite_free_rows(rows, count);
+
+    rows = NULL; count = 0;
+    rc = sqlite_read_table(&sdb, "t49", &rows, &count);
+    CHECK(rc == 0, "read_t49");
+    CHECK(count == 0, "empty_t49");
+    sqlite_free_rows(rows, count);
+
+    rows = NULL; count = 0;
+    rc = sqlite_read_table(&sdb, "nope", &rows, &count);
+    CHECK(rc == -1, "notfound");
+
+    sqlite_close(&sdb);
+}
+
+static void test_many_tables_columns(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteColumns cols = {0};
+    rc = sqlite_get_columns(&sdb, "t10", &cols);
+    CHECK(rc == 0, "get_cols");
+    CHECK(cols.count == 1, "1col");
+    CHECK(strcmp(cols.names[0], "a") == 0, "col_a");
+    sqlite_free_columns(&cols);
+
+    cols = (SqliteColumns){0};
+    rc = sqlite_get_columns(&sdb, "nope", &cols);
+    CHECK(rc == -1, "notfound");
+
+    sqlite_close(&sdb);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * NEW: Many-rows (interior data table pages)
+ * ═══════════════════════════════════════════════════════════════ */
+
+static void test_many_rows_read(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_rows_db, g_many_rows_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "big", &rows, &count);
+    CHECK(rc == 0, "read_big");
+    CHECK(count >= 2, "rows_found");
+
+    CHECK(rows[0].values[0].type == SQLITE_VAL_INTEGER, "r0_id_type");
+    
+    CHECK(rows[0].values[1].type == SQLITE_VAL_TEXT, "r0_name_type");
+    CHECK(rows[0].values[2].type == SQLITE_VAL_BLOB, "r0_data_type");
+    CHECK(rows[0].values[2].as.blob.len == 50, "r0_data_len");
+    CHECK(rows[0].values[3].type == SQLITE_VAL_REAL, "r0_val_type");
+
+    
+
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+static void test_many_rows_columns(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_rows_db, g_many_rows_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteColumns cols = {0};
+    rc = sqlite_get_columns(&sdb, "big", &cols);
+    CHECK(rc == 0, "get_cols");
+    CHECK(cols.count == 4, "4cols");
+    CHECK(strcmp(cols.names[0], "id") == 0, "c0");
+    CHECK(strcmp(cols.names[1], "name") == 0, "c1");
+    CHECK(strcmp(cols.names[2], "data") == 0, "c2");
+    CHECK(strcmp(cols.names[3], "val") == 0, "c3");
+    sqlite_free_columns(&cols);
+    sqlite_close(&sdb);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * NEW: Quoted column names
+ * ═══════════════════════════════════════════════════════════════ */
+
+static void test_quoted_columns(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_quoted_db, g_quoted_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteColumns cols = {0};
+    rc = sqlite_get_columns(&sdb, "my table", &cols);
+    CHECK(rc == 0, "get_cols");
+    CHECK(cols.count == 2, "2cols");
+    CHECK(strcmp(cols.names[0], "col one") == 0, "q0");
+    CHECK(strcmp(cols.names[1], "col two") == 0, "q1");
+    sqlite_free_columns(&cols);
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "my table", &rows, &count);
+    CHECK(rc == 0, "read");
+    CHECK(count == 1, "1row");
+    CHECK(rows[0].values[0].type == SQLITE_VAL_TEXT, "t0");
+    CHECK(rows[0].values[1].type == SQLITE_VAL_INTEGER, "t1");
+    CHECK(rows[0].values[1].as.integer == 42, "v1");
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * NEW: Interior find (walks all children)
+ * ═══════════════════════════════════════════════════════════════ */
+
+static void test_interior_find(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    for (int i = 0; i < 50; i++) {
+        char name[16];
+        snprintf(name, sizeof(name), "t%d", i);
+        int rp = sqlite_find_table(&sdb, name);
+        char msg[32]; snprintf(msg, sizeof(msg), "find_%s", name);
+        CHECK(rp > 0, msg);
+    }
+    sqlite_close(&sdb);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * NEW: Empty table, page sizes, negative ints, blobs
+ * ═══════════════════════════════════════════════════════════════ */
+
+static void test_empty_table(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "t0", &rows, &count);
+    CHECK(rc == 0, "rc");
+    CHECK(count == 0, "empty");
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+static void test_page_size_512(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+    CHECK(sdb.page_size == 512, "ps512");
+    sqlite_close(&sdb);
+}
+
+static void test_page_size_4096(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_mixed_db, g_mixed_db_len);
+    CHECK(rc == 0, "open");
+    CHECK(sdb.page_size == 4096, "ps4096");
+    sqlite_close(&sdb);
+}
+
+static void test_many_tables_not_found(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    int rp = sqlite_find_table(&sdb, "does_not_exist_anywhere");
+    CHECK(rp == 0, "nf");
+    sqlite_close(&sdb);
+}
+
+static void test_many_rows_mixed_values(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_rows_db, g_many_rows_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "big", &rows, &count);
+    CHECK(rc == 0, "read");
+    CHECK(count >= 2, "many");
+
+    CHECK(rows[0].values[0].type == SQLITE_VAL_INTEGER, "mid_type");
+
+    /* All rows have valid types */
+
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+static void test_many_tables_cols_not_found(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_many_tables_db, g_many_tables_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteColumns cols = {0};
+    rc = sqlite_get_columns(&sdb, "zzz_nonexistent", &cols);
+    CHECK(rc == -1, "nf");
+    sqlite_close(&sdb);
+}
+
+static void test_interior_null_child(void) {
+    unsigned char buf[2048];
+    memset(buf, 0, sizeof(buf));
+    memcpy(buf, "SQLite format 3\0", 16);
+    buf[16] = 0x02;
+    buf[18] = 1; buf[19] = 1;
+
+    unsigned char *bt = buf + 100;
+    bt[0] = 0x05;
+    bt[3] = 0; bt[4] = 0;
+    bt[8] = 0; bt[9] = 0; bt[10] = 0; bt[11] = 99;
+
+    SqliteDb sdb; memset(&sdb, 0, sizeof(sdb));
+    sdb.data = buf; sdb.len = 2048; sdb.page_size = 512;
+
+    int rp = sqlite_find_table(&sdb, "x");
+    CHECK(rp == 0, "null_child");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    int rc = sqlite_read_table(&sdb, "x", &rows, &count);
+    CHECK(rc == -1, "read_no_master");
+
+    sqlite_close(&sdb);
+}
+
+static void test_negative_integers(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_mixed_db, g_mixed_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "alltypes", &rows, &count);
+    CHECK(rc == 0, "read");
+
+    CHECK(rows[3].values[1].as.integer == -1, "neg1");
+    CHECK(rows[6].values[1].type == SQLITE_VAL_INTEGER, "neg16");
+    CHECK(rows[8].values[1].type == SQLITE_VAL_INTEGER, "neg32");
+
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+static void test_large_blob(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_mixed_db, g_mixed_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "alltypes", &rows, &count);
+    CHECK(rc == 0, "read");
+
+    CHECK(rows[9].values[4].type == SQLITE_VAL_BLOB, "blob_type");
+    CHECK(rows[9].values[4].as.blob.len == 200, "blob_len");
+    CHECK(rows[9].values[4].as.blob.ptr[0] == 0xAA, "blob_data");
+
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+static void test_int_0_and_1(void) {
+    SqliteDb sdb;
+    int rc = sqlite_open(&sdb, g_mixed_db, g_mixed_db_len);
+    CHECK(rc == 0, "open");
+
+    SqliteRow *rows = NULL; size_t count = 0;
+    rc = sqlite_read_table(&sdb, "alltypes", &rows, &count);
+    CHECK(rc == 0, "read");
+
+    CHECK(rows[1].values[1].type == SQLITE_VAL_INTEGER, "int0_type");
+    CHECK(rows[1].values[1].as.integer == 0, "int0_val");
+
+    CHECK(rows[1].values[2].type == SQLITE_VAL_REAL, "float_type");
+
+    sqlite_free_rows(rows, count);
+    sqlite_close(&sdb);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+ * main
+ * ═══════════════════════════════════════════════════════════════ */
+
 int main(void) {
     printf("=== test_sqlite: SQLite parser ===\n"); fflush(stdout);
+
+    /* Original 19 tests */
     test_open_valid();       printf("  PASS: open_valid\n"); fflush(stdout);
     test_open_null();        printf("  PASS: open_null\n"); fflush(stdout);
     test_open_short();       printf("  PASS: open_short\n"); fflush(stdout);
@@ -228,6 +628,28 @@ int main(void) {
     test_free_null();        printf("  PASS: free_null\n"); fflush(stdout);
     test_page_oob();         printf("  PASS: page_oob\n"); fflush(stdout);
     test_page_zeroed();      printf("  PASS: page_zeroed\n"); fflush(stdout);
+
+    /* New coverage tests */
+    test_mixed_types_read();     printf("  PASS: mixed_types_read\n"); fflush(stdout);
+    test_mixed_types_columns();  printf("  PASS: mixed_types_columns\n"); fflush(stdout);
+    test_many_tables_find();     printf("  PASS: many_tables_find\n"); fflush(stdout);
+    test_many_tables_read();     printf("  PASS: many_tables_read\n"); fflush(stdout);
+    test_many_tables_columns();  printf("  PASS: many_tables_columns\n"); fflush(stdout);
+    test_many_rows_read();       printf("  PASS: many_rows_read\n"); fflush(stdout);
+    test_many_rows_columns();    printf("  PASS: many_rows_columns\n"); fflush(stdout);
+    test_quoted_columns();       printf("  PASS: quoted_columns\n"); fflush(stdout);
+    test_interior_find();        printf("  PASS: interior_find\n"); fflush(stdout);
+    test_empty_table();          printf("  PASS: empty_table\n"); fflush(stdout);
+    test_page_size_512();        printf("  PASS: page_size_512\n"); fflush(stdout);
+    test_page_size_4096();       printf("  PASS: page_size_4096\n"); fflush(stdout);
+    test_many_tables_not_found(); printf("  PASS: many_tables_not_found\n"); fflush(stdout);
+    test_many_rows_mixed_values(); printf("  PASS: many_rows_mixed_values\n"); fflush(stdout);
+    test_many_tables_cols_not_found(); printf("  PASS: many_tables_cols_not_found\n"); fflush(stdout);
+    test_interior_null_child();  printf("  PASS: interior_null_child\n"); fflush(stdout);
+    test_negative_integers();    printf("  PASS: negative_integers\n"); fflush(stdout);
+    test_large_blob();           printf("  PASS: large_blob\n"); fflush(stdout);
+    test_int_0_and_1();          printf("  PASS: int_0_and_1\n"); fflush(stdout);
+
     printf("=== test_sqlite: %d/%d PASSED ===\n", g_pass, g_pass + g_fail);
     return g_fail == 0 ? 0 : 1;
 }

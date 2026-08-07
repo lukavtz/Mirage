@@ -30,9 +30,6 @@ static int is_ltc_char(char c) {
     /* LTC uses Base58 (same as BTC chars) plus '0' and 'O' for bech32 */
     return is_btc_char(c) || c == '0' || c == 'O';
 }
-    /* LTC uses Base58 (same as BTC chars) plus '0' and 'O' for bech32 */
-    return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-           (c >= '2' && c <= '9') || c == '0';
 }
 
 static int detect_btc(const char *text) {

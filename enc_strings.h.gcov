@@ -14,18 +14,18 @@
         -:   10:/* Decrypt helper — XOR with MIRAGE_STRING_KEY_ENC[16] from config.h */
         -:   11:#include "config.h"
         -:   12:
-      169:   13:static inline void enc_decrypt(const uint8_t *enc, size_t len, char *out) {
-     2417:   14:    for (size_t i = 0; i < len; i++)
-     2248:   15:        out[i] = (char)(enc[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
-      169:   16:    out[len] = '\0';
-      169:   17:}
+      265:   13:static inline void enc_decrypt(const uint8_t *enc, size_t len, char *out) {
+     4117:   14:    for (size_t i = 0; i < len; i++)
+     3852:   15:        out[i] = (char)(enc[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
+      265:   16:    out[len] = '\0';
+      265:   17:}
         -:   18:
-    #####:   19:static inline void enc_decrypt_wide(const uint8_t *enc, size_t enc_len, wchar_t *out) {
+     1271:   19:static inline void enc_decrypt_wide(const uint8_t *enc, size_t enc_len, wchar_t *out) {
         -:   20:    /* enc is XOR'd narrow bytes; decrypt to narrow then widen */
-    #####:   21:    for (size_t i = 0; i < enc_len; i++)
-    #####:   22:        out[i] = (wchar_t)(enc[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
-    #####:   23:    out[enc_len] = L'\0';
-    #####:   24:}
+    16504:   21:    for (size_t i = 0; i < enc_len; i++)
+    15233:   22:        out[i] = (wchar_t)(enc[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
+     1271:   23:    out[enc_len] = L'\0';
+     1271:   24:}
         -:   25:
         -:   26:static const uint8_t enc_ntdll[9] = { 0x34, 0x65, 0x34, 0x97, 0x94, 0x7e, 0xed, 0x6c, 0x4a };
         -:   27:#define ENC_NTDLL_LEN 9

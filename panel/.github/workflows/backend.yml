@@ -34,10 +34,27 @@ jobs:
           cache: true
 
       - name: Test backend
-        run: go test ./internal/...
+        run: go test -count=1 ./internal/...
+
+      - name: Race test backend
+        run: go test -race -count=1 ./internal/...
 
       - name: Vet backend
         run: go vet ./...
 
       - name: Build backend
         run: go build ./...
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Test and build frontend
+        working-directory: web
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm test && npm run build
+
+      - name: Build Docker image
+        run: docker build --tag mirage-panel:ci .

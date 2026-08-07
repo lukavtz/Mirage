@@ -6,6 +6,20 @@
 *.ilk
 *.exp
 *.lib
+*.res
+
+# Coverage / profiling garbage
+*.gcov
+*.gcno
+*.gcda
+*.gcov.*
+coverage.info
+coverage_html/
+*.coverprofile
+*.coverage
+*.cover.out
+**/coverage*.html
+**/coverage*.out
 
 # Binaries in root
 /mirage.exe
@@ -14,7 +28,7 @@
 tests/*.exe
 tests/*.o
 
-# Cache
+# Cache / toolchain
 .zig-cache/
 zig-out/
 .ziglocal
@@ -25,7 +39,7 @@ node_modules/
 *.db-wal
 *.db-shm
 
-# IDE/OS
+# IDE / OS
 .vscode/
 .idea/
 *.suo
@@ -34,12 +48,8 @@ Thumbs.db
 .DS_Store
 *~
 
-# CodeGraph per-machine index
+# CodeGraph
 .codegraph/
-
-# Obsolete project directories
-/Mirage.Stealer/
-/Mirage.Panel/
 
 # Build output
 build/
@@ -55,4 +65,27 @@ tests/test_network
 tests/test_evasion
 tests/test_hash
 tests/test_e2e
+tests/test_sqlite_fault
+
+# Panel garbage
 panel/internal/services/data/
+panel/internal/api/data/
+panel/offsite-backups/
+panel/dev/
+panel/web/coverage/
+panel/coverage*.html
+panel/coverage*.out
+
+# Docker
+panel/data/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# Docs / temp
+*.md.tmp
+TODO.txt
+PLAN.md
+FAQ.md

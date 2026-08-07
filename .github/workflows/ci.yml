@@ -8,7 +8,7 @@ on:
 
 jobs:
   backend:
-    name: Backend (SQLite + PostgreSQL)
+    name: Backend (PostgreSQL)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -26,6 +26,7 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgres://mirage:test@localhost:5432/mirage?sslmode=disable
+      TEST_DATABASE_URL: postgres://mirage:test@localhost:5432/mirage?sslmode=disable
     steps:
       - uses: actions/checkout@v4
 
@@ -37,11 +38,11 @@ jobs:
       - name: Go vet
         run: cd panel && go vet ./...
 
-      - name: Test (SQLite)
+      - name: Test backend
         run: cd panel && go test -count=1 ./internal/...
 
-      - name: Test (PostgreSQL)
-        run: cd panel && DB_PROVIDER=postgres go test -count=1 ./internal/...
+      - name: Race test backend
+        run: cd panel && go test -race -count=1 ./internal/...
 
       - name: Build panel binary
         run: cd panel && CGO_ENABLED=0 go build -o /tmp/panel ./cmd/panel && CGO_ENABLED=0 go build -o /tmp/hashpw ./cmd/hashpw

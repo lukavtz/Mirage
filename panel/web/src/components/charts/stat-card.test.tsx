@@ -13,7 +13,7 @@ describe('StatCard', () => {
   it('renders title, formatted value and icon', () => {
     render(<StatCard title="Sessions" value={1234} icon={Users} isLoading={false} />)
     expect(screen.getByText('Sessions')).toBeInTheDocument()
-    expect(screen.getByText((t) => t.replace(/\s/g, '') === '1234')).toBeInTheDocument()
+    expect(screen.getByText((text) => text.replace(/\D/g, '') === '1234')).toBeInTheDocument()
     expect(document.querySelector('.lucide-users')).not.toBeNull()
   })
 

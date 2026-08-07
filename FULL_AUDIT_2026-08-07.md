@@ -146,6 +146,27 @@ Static: Yes, no CRT dependency
 | pefile 2024.8.26 | ✅ Run | Zero imports confirmed |
 | rabin2 6.1.8 | ✅ Run | NX/canary/static confirmed |
 | llvm-readobj 22.1.8 | ✅ Run | 8 sections verified |
+## DYNAMIC TESTING RESULTS
+
+### Dr.Memory 2.6
+| Check | Result |
+|-------|--------|
+| Memory Leaks | ✅ No leaks detected |
+| Uninitialized Reads | ✅ None |
+| Stack Overflow | ⚠️ 2 UNADDRESSABLE ACCESS errors beyond top of stack |
+
+**Stack errors** (requires investigation):
+- `+0x2d720`: reading 4 bytes, 4072 bytes beyond stack top
+- `+0x2d737`: reading 4 bytes, 94480 bytes beyond stack top
+
+### libFuzzer
+⚠️ Cannot target `x86_64-w64-windows-gnu` with libFuzzer — existing fuzz targets (fuzz_json, fuzz_lz4, fuzz_sqlite) work with native x86_64-w64-windows-msvc target.
+
+### ASan+UBSan Compilation
+✅ Successful with Clang 22.1.8 (`mirage_san.exe`). Only 1 warning (C2_TOKEN #warning).
+
+---
+
 | MinGW GCC 16.1 | ✅ Run | Clean build after fixes |
 | NASM 3.02 | ✅ Run | stubs compiled |
 

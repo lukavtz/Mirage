@@ -128,12 +128,12 @@ test-peb: tests/test_peb.c src/types/hash.c src/types/peb.c
 	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -o tests/test_peb tests/test_peb.c src/types/hash.c src/types/peb.c
 	./tests/test_peb
 
-test-chromium: tests/test_chromium.c tests/peb_stub.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c
-	$(TEST_CC) $(TEST_CFLAGS) -O0 -DZIALFI_TEST_MODE -o tests/test_chromium tests/test_chromium.c tests/peb_stub.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c
+test-chromium: tests/test_chromium.c tests/peb_stub.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c src/rt/rt_str.c
+	$(TEST_CC) $(TEST_CFLAGS) -O0 -DZIALFI_TEST_MODE -o tests/test_chromium tests/test_chromium.c tests/peb_stub.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c src/rt/rt_str.c
 	./tests/test_chromium
 
-test-wallets: tests/test_wallets.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c
-	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_wallets tests/test_wallets.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c
+test-wallets: tests/test_wallets.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c src/rt/rt_str.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_wallets tests/test_wallets.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c src/rt/rt_str.c
 	./tests/test_wallets
 
 test-messengers: tests/test_messengers.c src/messengers/messengers.c

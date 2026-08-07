@@ -245,7 +245,7 @@ inject_result_t inject_dll_to_pid(DWORD pid, const char *dll_path)
     }
 
     HANDLE hThread = inj_api.pCRT(hProcess, NULL, 0,
-                                   (LPTHREAD_START_ROUTINE)loadlib,
+                                   (LPTHREAD_START_ROUTINE)(void *)loadlib,
                                    remote_path, 0, NULL);
     if (!hThread) {
         inj_api.pVFE(hProcess, remote_path, 0, MEM_RELEASE);

@@ -53,7 +53,7 @@ int is_cis_language(uint16_t lang_id) {
 
 /* ── CIS language ID check ──────────────────────────────── */
 
-static int is_cis_language(uint16_t lang_id) {
+int is_cis_language(uint16_t lang_id) {
     uint16_t primary = lang_id & 0x3FF;
     switch (primary) {
         case 0x19: /* Russian */

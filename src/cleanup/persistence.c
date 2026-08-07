@@ -108,7 +108,7 @@ static int create_process_w(const wchar_t *cmdline)
                            NULL, NULL, &si, &pi) != 0;
 }
 
-/* ── Helper/* ── Helper: ASCII to wide string ───────────────────────────── */
+/* ── Helper: ASCII to wide string ── */
 
 static int ascii_to_wide(const char *src, wchar_t *dst, size_t dst_chars)
 {

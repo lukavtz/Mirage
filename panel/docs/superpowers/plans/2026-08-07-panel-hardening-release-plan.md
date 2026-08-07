@@ -97,6 +97,37 @@
 - [ ] Run backup and restore verification; verify retention/off-host configuration without uploading real data.
 - [ ] Stop all services and record exact evidence.
 
+### Task 7: Frontend production-quality pass
+
+**Files:**
+- Modify: `web/src/pages/Dashboard.tsx`, `web/src/pages/Sessions.tsx`, `web/src/pages/DataTablePage.tsx`, `web/src/pages/Search.tsx`, `web/src/pages/Login.tsx`, `web/src/components/layout/topbar.tsx`, `web/src/components/charts/latest-logs.tsx`, `web/src/App.tsx`
+- Add/modify tests beside each affected component.
+- Create: `docs/superpowers/specs/2026-08-07-frontend-quality-pass-design.md`
+
+**Interfaces:**
+- Preserve existing API payloads, routes, design tokens, and responsive layout.
+- Error states expose retry callbacks from React Query; interactive rows expose real links/buttons.
+
+- [ ] Write focused failing tests for query errors/retry and accessible names.
+- [ ] Run focused frontend tests and confirm expected failure.
+- [ ] Implement the smallest shared error and accessibility changes.
+- [ ] Run full Vitest, TypeScript build, and inspect bundle output.
+- [ ] Commit frontend changes separately from backend hardening.
+
+### Task 8: CI race gate and release evidence
+
+**Files:**
+- Modify: `.github/workflows/ci.yml`
+- Modify only verified stale tests/configuration under `panel/internal/services/`.
+
+**Interfaces:**
+- CI race command is `go test -race -p 1 -timeout=30m -count=1 ./internal/...` with `CGO_ENABLED=1` available on Ubuntu.
+- BuildConfig test fields must match the exported `services.BuildConfig` API (`Persistence`, `Modules.System.Screenshot`, `Modules.Grabber.Enabled`).
+
+- [ ] Update the stale BuildConfig test after confirming the current production schema.
+- [ ] Run the focused service test, then the serialized local race suite.
+- [ ] Push and verify all panel CI checks; document unrelated C workflow failure separately.
+
 ### Task 6: Reviewable GitHub release
 
 **Files:**

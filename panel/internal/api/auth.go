@@ -432,9 +432,15 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if _, err = tx.Exec("UPDATE password_resets SET used = TRUE WHERE id = $1 AND used = FALSE", resetID); err != nil {
+	result, err := tx.Exec("UPDATE password_resets SET used = TRUE WHERE id = $1 AND used = FALSE", resetID)
+	if err != nil {
 		rollback()
 		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		rollback()
+		writeError(w, http.StatusBadRequest, "reset token already used")
 		return
 	}
 	if _, err = tx.Exec("DELETE FROM auth_sessions WHERE user_id = $1", userID); err != nil {

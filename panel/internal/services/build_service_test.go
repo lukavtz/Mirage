@@ -49,7 +49,7 @@ func makeTestPE(t *testing.T) []byte {
 	binary.LittleEndian.PutUint32(sectText[24:28], 0x100)  // SizeOfRawData
 	binary.LittleEndian.PutUint32(sectText[28:32], 0x200)  // PointerToRawData
 
-	placeholderSize := uint32(1024)
+	placeholderSize := uint32(4096)
 	sectRdata := make([]byte, 40)
 	copy(sectRdata[0:8], []byte(".rdata\x00\x00\x00\x00"))
 	binary.LittleEndian.PutUint32(sectRdata[16:20], placeholderSize)
@@ -98,15 +98,11 @@ func TestBuild_BasicPatch(t *testing.T) {
 	}
 
 	config := services.BuildConfig{
-		C2Host:            "192.168.1.100",
-		C2Port:            8080,
-		TelegramToken:     "",
-		TelegramChatID:    "",
-		EnablePersistence: true,
-		EnableScreenshot:  false,
-		EnableGrabber:     true,
-		IncludeDecryptor:  false,
-		BuildTag:          "test-v1",
+		C2Host:           "192.168.1.100",
+		C2Port:           8080,
+		Persistence:      true,
+		IncludeDecryptor: false,
+		BuildTag:         "test-v1",
 	}
 
 	result, err := svc.Build(pe, nil, config)
@@ -156,8 +152,8 @@ func TestBuild_BasicPatch(t *testing.T) {
 	if cfg.C2Port != 8080 {
 		t.Errorf("C2Port = %d, want %d", cfg.C2Port, 8080)
 	}
-	if !cfg.EnablePersistence {
-		t.Error("EnablePersistence should be true")
+	if !cfg.Persistence {
+		t.Error("Persistence should be true")
 	}
 	if cfg.BuildTag != "test-v1" {
 		t.Errorf("BuildTag = %q, want %q", cfg.BuildTag, "test-v1")

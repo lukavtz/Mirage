@@ -119,7 +119,7 @@ char *strncat(char *dst, const char *src, size_t n) {
     return dst;
 }
 
-char *strdup(const char *s) {
+char *mi_strdup(const char *s) {
     size_t n = strlen(s) + 1;
     char *p = malloc(n);
     if (p)

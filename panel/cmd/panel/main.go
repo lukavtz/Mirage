@@ -120,34 +120,37 @@ func main() {
 		slog.Error("DB_PROVIDER and DB_PATH are unsupported; use DATABASE_URL")
 		os.Exit(1)
 	}
+	appEnv := getEnv("APP_ENV", "development")
 	jwtSecret := getEnv("JWT_SECRET", "")
+	if appEnv == "production" && jwtSecret == "" {
+		slog.Error("JWT_SECRET is required in production")
+		os.Exit(1)
+	}
 	allowedOrigins := getEnv("ALLOWED_ORIGINS", "http://localhost:5173")
 
 	tlsEnabled, _ := strconv.ParseBool(os.Getenv("TLS_ENABLED"))
 	tlsSelfSigned, _ := strconv.ParseBool(os.Getenv("TLS_SELF_SIGNED"))
+	tlsCertFile := getEnv("TLS_CERT_FILE", filepath.Join("data", "certs", "cert.pem"))
+	tlsKeyFile := getEnv("TLS_KEY_FILE", filepath.Join("data", "certs", "key.pem"))
+	if appEnv == "production" && (!tlsEnabled || tlsSelfSigned) {
+		slog.Error("production requires TLS_ENABLED=true and TLS_SELF_SIGNED=false")
+		os.Exit(1)
+	}
 
 	if jwtSecret == "" {
 		secretFile := filepath.Join("data", ".jwt_secret")
 		if data, err := os.ReadFile(secretFile); err == nil {
 			jwtSecret = strings.TrimSpace(string(data))
-			slog.Info("loaded JWT secret from file", "path", secretFile)
 		} else {
 			jwtSecret = generateSecret()
-			slog.Warn("generated new JWT secret — all existing sessions are now invalid", "path", secretFile)
-			if err := os.MkdirAll(filepath.Dir(secretFile), 0755); err != nil {
-				slog.Warn("failed to create JWT secret directory", "err", err)
-			} else if err := os.WriteFile(secretFile, []byte(jwtSecret), 0600); err != nil {
-				slog.Warn("failed to persist JWT secret, tokens will be invalid after restart", "err", err)
+			slog.Warn("generated local JWT secret; configure JWT_SECRET for restart-stable sessions")
+			if err := os.MkdirAll(filepath.Dir(secretFile), 0755); err == nil {
+				_ = os.WriteFile(secretFile, []byte(jwtSecret), 0600)
 			}
 		}
 	}
 
-	slog.Info("starting Mirage Panel",
-		"port", port,
-		"database", "postgresql",
-		"tls", tlsEnabled,
-		"allowed_origins", allowedOrigins,
-	)
+	slog.Info("starting Mirage Panel", "port", port, "database", "postgresql", "tls", tlsEnabled, "allowed_origins", allowedOrigins)
 
 	sqlDB, err := db.OpenPostgres(databaseURL)
 	if err != nil {
@@ -308,23 +311,25 @@ func main() {
 
 	go func() {
 		addr := srv.Addr
+		certFile, keyFile, tlsDesc := tlsCertFile, tlsKeyFile, "custom"
 		if tlsEnabled {
 			scheme := "https"
-			certDir := filepath.Join("data", "certs")
-			var certFile, keyFile string
-			var tlsDesc string
 			if tlsSelfSigned {
-				certFile, keyFile, err = generateSelfSignedCert(certDir)
+				certFile, keyFile, err = generateSelfSignedCert(filepath.Dir(tlsCertFile))
 				if err != nil {
 					slog.Error("failed to generate self-signed cert", "err", err)
 					os.Exit(1)
 				}
 				tlsDesc = "self-signed"
 			} else {
-				certFile = filepath.Join(certDir, "cert.pem")
-				keyFile = filepath.Join(certDir, "key.pem")
-				if _, err := os.Stat(certFile); os.IsNotExist(err) {
-					slog.Error("TLS enabled but cert.pem not found and TLS_SELF_SIGNED is false", "cert", certFile)
+				certFile = tlsCertFile
+				keyFile = tlsKeyFile
+				if _, err := os.Stat(certFile); err != nil {
+					slog.Error("TLS certificate not found", "path", certFile)
+					os.Exit(1)
+				}
+				if _, err := os.Stat(keyFile); err != nil {
+					slog.Error("TLS key not found", "path", keyFile)
 					os.Exit(1)
 				}
 				tlsDesc = "custom"

@@ -43,16 +43,29 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: ${DATABASE_URL:?set in .env}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-30}
+      BACKUP_OFFSITE_DIR: ${BACKUP_OFFSITE_DIR:-}
+      BACKUP_OFFSITE_REQUIRED: ${BACKUP_OFFSITE_REQUIRED:-false}
     volumes:
       - panel-backups:/backups
+      - ${BACKUP_OFFSITE_DIR:-./offsite-backups}:/offsite-backups
     command:
       - sh
       - -ec
       - |
+        case "$$BACKUP_RETENTION_DAYS" in ''|*[!0-9]*) echo 'BACKUP_RETENTION_DAYS must be a non-negative integer' >&2; exit 1;; esac
         dump="/backups/mirage-$$(date -u +%Y%m%dT%H%M%SZ).dump"
         pg_dump --format=custom --no-owner --file="$$dump" "$$DATABASE_URL"
         pg_restore --list "$$dump" >/dev/null
-        echo "Backup and restore check complete: $$dump"
+        find /backups -maxdepth 1 -type f -name 'mirage-*.dump' -mtime +"$$BACKUP_RETENTION_DAYS" -delete
+        if [ -n "$$BACKUP_OFFSITE_DIR" ]; then
+          mkdir -p /offsite-backups
+          cp --reflink=auto "$$dump" /offsite-backups/
+        elif [ "$$BACKUP_OFFSITE_REQUIRED" = "true" ]; then
+          echo 'BACKUP_OFFSITE_DIR is required by BACKUP_OFFSITE_REQUIRED' >&2
+          exit 1
+        fi
+        echo 'Backup and restore check complete'
 
 volumes:
   pgdata:

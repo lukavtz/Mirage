@@ -94,7 +94,7 @@ static void init_vpn_table(void) {
     static const int locals[] = { 0,0,0,1,0,0,0,0,0,1,1,0,0,0,0,0,0,1 };
     for (int i = 0; i < 18; i++) {
         enc_decrypt(names[i].enc, names[i].len, buf);
-        vpn_table[i].name = _strdup(buf);
+        vpn_table[i].name = mi_strdup(buf);
         vpn_table[i].subdir = subdirs[i];
         vpn_table[i].ext = exts[i];
         vpn_table[i].use_local = locals[i];

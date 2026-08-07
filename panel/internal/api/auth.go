@@ -169,7 +169,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	var totpEnabled bool
 	var totpSecret string
-	db.QueryRow(h.db, "SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret)
+	if err := db.QueryRow(h.db, "SELECT totp_enabled, totp_secret FROM users WHERE id = ?", id).Scan(&totpEnabled, &totpSecret); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	if totpEnabled {
 		tempToken := uuid.New().String()
 		h.tempMu.Lock()
@@ -184,7 +187,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := uuid.New().String()
 	var tv int
-	db.QueryRow(h.db, "SELECT COALESCE(token_version, 0) FROM users WHERE id = ?", id).Scan(&tv)
+	if err := db.QueryRow(h.db, "SELECT COALESCE(token_version, 0) FROM users WHERE id = ?", id).Scan(&tv); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 	token, expiresAt, err := auth.GenerateTokenWithSession(id, role, sessionID, h.jwtSecret, tv)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
@@ -193,8 +199,11 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	ua := r.Header.Get("User-Agent")
 	os, browser := ParseUserAgent(ua)
-	db.Exec(h.db, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, id, hashToken(token), "", os, browser, ip)
+	if _, err := db.Exec(h.db, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, id, hashToken(token), "", os, browser, ip); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	score := mw.CheckIP(ip)
 
@@ -222,41 +231,42 @@ func (h *AuthHandler) VerifyLogin(w http.ResponseWriter, r *http.Request) {
 		delete(h.tempTokens, req.TotpToken)
 	}
 	h.tempMu.Unlock()
-
 	if !ok || time.Now().After(entry.expiresAt) {
 		writeError(w, http.StatusUnauthorized, "invalid or expired TOTP token")
 		return
 	}
 
 	var secret string
-	err := db.QueryRow(h.db, "SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret)
-	if err != nil {
+	if err := db.QueryRow(h.db, "SELECT totp_secret FROM users WHERE id = ?", entry.userID).Scan(&secret); err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
 	if !auth.NewTOTPManager().Validate(req.Passcode, secret) {
 		writeError(w, http.StatusUnauthorized, "invalid passcode")
 		return
 	}
 
 	ip := extractIP(r)
-	sessionID := uuid.New().String()
 	var tv int
-	db.QueryRow(h.db, "SELECT COALESCE(token_version, 0) FROM users WHERE id = ?", entry.userID).Scan(&tv)
+	if err := db.QueryRow(h.db, "SELECT COALESCE(token_version, 0) FROM users WHERE id = ?", entry.userID).Scan(&tv); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	sessionID := uuid.New().String()
 	token, expiresAt, err := auth.GenerateTokenWithSession(entry.userID, entry.role, sessionID, h.jwtSecret, tv)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-
 	ua := r.Header.Get("User-Agent")
 	os, browser := ParseUserAgent(ua)
-	db.Exec(h.db, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
-		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, entry.userID, hashToken(token), "", os, browser, ip)
+	if _, err := db.Exec(h.db, `INSERT INTO auth_sessions (id, user_id, token_hash, device, os, browser, ip)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`, sessionID, entry.userID, hashToken(token), "", os, browser, ip); err != nil {
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	score := mw.CheckIP(ip)
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      token,
 		"expires_at": expiresAt.Format(time.RFC3339),
@@ -409,17 +419,31 @@ func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update password, mark token used, revoke all sessions
-	_, err = db.Exec(h.db, "UPDATE users SET password_hash = ? WHERE id = ?", passwordHash, userID)
+	tx, err := h.db.Begin()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if _, err = db.Exec(h.db, "UPDATE password_resets SET used = TRUE WHERE id = ?", resetID); err != nil {
+	rollback := func() {
+		_ = tx.Rollback()
+	}
+	if _, err = tx.Exec(db.Placeholders("UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?"), passwordHash, userID); err != nil {
+		rollback()
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if _, err = db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ?", userID); err != nil {
+	if _, err = tx.Exec("UPDATE password_resets SET used = TRUE WHERE id = $1 AND used = FALSE", resetID); err != nil {
+		rollback()
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if _, err = tx.Exec("DELETE FROM auth_sessions WHERE user_id = $1", userID); err != nil {
+		rollback()
+		writeError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if err = tx.Commit(); err != nil {
+		rollback()
 		writeError(w, http.StatusInternalServerError, "internal error")
 		return
 	}

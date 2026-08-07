@@ -375,7 +375,7 @@ func TestE2E_ConcurrentUploads(t *testing.T) {
 		}
 	}
 
-	// At least 70% should succeed (SQLite may reject some concurrent writes)
+	// PostgreSQL handles concurrent writes through the configured test pool.
 	minExpected := numUploads * 7 / 10
 	if successes < minExpected {
 		t.Errorf("expected >= %d successful uploads, got %d", minExpected, successes)

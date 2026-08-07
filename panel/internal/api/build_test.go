@@ -13,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"zialfi-panel/internal/api"
+	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/services"
 	"zialfi-panel/internal/testutil"
 )
@@ -139,6 +141,7 @@ func TestBuild_Download(t *testing.T) {
 	r.Get("/api/build/{id}/download", handler.Download)
 
 	reqDL := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/api/build/%s/download", buildID), nil)
+	reqDL = reqDL.WithContext(middleware.ContextWithClaims(reqDL.Context(), &auth.Claims{Role: "admin"}))
 	wDL := httptest.NewRecorder()
 	r.ServeHTTP(wDL, reqDL)
 
@@ -202,6 +205,7 @@ func TestBuild_DownloadNotFound(t *testing.T) {
 	r.Get("/api/build/{id}/download", handler.Download)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/build/nonexistent-id/download", nil)
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{Role: "admin"}))
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -251,6 +255,7 @@ func TestBuild_UpdateTag(t *testing.T) {
 	r := chi.NewRouter()
 	r.Put("/api/build/{id}/tag", handler.UpdateTag)
 	updateReq := httptest.NewRequest(http.MethodPut, "/api/build/"+buildID+"/tag", strings.NewReader(updateBody))
+	updateReq = updateReq.WithContext(middleware.ContextWithClaims(updateReq.Context(), &auth.Claims{Role: "admin"}))
 	updateReq.Header.Set("Content-Type", "application/json")
 	updateW := httptest.NewRecorder()
 	r.ServeHTTP(updateW, updateReq)
@@ -399,7 +404,6 @@ func TestBuildDownload_OwnerForbidden(t *testing.T) {
 
 	_, userA := workerToken(t, d, "builda")
 	tokenB, _ := workerToken(t, d, "buildb")
-
 	buildA := insertBuildWithUser(t, d, userA)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/build/"+buildA+"/download", nil)

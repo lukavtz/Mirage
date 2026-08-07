@@ -2,7 +2,7 @@
 FROM node:22-alpine AS frontend
 WORKDIR /web
 COPY web/package*.json ./
-RUN npm ci --registry=https://registry.npmjs.org --fetch-retries=5 --fetch-retry-mintimeout=20000
+RUN npm ci --prefer-offline --no-audit --no-fund --registry=https://registry.npmjs.org --fetch-retries=10 --fetch-retry-mintimeout=30000 --fetch-retry-maxtimeout=120000
 COPY web/ .
 RUN npm run build
 

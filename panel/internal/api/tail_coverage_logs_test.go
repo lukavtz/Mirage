@@ -26,7 +26,7 @@ func chunkRequest(t *testing.T, r http.Handler, apiKey, sessionID, index string,
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("X-API-Key", apiKey)
 	if ip != "" {
-		req.Header.Set("X-Forwarded-For", ip)
+		req.RemoteAddr = ip + ":40000"
 	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -141,7 +141,7 @@ func TestChunk_MissingDataFile(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/log/chunk", &buf)
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	req.Header.Set("X-API-Key", apiKey)
-	req.Header.Set("X-Forwarded-For", "203.0.113.90")
+	req.RemoteAddr = "203.0.113.90:40000"
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusBadRequest {

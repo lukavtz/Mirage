@@ -244,7 +244,7 @@ func TestNotesCoverage_Delete_Admin(t *testing.T) {
 	}
 }
 
-// Delete coverage: delete valid note without claims → 200 (sessionOwnedBy returns true for nil claims)
+// Delete coverage: delete valid note without claims → 403 (fail closed)
 func TestNotesCoverage_Delete_NoClaims(t *testing.T) {
 	d := testutil.OpenTestDB(t)
 	handler := api.NewNotesHandler(d)
@@ -268,8 +268,8 @@ func TestNotesCoverage_Delete_NoClaims(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("expected 403, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

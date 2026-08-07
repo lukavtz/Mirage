@@ -368,8 +368,8 @@ WalletExtData *collect_wallet_extensions(const char *app_data, const char *path_
         
         DWORD attr = g_we_k32.pGFAA(ext_path);
         if (attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY)) {
-            results[found].name = strdup(wallet_names[i]);
-            results[found].path = strdup(ext_path);
+            results[found].name = mi_strdup(wallet_names[i]);
+            results[found].path = mi_strdup(ext_path);
             results[found].file_count = 0;
             results[found].files = NULL;
             found++;

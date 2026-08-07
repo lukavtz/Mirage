@@ -91,21 +91,21 @@ func (h *SessionMgmtHandler) TerminateAll(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusUnauthorized, "authentication required")
 		return
 	}
-
 	currentSessionID := claims.SessionID
 
+	var err error
 	if currentSessionID != "" {
-		_, err := db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ? AND id != ?", claims.UserID, currentSessionID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
-			return
-		}
+		_, err = db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ? AND id != ?", claims.UserID, currentSessionID)
 	} else {
-		_, err := db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ?", claims.UserID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
-			return
-		}
+		_, err = db.Exec(h.db, "DELETE FROM auth_sessions WHERE user_id = ?", claims.UserID)
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
+		return
+	}
+	if _, err = db.Exec(h.db, "UPDATE users SET token_version = token_version + 1 WHERE id = ?", claims.UserID); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to terminate sessions")
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "other sessions terminated"})

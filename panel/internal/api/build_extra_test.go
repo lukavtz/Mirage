@@ -25,10 +25,10 @@ func TestBuild_UpdateTag_Extra(t *testing.T) {
 	d := testutil.OpenTestDB(t)
 	svc := services.NewBuildService()
 	handler := api.NewBuildHandler(svc, []byte{}, []byte{}, d)
-
+	uid := createTestUserWithRole(t, d, "build-extra-owner", "pass", "user")
 	buildID := uuid.New().String()
-	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config)
-		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', 'original', '{}')`, buildID); err != nil {
+	if _, err := d.Exec(`INSERT INTO builds (id, config_hash, file_size, file_data, sha256, build_tag, module_config, user_id)
+		VALUES ($1, 'hash', 4, decode('01020304', 'hex'), 'sha', 'original', '{}', $2)`, buildID, uid); err != nil {
 		t.Fatal(err)
 	}
 
@@ -37,6 +37,7 @@ func TestBuild_UpdateTag_Extra(t *testing.T) {
 
 	updateBody := `{"tag":"updated-tag"}`
 	req2 := httptest.NewRequest(http.MethodPut, fmt.Sprintf("/api/build/%s/tag", buildID), strings.NewReader(updateBody))
+	req2 = req2.WithContext(middleware.ContextWithClaims(req2.Context(), &auth.Claims{UserID: uid, Role: "user"}))
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	r.ServeHTTP(w2, req2)
@@ -90,6 +91,7 @@ func TestBuild_UpdateTag_NotFound_Extra(t *testing.T) {
 
 	body := `{"tag":"newtag"}`
 	req := httptest.NewRequest(http.MethodPut, "/api/build/nonexistent-id/tag", strings.NewReader(body))
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{Role: "admin"}))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -127,6 +129,7 @@ func TestBuild_UploadIcon(t *testing.T) {
 	r.Post("/api/build/{id}/icon", handler.UploadIcon)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/build/%s/icon", buildID), &buf)
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{Role: "admin"}))
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -169,6 +172,7 @@ func TestBuild_UploadIcon_NoFile(t *testing.T) {
 	r.Post("/api/build/{id}/icon", handler.UploadIcon)
 
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/build/%s/icon", buildID), &buf)
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{Role: "admin"}))
 	req.Header.Set("Content-Type", mw.FormDataContentType())
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -313,6 +317,7 @@ func TestBuild_UploadIcon_InvalidMultipart(t *testing.T) {
 
 	// Garbage body with multipart content type -> ParseMultipartForm fails
 	req := httptest.NewRequest(http.MethodPost, fmt.Sprintf("/api/build/%s/icon", buildID), strings.NewReader("not a multipart body"))
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{Role: "admin"}))
 	req.Header.Set("Content-Type", "multipart/form-data; boundary=xyz")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

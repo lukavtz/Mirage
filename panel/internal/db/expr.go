@@ -10,11 +10,8 @@ func Now() string { return "CURRENT_TIMESTAMP" }
 
 func UUID() string { return "gen_random_uuid()::text" }
 
-// NoPlaceholders skips ? → $N conversion for SQLite.
-var NoPlaceholders bool
-
 func Placeholders(query string) string {
-	if NoPlaceholders || !strings.Contains(query, "?") {
+	if !strings.Contains(query, "?") {
 		return query
 	}
 	var b strings.Builder

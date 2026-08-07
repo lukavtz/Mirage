@@ -782,7 +782,7 @@ static void bp_wappend(WCHAR *dst, int cap, const WCHAR *src)
 static void bp_wtoa(const WCHAR *w, char *a, size_t cap)
 {
     size_t i = 0;
-    while (w[i] && i < cap - 1) { a[i] = (w[i] < 128) ? (char)w[i] : '?'; i++; }
+    while (i < cap - 1 && w[i]) { a[i] = (w[i] < 128) ? (char)w[i] : '?'; i++; }
     a[i] = '\0';
 }
 
@@ -944,7 +944,7 @@ static void *gecko_resolve_fn(void *mod, const char *name) {
 /* Wide-to-narrow (ASCII-safe for browser dir names). Returns char count. */
 static int gecko_wton(const WCHAR *w, char *dst, size_t cap) {
     size_t i = 0;
-    while (w[i] && i < cap - 1) { dst[i] = (char)(w[i] & 0x7F); i++; }
+    while (i < cap - 1 && w[i]) { dst[i] = (char)(w[i] & 0x7F); i++; }
     dst[i] = 0;
     return (int)i;
 }
@@ -1400,8 +1400,8 @@ int discover_chromium_browsers_registry(BrowserPath *out,
 
             /* ── Add entry ────────────────────────────────────── */
             if (*count < max_out) {
-                out[*count].name         = strdup(browser_name);
-                out[*count].path_suffix  = strdup(probe);
+                out[*count].name         = mi_strdup(browser_name);
+                out[*count].path_suffix  = mi_strdup(probe);
                 out[*count].use_roaming  = 0;
                 out[*count].process_name = out[*count].name; /* exe stem */
                 (*count)++;

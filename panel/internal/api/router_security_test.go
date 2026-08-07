@@ -15,13 +15,15 @@ import (
 func securityRouter(t *testing.T) (chi.Router, string, string) {
 	t.Helper()
 	d := testutil.OpenTestDB(t)
+	adminID := createTestUserWithRole(t, d, "admin-user", "security-test-password", "admin")
+	workerID := createTestUserWithRole(t, d, "worker-user", "security-test-password", "worker")
 	r := chi.NewRouter()
 	api.SetupRoutes(r, d, "security-test-secret", "*", nil, nil, nil, nil)
-	adminToken, _, err := auth.GenerateToken("admin-user", "admin", "security-test-secret", "", 0)
+	adminToken, _, err := auth.GenerateToken(adminID, "admin", "security-test-secret", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	workerToken, _, err := auth.GenerateToken("worker-user", "worker", "security-test-secret", "", 0)
+	workerToken, _, err := auth.GenerateToken(workerID, "worker", "security-test-secret", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,5 +93,27 @@ func TestSecurity_AdminCanReachSettingsAndTelegramBotRoutes(t *testing.T) {
 				t.Fatalf("admin route unexpectedly forbidden: %s", w.Body.String())
 			}
 		})
+	}
+}
+
+func TestAuthMiddleware_RevokesTokenAfterVersionBump(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	uid := createTestUser(t, d, "revoked-user", "secret123")
+	token, _, err := auth.GenerateToken(uid, "admin", "security-test-secret", "session-1", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec("UPDATE users SET token_version = 1 WHERE id = $1", uid); err != nil {
+		t.Fatal(err)
+	}
+	r := chi.NewRouter()
+	r.Use(api.AuthMiddleware("security-test-secret", d))
+	r.Get("/protected", func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("expected revoked token to be rejected, got %d", w.Code)
 	}
 }

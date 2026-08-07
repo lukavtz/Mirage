@@ -39,4 +39,8 @@ typedef int errno_t;
 #define SEEK_END 2
 #endif
 
+/* ═══════ String utilities ═══════ */
+char *mi_strdup(const char *s);
+
+
 #endif /* ZIALFI_RT_H */

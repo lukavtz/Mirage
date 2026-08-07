@@ -31,7 +31,6 @@ static int is_ltc_char(char c) {
     return is_btc_char(c) || c == '0' || c == 'O';
 }
 }
-
 static int detect_btc(const char *text) {
     const char *p = text;
 

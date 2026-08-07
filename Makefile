@@ -9,6 +9,7 @@ SRCS = src/main.c \
        src/rt/rt_str.c \
        src/rt/rt_conv.c \
        src/rt/rt_snprintf.c \
+       src/config_rt.c \
        src/rt/rt_file.c \
        src/types/peb.c \
        src/types/hash.c \

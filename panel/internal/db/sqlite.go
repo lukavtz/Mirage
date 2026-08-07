@@ -32,20 +32,27 @@ func RunMigrations(db *sql.DB, migrations fs.FS) error {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
 		hash := fmt.Sprintf("%x", sha256.Sum256(content))
-		var existing string
-		err = db.QueryRow("SELECT hash FROM _migrations WHERE name = $1", name).Scan(&existing)
-		if err == nil {
-			if existing == hash {
-				continue
-			}
-			return fmt.Errorf("migration %s hash mismatch (was %s, now %s)", name, existing, hash)
-		}
-		if err != sql.ErrNoRows {
-			return fmt.Errorf("check migration %s: %w", name, err)
-		}
 		tx, err := db.Begin()
 		if err != nil {
 			return fmt.Errorf("begin %s: %w", name, err)
+		}
+		if _, err = tx.Exec("SELECT pg_advisory_xact_lock($1)", int64(714239812349)); err != nil {
+			tx.Rollback()
+			return fmt.Errorf("lock %s: %w", name, err)
+		}
+		var existing string
+		err = tx.QueryRow("SELECT hash FROM _migrations WHERE name = $1", name).Scan(&existing)
+		if err == nil {
+			if existing != hash {
+				tx.Rollback()
+				return fmt.Errorf("migration %s hash mismatch (was %s, now %s)", name, existing, hash)
+			}
+			tx.Commit()
+			continue
+		}
+		if err != sql.ErrNoRows {
+			tx.Rollback()
+			return fmt.Errorf("check migration %s: %w", name, err)
 		}
 		if _, err = tx.Exec(string(content)); err != nil {
 			tx.Rollback()

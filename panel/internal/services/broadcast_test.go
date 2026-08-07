@@ -78,16 +78,20 @@ func TestPGNotifier_LiveRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPGNotifier: %v", err)
 	}
-	defer func() {
-		cancel() // stop Listen first (graceful exit), then close the conn
-		notifier.Close(ctx)
-	}()
-
+	listenDone := make(chan struct{})
 	go func() {
+		defer close(listenDone)
 		if err := notifier.Listen(ctx); err != nil && ctx.Err() == nil {
 			t.Errorf("Listen: %v", err)
 		}
 	}()
+	t.Cleanup(func() {
+		cancel()
+		<-listenDone
+		if err := notifier.Close(context.Background()); err != nil {
+			t.Errorf("Close: %v", err)
+		}
+	})
 
 	// Give LISTEN a moment to register before we publish.
 	time.Sleep(500 * time.Millisecond)

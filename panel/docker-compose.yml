@@ -26,12 +26,19 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL:?set in .env}
       JWT_SECRET: ${JWT_SECRET:?set in .env}
+      APP_ENV: ${APP_ENV:-development}
+      TLS_ENABLED: ${TLS_ENABLED:-false}
+      TLS_SELF_SIGNED: ${TLS_SELF_SIGNED:-false}
+      TLS_CERT_FILE: ${TLS_CERT_FILE:-/run/secrets/tls.crt}
+      TLS_KEY_FILE: ${TLS_KEY_FILE:-/run/secrets/tls.key}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080}
       LICENSE_SECRET: ${LICENSE_SECRET:-}
-    ports:
-      - "${PANEL_PORT:-8080}:8080"
     volumes:
       - panel-data:/app/data
+      - ${TLS_CERT_HOST_FILE:-./data/certs/cert.pem}:/run/secrets/tls.crt:ro
+      - ${TLS_KEY_HOST_FILE:-./data/certs/key.pem}:/run/secrets/tls.key:ro
+    ports:
+      - "${PANEL_PORT:-8080}:8080"
 
   # Run with: docker compose --profile backup run --rm backup
   backup:

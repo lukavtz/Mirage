@@ -1,6 +1,7 @@
 package db_test
 
 import (
+	"fmt"
 	"testing"
 
 	"zialfi-panel/internal/db"
@@ -58,5 +59,17 @@ func TestRunMigrations_Idempotent(t *testing.T) {
 	d := testutil.OpenTestDB(t)
 	if err := db.RunMigrations(d, db.MigrationsFS); err != nil {
 		t.Fatalf("second canonical migration run: %v", err)
+	}
+}
+
+func TestConcurrentMigrationsDoNotRaceOnDatabaseExtensions(t *testing.T) {
+	t.Parallel()
+	for i := 0; i < 8; i++ {
+		i := i
+		t.Run(fmt.Sprintf("schema-%d", i), func(t *testing.T) {
+			t.Parallel()
+			_ = i
+			testutil.OpenTestDB(t)
+		})
 	}
 }

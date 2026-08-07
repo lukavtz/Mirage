@@ -218,6 +218,11 @@ func main() {
 			slog.Error("pg listener stopped", "err", err)
 		}
 	}()
+	defer func() {
+		if err := notifier.Close(context.Background()); err != nil {
+			slog.Warn("failed to close PG notifier", "err", err)
+		}
+	}()
 	slog.Info("postgres LISTEN/NOTIFY broadcaster enabled")
 
 	// Start Telegram sales bot

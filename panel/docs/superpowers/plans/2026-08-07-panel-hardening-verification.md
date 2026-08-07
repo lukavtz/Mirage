@@ -16,6 +16,16 @@ Commit pushed: `9d9689e fix(panel): harden reset flow and release verification`
 - The C Stealer workflow remains unrelated to panel changes and still fails on the existing PR.
 - Unrelated working-tree changes under `Makefile`, `include/`, `src/`, `tools/`, and new generator artifacts were not staged or modified by this release commit.
 
+## Fresh verification — 2026-08-07
+
+- Full backend PostgreSQL suite passed in the Compose PostgreSQL network: `internal/api`, `auth`, `builder`, `db`, `middleware`, `services`, `services/bot`, and `ws`.
+- Full backend race suite passed with `CGO_ENABLED=1`, `-race -p 1 -timeout=30m`: same package set.
+- Frontend passed again: `52` files and `363` tests; production build completed.
+- Fresh Docker image `mirage-panel-fresh` built successfully.
+- API smoke: `/health`, `/api/csrf`, and `/api/pricing` returned HTTP 200.
+- Backup profile smoke completed with `Backup and restore check complete`.
+- Current PR #5 status: Backend, Frontend, and Docker checks SUCCESS; unrelated C Stealer `build` check FAILURE; PR remains OPEN.
+
 ## Remaining risk
 
-A full backend race run was not re-run after the CI timeout change; the focused race slice passed. The branch has no new PR; changes were pushed to `feat/data-tabs` for the existing PR context.
+The C Stealer workflow is unrelated to panel changes and remains failing. Existing unrelated parent-repository changes remain unstaged and were preserved.

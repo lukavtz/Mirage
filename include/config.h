@@ -155,6 +155,19 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
     #define dbg_printf(...) ((void)0)
 #endif
 
+/* ═══════ Runtime Config Overrides ═══════════════════════════ */
+extern int g_cfg_loaded;
+
+struct runtime_config {
+    struct { int enabled; char type[32]; char source_id[128]; } proxy_gate;
+    char c2_host[256];
+    int  c2_port;
+};
+extern struct runtime_config g_config;
+
+/* ═══════ Proxy Gate ═══════════════════════════════════════════ */
+#define ENABLE_PROXY_GATE
+
 /* ═══════ Test Mode — skip blocking checks for smoke testing ═══ */
 /* #define ZIALFI_TEST_MODE */
 

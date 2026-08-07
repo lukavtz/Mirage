@@ -164,9 +164,50 @@ static void obf(void) {
 }
 
 
+
+/* --- .mi_cfg section reader ------------------------------------ */
+typedef struct {
+    uint32_t seed;
+    uint8_t  string_key[16];
+    uint32_t ssn_xor_key;
+} mi_cfg_t;
+
+static mi_cfg_t g_mi_cfg;
+static int g_mi_cfg_loaded_flag = 0;
+
+int mi_cfg_load(void) {
+    if (g_mi_cfg_loaded_flag) return g_mi_cfg.seed != 0;
+    g_mi_cfg_loaded_flag = 1;
+
+    void *base = (void *)__readgsqword(0x60);
+    if (!base) return 0;
+    base = *(void **)((char *)base + 0x10);
+    if (!base) return 0;
+
+    PIMAGE_DOS_HEADER dos = (PIMAGE_DOS_HEADER)base;
+    if (dos->e_magic != IMAGE_DOS_SIGNATURE) return 0;
+    PIMAGE_NT_HEADERS64 nt = (PIMAGE_NT_HEADERS64)((char *)base + dos->e_lfanew);
+    if (nt->Signature != IMAGE_NT_SIGNATURE) return 0;
+
+    DWORD sec_off = dos->e_lfanew + sizeof(DWORD) + sizeof(IMAGE_FILE_HEADER)
+                  + nt->FileHeader.SizeOfOptionalHeader;
+    PIMAGE_SECTION_HEADER sec = (PIMAGE_SECTION_HEADER)((char *)base + sec_off);
+
+    for (int i = 0; i < nt->FileHeader.NumberOfSections; i++) {
+        if (memcmp(sec[i].Name, ".mi_cfg", 7) == 0) {
+            uint8_t *data = (uint8_t *)base + sec[i].VirtualAddress;
+            memcpy(&g_mi_cfg.seed, data, 4);
+            memcpy(g_mi_cfg.string_key, data + 4, 16);
+            memcpy(&g_mi_cfg.ssn_xor_key, data + 20, 4);
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int mirage_syscall_resolve(void) {
     /* Generate dynamic SSN XOR key per-run */
-    ssn_xor_key = MIRAGE_SEED ^ (uint32_t)GetTickCount();
+    ssn_xor_key = mi_cfg_load() ? g_mi_cfg.ssn_xor_key : (MIRAGE_SEED ^ (uint32_t)GetTickCount());
 
     uint32_t h = mirage_encrypted_hash_module("ntdll.dll");
     void* ntdll = mirage_get_module_by_hash(h);

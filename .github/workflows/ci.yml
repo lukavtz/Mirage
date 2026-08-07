@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 4 * * 1'  # Weekly Monday 4 AM UTC
+  workflow_dispatch:
+
+jobs:
+  backend:
+    name: Backend (PostgreSQL)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mirage
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: mirage
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mirage -d mirage"
+          --health-interval 10s
+          --health-timeout 3s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://mirage:test@localhost:5432/mirage?sslmode=disable
+      TEST_DATABASE_URL: postgres://mirage:test@localhost:5432/mirage?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache-dependency-path: panel/go.sum
+
+      - name: Go vet
+        run: cd panel && go vet ./...
+
+      - name: Test backend
+        run: cd panel && go test -count=1 ./internal/...
+
+      - name: Race test backend
+        run: cd panel && go test -race -p 1 -timeout=30m -count=1 ./internal/...
+
+      - name: Build panel binary
+        run: cd panel && CGO_ENABLED=0 go build -o /tmp/panel ./cmd/panel && CGO_ENABLED=0 go build -o /tmp/hashpw ./cmd/hashpw
+
+  frontend:
+    name: Frontend (typecheck + unit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: panel/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: panel/web/package-lock.json
+
+      - name: Install deps
+        run: npm ci --registry=https://registry.npmjs.org
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build panel image
+        run: docker build -f panel/Dockerfile -t mirage-panel:ci panel/
+
+  template:
+    name: Rebuild template.exe (weekly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      - name: Regenerate poly strings
+        run: |
+          cd panel
+          go run ./cmd/polymorph ../.
+        env:
+          CGO_ENABLED: 0
+      - name: Build template
+        shell: cmd
+        run: |
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvars64.bat"
+          mingw32-make clean && mingw32-make all
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mirage-template
+          path: mirage.exe

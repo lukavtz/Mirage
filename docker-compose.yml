@@ -1,0 +1,29 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: mirage
+      POSTGRES_PASSWORD: mirage-dev
+      POSTGRES_DB: mirage
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  panel:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    depends_on:
+      - db
+    ports:
+      - "8080:8080"
+    environment:
+      - DATABASE_URL=postgres://mirage:mirage-dev@db:5432/mirage?sslmode=disable
+      - JWT_SECRET=local-dev-secret-change-in-prod-64chars0000000000000000000000
+      - ALLOWED_ORIGINS=http://localhost:8080
+    restart: unless-stopped
+volumes:
+  pgdata:
+  panel-data:

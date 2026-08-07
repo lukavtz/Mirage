@@ -136,7 +136,7 @@ func SetupRoutes(r chi.Router, db *sql.DB, jwtSecret string, _ string, hub *ws.H
 		r.Post("/api/log/ssp", sspHandler.ProcessSSP)
 
 		r.Route("/api/build", func(r chi.Router) {
-			r.Post("/", buildHandler.Build)
+			r.With(middleware.RateLimit(10, time.Minute)).Post("/", buildHandler.Build)
 			r.Get("/", buildHandler.List)
 			r.Get("/stats", buildHandler.Stats)
 			r.Get("/{id}/download", buildHandler.Download)

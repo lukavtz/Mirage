@@ -9,6 +9,9 @@
  *   https://github.com/klezVirus/SilentMoonwalk
  */
 #include "stack_spoof.h"
+#ifdef _WIN32
+#include <windows.h>
+#endif
 #include "peb.h"
 #include "hash.h"
 #include "export_resolve.h"
@@ -16,6 +19,8 @@
 #include "config.h"
 #include "nt_types.h"
 #include <stddef.h>
+
+
 
 /* ── Global state ────────────────────────────────────────── */
 int g_spoof_ready = 0;

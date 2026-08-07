@@ -72,7 +72,7 @@ SRCS = src/main.c \
        src/evasion/mutex.c \
        src/evasion/unhook.c \
        src/cleanup/persistence.c \
-       src/cleanup/self_delete.c \
+       src/cleanup/self_delete.c
 ASM_SRCS = asm/mirage_stubs_v2.asm asm/stack_spoof_stubs.asm
 
 
@@ -83,10 +83,10 @@ TARGET = mirage.exe
 
 .PHONY: all clean test polymorph
 
-all: polymorph $(TARGET)
+all: $(TARGET)
 
 polymorph:
-	python tools/make_polymorphic.py
+	go run ./panel/cmd/polymorph .
 
 test: $(TARGET)
 	./$(TARGET) --test

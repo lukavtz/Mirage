@@ -12,7 +12,7 @@ import (
 
 func setupBanDB(t *testing.T) *sql.DB {
 	t.Helper()
-	d := testutil.OpenTestDB(t)
+	d := testutil.GetTestDB(t)
 	if _, err := d.Exec("INSERT INTO bans (id, ip, reason) VALUES ('b1', '192.168.1.100', 'test ban')"); err != nil {
 		t.Fatal(err)
 	}

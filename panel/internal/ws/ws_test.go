@@ -165,6 +165,28 @@ func TestHub_BroadcastSkipsSlowClient(t *testing.T) {
 	}
 }
 
+func TestHub_SlowClientEvictionClosesConnection(t *testing.T) {
+	hub := ws.NewHub()
+	go hub.Run()
+
+	srv, token := setupTestServer(t, hub)
+	defer srv.Close()
+	conn := connectWS(t, srv, token)
+	defer conn.Close()
+
+	time.Sleep(50 * time.Millisecond)
+	for i := 0; i < 66; i++ {
+		hub.Broadcast("chat:all", []byte("flood"))
+	}
+	conn.SetReadDeadline(time.Now().Add(time.Second))
+	for {
+		_, _, err := conn.ReadMessage()
+		if err != nil {
+			return
+		}
+	}
+}
+
 func TestHub_ConcurrentBroadcast(t *testing.T) {
 	hub := ws.NewHub()
 	go hub.Run()

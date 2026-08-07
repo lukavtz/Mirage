@@ -1,0 +1,247 @@
+        -:    0:Source:C:/msys64/ucrt64/include/string.h
+        -:    0:Graph:test_rt-rt_mem.gcno
+        -:    0:Data:test_rt-rt_mem.gcda
+        -:    0:Runs:1
+        -:    1:/**
+        -:    2: * This file has no copyright assigned and is placed in the Public Domain.
+        -:    3: * This file is part of the mingw-w64 runtime package.
+        -:    4: * No warranty is given; refer to the file DISCLAIMER.PD within this package.
+        -:    5: */
+        -:    6:#ifndef _INC_STRING
+        -:    7:#define _INC_STRING
+        -:    8:
+        -:    9:#include <crtdefs.h>
+        -:   10:#include <corecrt_memory.h>
+        -:   11:#include <corecrt_wstring.h>
+        -:   12:
+        -:   13:#ifdef __cplusplus
+        -:   14:extern "C" {
+        -:   15:#endif
+        -:   16:
+        -:   17:#ifdef __cplusplus
+        -:   18:/* Tell libstdc++ and libc++ we have provided the correct ISO C++ overloads */
+        -:   19:#define __CORRECT_ISO_CPP_STRING_H_PROTO
+        -:   20:#endif
+        -:   21:
+        -:   22:#ifndef _NLSCMP_DEFINED
+        -:   23:#define _NLSCMP_DEFINED
+        -:   24:#define _NLSCMPERROR 2147483647
+        -:   25:#endif
+        -:   26:
+        -:   27:#ifndef NULL
+        -:   28:#ifdef __cplusplus
+        -:   29:#ifndef _WIN64
+        -:   30:#define NULL 0
+        -:   31:#else
+        -:   32:#define NULL 0LL
+        -:   33:#endif  /* W64 */
+        -:   34:#else
+        -:   35:#define NULL ((void *)0)
+        -:   36:#endif
+        -:   37:#endif
+        -:   38:
+        -:   39:  char * __cdecl _strset(char *_Str,int _Val) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   40:  char * __cdecl _strset_l(char *_Str,int _Val,_locale_t _Locale) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   41:  char * __cdecl strcpy(char * __restrict__ _Dest,const char * __restrict__ _Source);
+        -:   42:  char * __cdecl strcat(char * __restrict__ _Dest,const char * __restrict__ _Source);
+        -:   43:  int __cdecl strcmp(const char *_Str1,const char *_Str2);
+        -:   44:  size_t __cdecl strlen(const char *_Str);
+        -:   45:  size_t __cdecl strnlen(const char *_Str,size_t _MaxCount);
+    #####:   46:  void *__cdecl memmove(void *_Dst,const void *_Src,size_t _Size) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   47:#if defined(_DEBUG) && defined(_CRTDBG_MAP_ALLOC)
+        -:   48:#pragma push_macro("_strdup")
+        -:   49:#undef _strdup
+        -:   50:#endif
+        -:   51:  _CRTIMP char *__cdecl _strdup(const char *_Src);
+        -:   52:#if defined(_DEBUG) && defined(_CRTDBG_MAP_ALLOC)
+        -:   53:#pragma pop_macro("_strdup")
+        -:   54:#endif
+        -:   55:#if !defined(__STRICT_ANSI__) || defined(_GNU_SOURCE) || __STDC_VERSION__ + 0 >= 202311L || _POSIX_C_SOURCE + 0 >= 200809L || _XOPEN_SOURCE + 0 >= 600
+        -:   56:#if defined(_DEBUG) && defined(_CRTDBG_MAP_ALLOC)
+        -:   57:#pragma push_macro("strdup")
+        -:   58:#undef strdup
+        -:   59:#endif
+        -:   60:  char *__cdecl strdup(const char *_Src);
+        -:   61:#if defined(_DEBUG) && defined(_CRTDBG_MAP_ALLOC)
+        -:   62:#pragma pop_macro("strdup")
+        -:   63:#endif
+        -:   64:#endif
+        -:   65:#if !defined(__STRICT_ANSI__) || defined(_GNU_SOURCE) || __STDC_VERSION__ + 0 >= 202311L || _POSIX_C_SOURCE + 0 >= 200809L || _XOPEN_SOURCE + 0 >= 700
+        -:   66:  char *__cdecl strndup(const char *_Src,size_t _MaxCount);
+        -:   67:#endif
+        -:   68:  _CONST_RETURN char *__cdecl strchr(const char *_Str,int _Val);
+        -:   69:  _CRTIMP int __cdecl _stricmp(const char *_Str1,const char *_Str2);
+        -:   70:  _CRTIMP int __cdecl _strcmpi(const char *_Str1,const char *_Str2);
+        -:   71:  _CRTIMP int __cdecl _stricmp_l(const char *_Str1,const char *_Str2,_locale_t _Locale);
+        -:   72:  _CRTIMP int __cdecl strcoll(const char *_Str1,const char *_Str2);
+        -:   73:  _CRTIMP int __cdecl _strcoll_l(const char *_Str1,const char *_Str2,_locale_t _Locale);
+        -:   74:  _CRTIMP int __cdecl _stricoll(const char *_Str1,const char *_Str2);
+        -:   75:  _CRTIMP int __cdecl _stricoll_l(const char *_Str1,const char *_Str2,_locale_t _Locale);
+        -:   76:  _CRTIMP int __cdecl _strncoll (const char *_Str1,const char *_Str2,size_t _MaxCount);
+        -:   77:  _CRTIMP int __cdecl _strncoll_l(const char *_Str1,const char *_Str2,size_t _MaxCount,_locale_t _Locale);
+        -:   78:  _CRTIMP int __cdecl _strnicoll (const char *_Str1,const char *_Str2,size_t _MaxCount);
+        -:   79:  _CRTIMP int __cdecl _strnicoll_l(const char *_Str1,const char *_Str2,size_t _MaxCount,_locale_t _Locale);
+        -:   80:  size_t __cdecl strcspn(const char *_Str,const char *_Control);
+        -:   81:  _CRTIMP char *__cdecl _strerror(const char *_ErrMsg) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   82:  _CRTIMP char *__cdecl strerror(int) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   83:  _CRTIMP char *__cdecl _strlwr(char *_String) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   84:  char *strlwr_l(char *_String,_locale_t _Locale) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   85:  char *__cdecl strncat(char * __restrict__ _Dest,const char * __restrict__ _Source,size_t _Count) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   86:  int __cdecl strncmp(const char *_Str1,const char *_Str2,size_t _MaxCount);
+        -:   87:  _CRTIMP int __cdecl _strnicmp(const char *_Str1,const char *_Str2,size_t _MaxCount);
+        -:   88:  _CRTIMP int __cdecl _strnicmp_l(const char *_Str1,const char *_Str2,size_t _MaxCount,_locale_t _Locale);
+        -:   89:  char *strncpy(char * __restrict__ _Dest,const char * __restrict__ _Source,size_t _Count) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   90:  _CRTIMP char *__cdecl _strnset(char *_Str,int _Val,size_t _MaxCount) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   91:  _CRTIMP char *__cdecl _strnset_l(char *str,int c,size_t count,_locale_t _Locale) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   92:  _CONST_RETURN char *__cdecl strpbrk(const char *_Str,const char *_Control);
+        -:   93:  _CONST_RETURN char *__cdecl strrchr(const char *_Str,int _Ch);
+        -:   94:  _CRTIMP char *__cdecl _strrev(char *_Str);
+        -:   95:  size_t __cdecl strspn(const char *_Str,const char *_Control);
+        -:   96:  _CONST_RETURN char *__cdecl strstr(const char *_Str,const char *_SubStr);
+        -:   97:  _CRTIMP char *__cdecl strtok(char * __restrict__ _Str,const char * __restrict__ _Delim) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:   98:#pragma push_macro("strtok_r")
+        -:   99:#undef strtok_r
+        -:  100:  char *strtok_r(char * __restrict__ _Str, const char * __restrict__ _Delim, char ** __restrict__ __last);
+        -:  101:#pragma pop_macro("strtok_r")
+        -:  102:  _CRTIMP char *__cdecl _strupr(char *_String) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:  103:  _CRTIMP char *_strupr_l(char *_String,_locale_t _Locale) __MINGW_ATTRIB_DEPRECATED_SEC_WARN;
+        -:  104:  _CRTIMP size_t __cdecl strxfrm(char * __restrict__ _Dst,const char * __restrict__ _Src,size_t _MaxCount);
+        -:  105:  _CRTIMP size_t __cdecl _strxfrm_l(char * __restrict__ _Dst,const char * __restrict__ _Src,size_t _MaxCount,_locale_t _Locale);
+        -:  106:
+        -:  107:#ifndef	NO_OLDNAMES
+        -:  108:#if defined(_DEBUG) && defined(_CRTDBG_MAP_ALLOC)
+        -:  109:#pragma push_macro("strdup")
+        -:  110:#undef strdup
+        -:  111:#endif
+        -:  112:  char *__cdecl strdup(const char *_Src) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  113:#if defined(_DEBUG) && defined(_CRTDBG_MAP_ALLOC)
+        -:  114:#pragma pop_macro("strdup")
+        -:  115:#endif
+        -:  116:  int __cdecl strcmpi(const char *_Str1,const char *_Str2) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  117:  int __cdecl stricmp(const char *_Str1,const char *_Str2) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  118:  char *__cdecl strlwr(char *_Str) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  119:  int __cdecl strnicmp(const char *_Str1,const char *_Str,size_t _MaxCount) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  120:  int __cdecl strncasecmp (const char *, const char *, size_t);
+        -:  121:  int __cdecl strcasecmp (const char *, const char *);
+        -:  122:  char *__cdecl strnset(char *_Str,int _Val,size_t _MaxCount) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  123:  char *__cdecl strrev(char *_Str) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  124:  char *__cdecl strset(char *_Str,int _Val) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  125:  char *__cdecl strupr(char *_Str) __MINGW_ATTRIB_DEPRECATED_MSVC2005;
+        -:  126:#endif
+        -:  127:
+        -:  128:#ifdef __cplusplus
+        -:  129:}
+        -:  130:#endif
+        -:  131:
+        -:  132:#ifdef __CORRECT_ISO_CPP_STRING_H_PROTO
+        -:  133:extern "C++" {
+        -:  134:  inline char* strchr(char* __s, int __n)
+        -:  135:  { return const_cast<char*>(strchr(const_cast<const char*>(__s), __n)); }
+        -:  136:
+        -:  137:  inline char* strpbrk(char* __s1, const char* __s2)
+        -:  138:  { return const_cast<char*>(strpbrk(const_cast<const char*>(__s1), __s2)); }
+        -:  139:
+        -:  140:  inline char* strrchr(char* __s, int __n)
+        -:  141:  { return const_cast<char*>(strrchr(const_cast<const char*>(__s), __n)); }
+        -:  142:
+        -:  143:  inline char* strstr(char* __s1, const char* __s2)
+        -:  144:  { return const_cast<char*>(strstr(const_cast<const char*>(__s1), __s2)); }
+        -:  145:}
+        -:  146:#endif
+        -:  147:
+        -:  148:#include <sec_api/string_s.h>
+        -:  149:
+        -:  150:#if __MINGW_FORTIFY_LEVEL > 0
+        -:  151:#ifdef __cplusplus
+        -:  152:extern "C" {
+        -:  153:#endif
+        -:  154:
+        -:  155:__mingw_bos_declare;
+        -:  156:
+        -:  157:__mingw_bos_extern_ovr
+        -:  158:void * memcpy(void * __restrict__ __dst, const void * __restrict__ __src, size_t __n)
+        -:  159:{
+        -:  160:  return __builtin___memcpy_chk(__dst, __src, __n, __mingw_bos(__dst, 0));
+        -:  161:}
+        -:  162:
+        -:  163:__mingw_bos_extern_ovr
+        -:  164:void * memset(void * __dst, int __val, size_t __n)
+        -:  165:{
+        -:  166:  return __builtin___memset_chk(__dst, __val, __n, __mingw_bos(__dst, 0));
+        -:  167:}
+        -:  168:
+        -:  169:__mingw_bos_extern_ovr
+        -:  170:void * memmove(void * __dst, const void * __src, size_t __n)
+        -:  171:{
+        -:  172:  return __builtin___memmove_chk(__dst, __src, __n, __mingw_bos(__dst, 0));
+        -:  173:}
+        -:  174:
+        -:  175:#ifdef _GNU_SOURCE
+        -:  176:__mingw_bos_extern_ovr
+        -:  177:void * mempcpy(void * __dst, const void * __src, size_t __n)
+        -:  178:{
+        -:  179:  return __builtin___mempcpy_chk(__dst, __src, __n, __mingw_bos(__dst, 0));
+        -:  180:}
+        -:  181:#endif /* _GNU_SOURCE */
+        -:  182:
+        -:  183:__mingw_bos_extern_ovr
+        -:  184:char * strcpy(char * __restrict__ __dst, const char * __restrict__ __src)
+        -:  185:{
+        -:  186:  return __builtin___strcpy_chk(__dst, __src, __mingw_bos(__dst, 1));
+        -:  187:}
+        -:  188:
+        -:  189:__mingw_bos_extern_ovr
+        -:  190:char * strcat(char * __restrict__ __dst, const char * __restrict__ __src)
+        -:  191:{
+        -:  192:  return __builtin___strcat_chk(__dst, __src, __mingw_bos(__dst, 1));
+        -:  193:}
+        -:  194:
+        -:  195:__mingw_bos_extern_ovr
+        -:  196:char * strncpy(char * __restrict__ __dst, const char * __restrict__ __src, size_t __n)
+        -:  197:{
+        -:  198:  return __builtin___strncpy_chk(__dst, __src, __n, __mingw_bos(__dst, 1));
+        -:  199:}
+        -:  200:
+        -:  201:__mingw_bos_extern_ovr
+        -:  202:char * strncat(char * __restrict__ __dst, const char * __restrict__ __src, size_t __n)
+        -:  203:{
+        -:  204:  return __builtin___strncat_chk(__dst, __src, __n, __mingw_bos(__dst, 1));
+        -:  205:}
+        -:  206:
+        -:  207:_SECIMP errno_t __cdecl __mingw_call_memcpy_s(void *, size_t, const void *, size_t) __MINGW_ASM_CRT_CALL(memcpy_s);
+        -:  208:wchar_t * __cdecl __mingw_call_wcscpy(wchar_t * __restrict__, const wchar_t * __restrict__) __MINGW_ASM_CALL(wcscpy);
+        -:  209:wchar_t * __cdecl __mingw_call_wcscat(wchar_t * __restrict__, const wchar_t * __restrict__) __MINGW_ASM_CALL(wcscat);
+        -:  210:
+        -:  211:__mingw_bos_extern_ovr
+        -:  212:errno_t memcpy_s(void * __dst, size_t __os, const void * __src, size_t __n)
+        -:  213:{
+        -:  214:  __mingw_bos_ptr_chk_warn(__dst, __os, 0);
+        -:  215:  return __mingw_call_memcpy_s(__dst, __os, __src, __n);
+        -:  216:}
+        -:  217:
+        -:  218:__mingw_bos_extern_ovr
+        -:  219:wchar_t * wcscpy(wchar_t * __restrict__ __dst, const wchar_t * __restrict__ __src)
+        -:  220:{
+        -:  221:  if (__mingw_bos_known(__dst)) {
+        -:  222:    __mingw_bos_cond_chk(!wcscpy_s(__dst, __mingw_bos(__dst, 1) / sizeof(wchar_t), __src));
+        -:  223:    return __dst;
+        -:  224:  }
+        -:  225:  return __mingw_call_wcscpy(__dst, __src);
+        -:  226:}
+        -:  227:
+        -:  228:__mingw_bos_extern_ovr
+        -:  229:wchar_t * wcscat(wchar_t * __restrict__ __dst, const wchar_t * __restrict__ __src)
+        -:  230:{
+        -:  231:  if (__mingw_bos_known(__dst)) {
+        -:  232:    __mingw_bos_cond_chk(!wcscat_s(__dst, __mingw_bos(__dst, 1) / sizeof(wchar_t), __src));
+        -:  233:    return __dst;
+        -:  234:  }
+        -:  235:  return __mingw_call_wcscat(__dst, __src);
+        -:  236:}
+        -:  237:
+        -:  238:#ifdef __cplusplus
+        -:  239:}
+        -:  240:#endif
+        -:  241:#endif /* __MINGW_FORTIFY_LEVEL > 0 */
+        -:  242:
+        -:  243:#endif

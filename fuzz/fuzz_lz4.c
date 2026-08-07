@@ -4,6 +4,7 @@
  *        -o fuzz/fuzz_lz4 fuzz/fuzz_lz4.c src/utils/lz4.c
  * Run:   fuzz/fuzz_lz4 -max_len=65536
  */
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "lz4.h"

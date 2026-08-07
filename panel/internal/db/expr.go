@@ -10,9 +10,11 @@ func Now() string { return "CURRENT_TIMESTAMP" }
 
 func UUID() string { return "gen_random_uuid()::text" }
 
-// Placeholders rewrites ? parameters to PostgreSQL positional parameters.
+// NoPlaceholders skips ? → $N conversion for SQLite.
+var NoPlaceholders bool
+
 func Placeholders(query string) string {
-	if !strings.Contains(query, "?") {
+	if NoPlaceholders || !strings.Contains(query, "?") {
 		return query
 	}
 	var b strings.Builder

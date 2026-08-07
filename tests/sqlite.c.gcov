@@ -1,4 +1,4 @@
         -:    0:Source:src/parsers/sqlite.c
-        -:    0:Graph:test_sqlite-sqlite.gcno
-        -:    0:Data:test_sqlite-sqlite.gcda
+        -:    0:Graph:test_sqlite_fault-sqlite.gcno
+        -:    0:Data:test_sqlite_fault-sqlite.gcda
         -:    0:Runs:1

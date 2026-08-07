@@ -24,6 +24,22 @@ func TestLogin_InvalidJSON(t *testing.T) {
 	}
 }
 
+func TestLogin_FailsWhenSessionPersistenceFails(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	createTestUser(t, d, "session-failure", "secret123")
+	if _, err := d.Exec("DROP TABLE auth_sessions"); err != nil {
+		t.Fatal(err)
+	}
+	handler := api.NewAuthHandler(d, "test-secret")
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader([]byte(`{"username":"session-failure","password":"secret123"}`)))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	handler.Login(w, req)
+	if w.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 when session persistence fails, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestLogin_MissingFields_Extra(t *testing.T) {
 	d := testutil.OpenTestDB(t)
 	handler := api.NewAuthHandler(d, "test-secret")

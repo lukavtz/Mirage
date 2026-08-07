@@ -10,20 +10,21 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	dbutil "zialfi-panel/internal/db"
 	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/testutil"
 )
 
 func setupAPIKeyDB(t *testing.T) (*sql.DB, string) {
 	t.Helper()
-	d := testutil.OpenTestDB(t)
+	d := testutil.GetTestDB(t)
 	userID := uuid.New().String()
-	if _, err := d.Exec("INSERT INTO users (id, username, password_hash, role) VALUES ($1, $2, $3, $4)", userID, "apikey-user", "x", "worker"); err != nil {
+	if _, err := dbutil.Exec(d, "INSERT INTO users (id, username, password_hash, role) VALUES (?, ?, ?, ?)", userID, "apikey-user", "x", "worker"); err != nil {
 		t.Fatal(err)
 	}
 	raw := uuid.New().String() + uuid.New().String()
 	hash := sha256.Sum256([]byte(raw))
-	if _, err := d.Exec("INSERT INTO api_keys (id, user_id, name, key_hash) VALUES ($1, $2, $3, $4)", uuid.New().String(), userID, "test-key", fmt.Sprintf("%x", hash)); err != nil {
+	if _, err := dbutil.Exec(d, "INSERT INTO api_keys (id, user_id, name, key_hash) VALUES (?, ?, ?, ?)", uuid.New().String(), userID, "test-key", fmt.Sprintf("%x", hash)); err != nil {
 		t.Fatal(err)
 	}
 	return d, raw

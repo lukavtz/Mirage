@@ -16,20 +16,17 @@ const (
 )
 
 type Client struct {
-	hub        *Hub
-	conn       *websocket.Conn
-	send       chan []byte
-	userID     string
-	channels   []string
-	closeOnce  sync.Once
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	userID    string
+	channels  []string
+	sendClose sync.Once
 }
 
 func (c *Client) close() {
-	c.closeOnce.Do(func() {
-		c.conn.Close()
-	})
+	_ = c.conn.Close()
 }
-
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c

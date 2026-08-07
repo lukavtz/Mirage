@@ -41,7 +41,7 @@ func (h *Hub) Run() {
 					delete(h.channels[ch], client)
 				}
 				delete(h.clients, client)
-				client.closeOnce.Do(func() { close(client.send) })
+				client.sendClose.Do(func() { close(client.send) })
 			}
 
 		case msg := <-h.broadcast:
@@ -54,7 +54,7 @@ func (h *Hub) Run() {
 						delete(h.channels[ch], client)
 					}
 					delete(h.clients, client)
-					client.closeOnce.Do(func() { close(client.send) })
+					client.sendClose.Do(func() { close(client.send) })
 				}
 			}
 		}

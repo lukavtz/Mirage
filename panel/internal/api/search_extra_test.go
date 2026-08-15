@@ -449,3 +449,109 @@ func TestSearch_OwnerIsolation(t *testing.T) {
 		t.Errorf("expected total=0 for other user, got %v", total2)
 	}
 }
+
+func TestSearchAdvanced_FacetsWithQueryFilter(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
+
+	sid := uuid.New().String()
+	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'tester', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pid := uuid.New().String()
+	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
+		VALUES ($1, $2, 'facet.com', 'dave', 'pass', 'chromium')`, pid, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cid := uuid.New().String()
+	_, err = d.Exec(`INSERT INTO cookies (id, session_id, name, domain, value)
+		VALUES ($1, $2, 'session', 'facet.com', 'xyz')`, cid, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/search/advanced?q=facet", nil)
+	w := httptest.NewRecorder()
+	handler.AdvancedSearch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	facets, ok := resp["facets"].(map[string]any)
+	if !ok {
+		t.Fatal("expected facets in response")
+	}
+
+	browsers, _ := facets["browsers"].(map[string]any)
+	if browsers["chromium"] != float64(1) {
+		t.Errorf("expected chromium in browsers facet, got %v", browsers)
+	}
+
+	osmap, _ := facets["os"].(map[string]any)
+	if osmap["win10"] != float64(1) {
+		t.Errorf("expected win10 in os facet, got %v", osmap)
+	}
+
+	domains, _ := facets["domains"].(map[string]any)
+	if domains["facet.com"] != float64(1) {
+		t.Errorf("expected facet.com in domains facet, got %v", domains)
+	}
+}
+
+func TestSearchAdvanced_FacetsWithBrowserFilter(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	handler := api.NewSearchHandler(d)
+
+	sid := uuid.New().String()
+	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, created_at)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'tester', '1.2.3.4', 'US', CURRENT_TIMESTAMP)`, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pid := uuid.New().String()
+	_, err = d.Exec(`INSERT INTO passwords (id, session_id, url, username, password_value, browser)
+		VALUES ($1, $2, 'facet.com', 'dave', 'pass', 'chromium')`, pid, sid)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/search/advanced?browser=chromium", nil)
+	w := httptest.NewRecorder()
+	handler.AdvancedSearch(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	facets, ok := resp["facets"].(map[string]any)
+	if !ok {
+		t.Fatal("expected facets in response")
+	}
+
+	browsers, _ := facets["browsers"].(map[string]any)
+	if browsers["chromium"] != float64(1) {
+		t.Errorf("expected chromium in browsers facet, got %v", browsers)
+	}
+
+	osmap, _ := facets["os"].(map[string]any)
+	if osmap["win10"] != float64(1) {
+		t.Errorf("expected win10 in os facet, got %v", osmap)
+	}
+}

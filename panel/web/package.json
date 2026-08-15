@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:embed": "tsc && vite build && node -e \"require('fs').cpSync('dist', '../cmd/panel/frontend/dist', { recursive: true })\"",
     "test": "vitest run",
     "preview": "vite preview"
   },

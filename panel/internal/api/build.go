@@ -92,7 +92,7 @@ func (h *BuildHandler) Status(w http.ResponseWriter, r *http.Request) {
 	}
 	var status, sha256, errorMsg string
 	var fileSize int
-	err := db.QueryRow(h.db, `SELECT status, COALESCE(sha256,''), file_size, COALESCE(error_message,'')
+	err := db.QueryRow(h.db, `SELECT status, COALESCE(sha256,''), COALESCE(file_size, 0), COALESCE(error_message,'')
 		FROM builds WHERE id = ? AND user_id = ?`, buildID, claimsUserID(r),
 	).Scan(&status, &sha256, &fileSize, &errorMsg)
 	if err != nil {
@@ -116,24 +116,24 @@ func (h *BuildHandler) List(w http.ResponseWriter, r *http.Request) {
 	if tagFilter != "" {
 		if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
 			rows, err = db.Query(h.db, `
-				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				SELECT id, config_hash, COALESCE(file_size, 0), COALESCE(sha256,''), COALESCE(build_tag,''), COALESCE(download_count, 0), created_at, COALESCE(module_config,'{}')
 				FROM builds WHERE build_tag = ? AND user_id = ? ORDER BY created_at DESC LIMIT 50
 			`, tagFilter, claims.UserID)
 		} else {
 			rows, err = db.Query(h.db, `
-				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				SELECT id, config_hash, COALESCE(file_size, 0), COALESCE(sha256,''), COALESCE(build_tag,''), COALESCE(download_count, 0), created_at, COALESCE(module_config,'{}')
 				FROM builds WHERE build_tag = ? ORDER BY created_at DESC LIMIT 50
 			`, tagFilter)
 		}
 	} else {
 		if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
 			rows, err = db.Query(h.db, `
-				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				SELECT id, config_hash, COALESCE(file_size, 0), COALESCE(sha256,''), COALESCE(build_tag,''), COALESCE(download_count, 0), created_at, COALESCE(module_config,'{}')
 				FROM builds WHERE user_id = ? ORDER BY created_at DESC LIMIT 50
 			`, claims.UserID)
 		} else {
 			rows, err = db.Query(h.db, `
-				SELECT id, config_hash, file_size, sha256, COALESCE(build_tag,''), download_count, created_at, COALESCE(module_config,'{}')
+				SELECT id, config_hash, COALESCE(file_size, 0), COALESCE(sha256,''), COALESCE(build_tag,''), COALESCE(download_count, 0), created_at, COALESCE(module_config,'{}')
 				FROM builds ORDER BY created_at DESC LIMIT 50
 			`)
 		}
@@ -295,12 +295,12 @@ func (h *BuildHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
 		rows, err = db.Query(h.db, `
-			SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
+			SELECT id, COALESCE(build_tag,''), COALESCE(download_count, 0), COALESCE(file_size, 0), created_at
 			FROM builds WHERE user_id = ? ORDER BY created_at DESC
 		`, claims.UserID)
 	} else {
 		rows, err = db.Query(h.db, `
-			SELECT id, COALESCE(build_tag,''), download_count, file_size, created_at
+			SELECT id, COALESCE(build_tag,''), COALESCE(download_count, 0), COALESCE(file_size, 0), created_at
 			FROM builds ORDER BY created_at DESC
 		`)
 	}

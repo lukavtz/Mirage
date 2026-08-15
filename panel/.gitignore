@@ -1,5 +1,10 @@
 # test fixtures produced by the screenshot tests
 internal/api/data/
+data/screenshots/
+
+# built frontend (produced by Dockerfile/CI from web/)
+cmd/panel/frontend/dist/
+
 .env
 coverage.out
 

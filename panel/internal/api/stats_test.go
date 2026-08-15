@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"zialfi-panel/internal/api"
 	"zialfi-panel/internal/auth"
+	"zialfi-panel/internal/middleware"
 	"zialfi-panel/internal/testutil"
 	"zialfi-panel/internal/ws"
 )
@@ -301,5 +303,46 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	}
 	if ev.Type != "stats_update" {
 		t.Errorf("expected type 'stats_update', got %q", ev.Type)
+	}
+}
+
+func TestStats_DashboardNonAdminOwner(t *testing.T) {
+	d := testutil.OpenTestDB(t)
+	handler := api.NewStatsHandler(d, nil)
+
+	uid := createTestUserWithRole(t, d, "statown", "pass", "user")
+	other := createTestUserWithRole(t, d, "statown2", "pass", "user")
+
+	_, err := d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
+		VALUES ($1, 'b1', 'hw1', 'win10', 'own', '1.2.3.4', 'US', $2, CURRENT_TIMESTAMP)`, uuid.New().String(), uid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = d.Exec(`INSERT INTO sessions (id, build_id, hwid, os, username, ip, country_code, owner_id, created_at)
+		VALUES ($1, 'b1', 'hw2', 'win11', 'other', '5.6.7.8', 'GB', $2, CURRENT_TIMESTAMP)`, uuid.New().String(), other)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stats", nil)
+	req = req.WithContext(middleware.ContextWithClaims(req.Context(), &auth.Claims{UserID: uid, Role: "user"}))
+	w := httptest.NewRecorder()
+	handler.Dashboard(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+
+	sessions, ok := resp["sessions"].(map[string]any)
+	if !ok {
+		t.Fatal("expected sessions in response")
+	}
+	if total := sessions["total"].(float64); total != 1 {
+		t.Errorf("expected sessions.total=1 for owner, got %v", total)
 	}
 }

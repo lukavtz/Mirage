@@ -74,8 +74,8 @@ func TestBuild_CreateAndList(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.Build(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]any
@@ -85,8 +85,8 @@ func TestBuild_CreateAndList(t *testing.T) {
 	if resp["id"] == "" {
 		t.Error("expected non-empty build id")
 	}
-	if resp["sha256"] == "" {
-		t.Error("expected non-empty sha256")
+	if resp["status"] != "queued" {
+		t.Errorf("status = %v, want %q", resp["status"], "queued")
 	}
 	if resp["build_tag"] != "release-1" {
 		t.Errorf("build_tag = %v, want %q", resp["build_tag"], "release-1")
@@ -127,8 +127,8 @@ func TestBuild_Download(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.Build(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]any
@@ -136,6 +136,11 @@ func TestBuild_Download(t *testing.T) {
 		t.Fatal(err)
 	}
 	buildID := resp["id"].(string)
+
+	// Simulate a finished async build so the artifact is downloadable.
+	if _, err := d.Exec(`UPDATE builds SET status = 'ready', file_data = decode('4d5a000001020304', 'hex'), sha256 = 'deadbeef' WHERE id = $1`, buildID); err != nil {
+		t.Fatal(err)
+	}
 
 	r := chi.NewRouter()
 	r.Get("/api/build/{id}/download", handler.Download)
@@ -243,8 +248,8 @@ func TestBuild_UpdateTag(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.Build(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]any
@@ -280,8 +285,8 @@ func TestBuild_Stats(t *testing.T) {
 	w := httptest.NewRecorder()
 	handler.Build(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", w.Code, w.Body.String())
 	}
 
 	var resp map[string]any
@@ -315,8 +320,8 @@ func TestBuild_ListByTag(t *testing.T) {
 	req1.Header.Set("Content-Type", "application/json")
 	w1 := httptest.NewRecorder()
 	handler.Build(w1, req1)
-	if w1.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", w1.Code)
+	if w1.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", w1.Code)
 	}
 
 	body2 := `{"c2_host":"10.0.0.2","c2_port":9090,"build_tag":"campaign-b"}`
@@ -324,8 +329,8 @@ func TestBuild_ListByTag(t *testing.T) {
 	req2.Header.Set("Content-Type", "application/json")
 	w2 := httptest.NewRecorder()
 	handler.Build(w2, req2)
-	if w2.Code != http.StatusCreated {
-		t.Fatalf("expected 201, got %d", w2.Code)
+	if w2.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d", w2.Code)
 	}
 
 	listReq := httptest.NewRequest(http.MethodGet, "/api/build?tag=campaign-a", nil)

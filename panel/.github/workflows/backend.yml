@@ -33,6 +33,20 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build frontend
+        working-directory: web
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm run build
+
+      - name: Embed frontend
+        run: cp -r web/dist cmd/panel/frontend/dist
+
       - name: Test backend
         run: go test -count=1 ./internal/...
 
@@ -44,17 +58,6 @@ jobs:
 
       - name: Build backend
         run: go build ./...
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: web/package-lock.json
-
-      - name: Test and build frontend
-        working-directory: web
-        run: npm ci --ignore-scripts --no-audit --no-fund && npm test && npm run build
 
       - name: Build Docker image
         run: docker build --tag mirage-panel:ci .

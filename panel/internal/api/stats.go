@@ -116,7 +116,7 @@ func (h *StatsHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sessions: total, today, yesterday
-	db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions"+whereOwner("", ownerClause), ownerArgs...).Scan(&resp.Sessions.Total)
+	db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions s"+whereOwner("", ownerClause), ownerArgs...).Scan(&resp.Sessions.Total)
 	db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions s WHERE s.created_at::date = CURRENT_TIMESTAMP::date"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Today)
 	db.QueryRow(h.db, "SELECT COUNT(*) FROM sessions s WHERE s.created_at::date = (CURRENT_TIMESTAMP - INTERVAL '1 day')::date"+ownerClause, ownerArgs...).Scan(&resp.Sessions.Yesterday)
 	resp.Sessions.Change = calcChange(resp.Sessions.Today, resp.Sessions.Yesterday)

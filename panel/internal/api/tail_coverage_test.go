@@ -1423,7 +1423,7 @@ func TestBuild_MissingC2Fields(t *testing.T) {
 	}
 }
 
-func TestBuild_ServiceError(t *testing.T) {
+func TestBuild_QueuedWithoutPayload(t *testing.T) {
 	d := testutil.OpenTestDB(t)
 	h := api.NewBuildHandler(services.NewBuildService(), nil, nil, d)
 	r := chi.NewRouter()
@@ -1433,8 +1433,18 @@ func TestBuild_ServiceError(t *testing.T) {
 	req = withClaims(req, createTestUser(t, d, "builderr", "pass"), "admin")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	if w.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500 (signature not found), got %d: %s", w.Code, w.Body.String())
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("expected 202 (async queue), got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Status != "queued" {
+		t.Errorf("status = %q, want %q", resp.Status, "queued")
 	}
 }
 

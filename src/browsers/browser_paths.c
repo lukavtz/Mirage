@@ -833,6 +833,7 @@ static void bp_fs_scan(
                 out[*cnt].name        = nc;
                 out[*cnt].path_suffix = pc;
                 out[*cnt].use_roaming = roaming;
+                out[*cnt].process_name = nc;   /* exe stem = dir leaf name */
                 (*cnt)++;
             } else {
                 free(pc);
@@ -1490,29 +1491,39 @@ int kill_browser_processes(const char *process_name)
     int killed = 0;
     HANDLE h = NULL;
 
+    /* NtGetNextProcess cursor discipline: the PREVIOUS handle is the iteration
+     * cursor — closing it mid-loop makes the kernel restart enumeration from
+     * scratch (handle ping-pong livelock), and the old code's break paths
+     * double-closed it at the end (STATUS_INVALID_HANDLE 0xC0000008 raised
+     * as an exception). Close the cursor only after advancing, and once at
+     * loop exit only if still open. */
     for (;;) {
         HANDLE next = NULL;
         NTSTATUS st = pGetNext(h, DESIRED_ACCESS, 0, 0, &next);
-        if (h) pClose(h);
-        if (st == STATUS_NO_MORE_ENTRIES) break;
-        if (st < 0) { h = NULL; break; }
+        if (st == STATUS_NO_MORE_ENTRIES) break;   /* h stays open — closed below */
+        if (st < 0) break;                          /* keep h; closed below */
+        if (h) { pClose(h); h = NULL; }             /* cursor advanced */
         h = next;
 
-        /* Query image name. Kernel allocates UNICODE_STRING.Buffer; acceptable
-         * leak — process exits shortly and OS reclaims all memory. */
-        UNICODE_STRING img = {0, 0, NULL};
-        st = pQIP(h, ProcessImageFileName, &img, sizeof(UNICODE_STRING), NULL);
-        if (st < 0 || !img.Buffer || img.Length == 0) continue;
+        /* Query image name. ProcessImageFileName writes the UNICODE_STRING
+         * header AND the name bytes into the CALLER's buffer — sizing the
+         * buffer at sizeof(UNICODE_STRING) let the kernel write the path
+         * over adjacent stack, corrupting h (0xC0000008 on NtClose). */
+        __declspec(align(8)) uint8_t imgbuf[16 + 512];
+        UNICODE_STRING *img = (UNICODE_STRING *)imgbuf;
+        img->Length = 0; img->MaximumLength = 0; img->Buffer = NULL;
+        st = pQIP(h, ProcessImageFileName, imgbuf, sizeof(imgbuf), NULL);
+        if (st < 0 || !img->Buffer || img->Length == 0) continue;
 
         /* Extract filename after last backslash */
-        const WCHAR *name = img.Buffer;
-        int nlen = img.Length / (int)sizeof(WCHAR);
+        const WCHAR *name = img->Buffer;
+        int nlen = img->Length / (int)sizeof(WCHAR);
         {
             int last_slash = -1;
             for (int i = 0; i < nlen; i++)
-                if (img.Buffer[i] == L'\\') last_slash = i;
+                if (img->Buffer[i] == L'\\') last_slash = i;
             if (last_slash >= 0) {
-                name  = img.Buffer + last_slash + 1;
+                name  = img->Buffer + last_slash + 1;
                 nlen -= last_slash + 1;
             }
         }
@@ -1535,7 +1546,7 @@ int kill_browser_processes(const char *process_name)
         st = pTerm(h, 0);
         if (st >= 0) killed++;
     }
-    if (h) pClose(h);
+    if (h) pClose(h);   /* single close: loop-exit paths never close h themselves */
     return killed;
 }
 

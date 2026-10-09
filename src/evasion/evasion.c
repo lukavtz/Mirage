@@ -225,10 +225,10 @@ int mirage_check_registry_vm_indicators(void) {
 
 mirage_screen_res mirage_check_screen_resolution(void) {
     mirage_screen_res res = {0, 0};
-    if (ssn_NtUserGetSystemMetrics != 0) {
-        res.w = (uint32_t)mirage_NtUserGetSystemMetrics(0);
-        res.h = (uint32_t)mirage_NtUserGetSystemMetrics(1);
-    }
+    /* ssn_NtUserGetSystemMetrics removed (win32u.dll, unresolvable from
+     * ntdll) — the wrapper is an unconditional user32 fallback now. */
+    res.w = (uint32_t)mirage_NtUserGetSystemMetrics(0);
+    res.h = (uint32_t)mirage_NtUserGetSystemMetrics(1);
     return res;
 }
 

@@ -36,7 +36,7 @@
  * Layout (all offsets from image base):
  *   0x0000        DOS header (e_lfanew = 0x40)
  *   0x0040        NT headers
- *   0x0100        section header (.text)  — VirtualAddress 0x1000, size 0x2000
+ *   0x0148        section header (.text)  — VirtualAddress 0x1000, size 0x2000
  *   0x0200        IMAGE_EXPORT_DIRECTORY
  *   0x0300        AddressOfNames array      (N dwords)
  *   0x0400        AddressOfFunctions array  (N dwords)
@@ -106,6 +106,7 @@ extern uint32_t ssn_NtResumeThread;
 extern uint32_t ssn_NtSuspendThread;
 extern uint32_t ssn_NtDeleteFile;
 extern uint32_t ssn_NtFlushInstructionCache;
+extern uint32_t ssn_xor_key;
 
 static uint32_t *g_ssn_slots[] = {
     &ssn_NtAllocateVirtualMemory, &ssn_NtProtectVirtualMemory,
@@ -169,7 +170,11 @@ static void build_ntdll(void) {
     nt->FileHeader.SizeOfOptionalHeader = sizeof(IMAGE_OPTIONAL_HEADER64);
     nt->OptionalHeader.DataDirectory[0].VirtualAddress = 0x200; /* exports */
 
-    PIMAGE_SECTION_HEADER sec = (PIMAGE_SECTION_HEADER)(g_image + 0x100);
+    /* Section headers follow the full NT headers: e_lfanew(0x40) +
+     * signature(4) + FILE_HEADER(20) + OPTIONAL_HEADER64(240) = 0x148.
+     * Anything earlier overlaps the optional header and tbounds() reads
+     * garbage (or zeros) as the section name. */
+    PIMAGE_SECTION_HEADER sec = (PIMAGE_SECTION_HEADER)(g_image + 0x148);
     memcpy(sec->Name, ".text", 6);
     sec->VirtualAddress = STUB_AREA_RVA;
     sec->Misc.VirtualSize = 0x2000;
@@ -257,7 +262,9 @@ static void test_hooked_stubs_resolve_via_halo(void) {
     assert(rc == 1);
     for (size_t k = 0; k < sizeof(g_hooked_idx) / sizeof(g_hooked_idx[0]); k++) {
         int idx = g_hooked_idx[k];
-        uint32_t got = *g_ssn_slots[idx];
+        /* slots hold obf()-XORed values; deobfuscate with the engine's
+         * per-run key (declared in mirage_asm.h on the real build) */
+        uint32_t got = *g_ssn_slots[idx] ^ ssn_xor_key;
         /* neighbor (idx+1) is clean with SSN 0x10+idx+1, distance 1 */
         uint32_t expect = 0x10 + (uint32_t)idx + 1 - 1;
         if (got != expect) {
@@ -316,7 +323,7 @@ static void test_strict_reject_high_ssn(void) {
     register_ntdll();
     int rc = mirage_syscall_resolve();
     assert(rc == 1);
-    uint32_t got = *g_ssn_slots[POISON_IDX];
+    uint32_t got = *g_ssn_slots[POISON_IDX] ^ ssn_xor_key;
     /* stub is poisoned but not hooked → Halo walk from clean neighbor
      * idx+1 (SSN 0x10+14+1, distance 1) → 0x10+POISON_IDX */
     if (got != 0x10 + POISON_IDX) {

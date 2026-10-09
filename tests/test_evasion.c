@@ -468,7 +468,8 @@ static void test_decoded_array(const char *name, const uint8_t *enc, size_t len)
     char out[256];
     mirage_xor_decrypt(enc, (uint8_t *)out, len);
     for (size_t i = 0; i < len; i++) {
-        if ((out[i] < 0x20 && out[i] != '\r' && out[i] != '\n') || out[i] > 0x7E) {
+        unsigned char c = (unsigned char)out[i];
+        if ((c < 0x20 && c != '\r' && c != '\n') || c > 0x7E) {
             fprintf(stderr, "  FAIL: %s decodes to non-printable byte 0x%02x at %zu\n",
                     name, c, i);
             assert(0 && "enc array does not decode to printable ASCII");

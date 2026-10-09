@@ -3,7 +3,7 @@
        alt="zialfi — C11 Windows Stealer with indirect syscalls, PEB walk, full evasion suite, and Go+React C2 panel. Ported from Mirage Zig.">
 </p>
 
-**zialfi** — порт [Mirage Stealer](https://github.com/) (Zig → C11). Полноценный Windows information stealer с косвенными syscall'ами, программным обходом AMSI/ETW/UAC/Defender и Go + React C2-панелью. 209 KB stripped, 0 детектов на реальном Windows 10, 86/86 unit-тестов.
+**zialfi** — порт [Mirage Stealer](https://github.com/) (Zig → C11). Полноценный Windows information stealer с косвенными syscall'ами, программным обходом AMSI/ETW/UAC/Defender и Go + React C2-панелью. 209 KB stripped, 0 детектов на реальном Windows 10, ~500 unit-тестов (`make test-all` — ALL PASSED).
 
 <br>
 
@@ -154,20 +154,25 @@ zialfi/
 
 <p align="center">
   <img src="./assets/readme/section-tests.svg" width="100%"
-       alt="86/86 unit tests — crypto, PEB, Chromium, wallets, messengers, network, evasion">
+       alt="~500 unit tests — crypto, syscalls, browsers, packer, evasion, panel interop">
 </p>
 
 | Suite | Тестов | Что проверяет |
 |-------|--------|---------------|
-| test_crypto | 9 | ChaCha20-Poly1305 roundtrip, tag verification, tamper detection |
+| test_crypto | 9+ | ChaCha20-Poly1305 (Monocypher 3.1) roundtrip, RFC 8439 KAT, tag verification, tamper detection |
 | test_peb | 8 | PEB walk, module hash, XOR encrypt/decrypt |
-| test_chromium | 10 | 58 Chromium + 10 Gecko — browser path enumeration |
-| test_wallets | 9 | 96 ext + 38 desktop — wallet path coverage |
-| test_messengers | 10 | 14 messenger directory patterns |
-| test_network | 8 | HTTP multipart format, metadata, response parsing |
-| test_evasion | 27 | Anti-analysis scoring — 15 weighted checks |
-| test_sqlite | 5 | Custom SQLite B-tree parser |
-| **Total** | **86** | |
+| test_engine | 8 | Fail-closed SSN resolution — Halo neighbor recovery, E9-hook recovery, gadget scan, obf zero-guard |
+| test_chromium | 18 | 56 Chromium + Gecko — enumeration, kill cursor discipline, merged discovery |
+| test_chrome_crypto | 39 | GCM decrypt, BCrypt/OpenSSL paths, auth-failure negatives |
+| test_archive_crypt | 26 | Archive envelope, PBKDF2 seed, C→Go interop fixture |
+| test_packer | 8 | TOCTOU packer — grow/realloc, shrink, empty dir |
+| test_stack_spoof_offsets | ✓ | win64 ABI frame layout invariants (shared .h/.inc) |
+| test_sleep_chain | ✓ | Zilean ROP chain builder — Rip/Rcx/Rdx/R8/R9 per step, Rsp−8/entry |
+| test_evasion | 27 | Anti-analysis scoring, TZI 172B, decode all enc_ arrays |
+| test_sqlite | 210 | Custom SQLite B-tree parser + fault injection |
+| test_wallets / messengers / network / clipper / wifi / keylogger / gaming / twofa / vpn | ~120 | Module path coverage |
+| **Total** | **~500** | `make test-all` — ALL PASSED |
+
 
 ### Real Windows 10 Test (2026-07-29)
 

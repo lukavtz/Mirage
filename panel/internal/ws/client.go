@@ -15,11 +15,17 @@ const (
 	sendBufSize    = 64
 )
 
+// wsRevalidateInterval is how often a connected socket re-checks
+// token_version in the DB. Periodic chosen over event-driven: no event
+// bus exists in the panel, and 5 minutes of staleness is acceptable for
+// a C2 panel. Package-level so tests can shrink it.
+var wsRevalidateInterval = 5 * time.Minute
 type Client struct {
 	hub       *Hub
 	conn      *websocket.Conn
 	send      chan []byte
 	userID    string
+	dbVersion int   // token_version at upgrade time; checked periodically
 	channels  []string
 	sendClose sync.Once
 }
@@ -46,6 +52,33 @@ func (c *Client) readPump() {
 			break
 		}
 	}
+}
+
+// revalidationLoop periodically re-checks token_version and closes the
+// socket when the client's token has been revoked. The actual unregister
+// happens via readPump's deferred handler once the conn closes.
+func (c *Client) revalidationLoop() {
+	if c.hub.dbConn == nil {
+		return
+	}
+	ticker := time.NewTicker(revalidateInterval())
+	defer ticker.Stop()
+	for range ticker.C {
+		if !c.revalidate() {
+			c.close()
+			return
+		}
+	}
+}
+
+// revalidate returns false when token_version changed in the DB since
+// upgrade (revocation).
+func (c *Client) revalidate() bool {
+	var dbVersion int
+	if err := c.hub.dbConn.QueryRow("SELECT COALESCE(token_version, 0) FROM users WHERE id = $1", c.userID).Scan(&dbVersion); err != nil {
+		return true // DB hiccup: keep the socket, next tick retries
+	}
+	return dbVersion == c.dbVersion
 }
 
 func (c *Client) writePump() {

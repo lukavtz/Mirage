@@ -252,7 +252,7 @@ func TestStats_BroadcastsViaHub(t *testing.T) {
 	}
 
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
+	r.Get("/ws", ws.ServeWs(hub, d, jwtSecret, "*"))
 	r.Group(func(r chi.Router) {
 		r.Use(api.AuthMiddleware(jwtSecret, d))
 		statsHandler := api.NewStatsHandler(d, hub)

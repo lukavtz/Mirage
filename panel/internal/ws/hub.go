@@ -1,11 +1,17 @@
 package ws
 
+import (
+	"database/sql"
+	"time"
+)
+
 type Hub struct {
 	clients    map[*Client]bool
 	channels   map[string]map[*Client]bool
 	register   chan *Client
 	unregister chan *Client
 	broadcast  chan *channelMessage
+	dbConn     *sql.DB // used by readPump's periodic token_version re-check
 }
 
 type channelMessage struct {
@@ -22,6 +28,11 @@ func NewHub() *Hub {
 		unregister: make(chan *Client),
 	}
 }
+
+// SetRevalidateInterval lets tests shrink the periodic token re-check.
+func SetRevalidateInterval(d time.Duration) { wsRevalidateInterval = d }
+
+func revalidateInterval() time.Duration { return wsRevalidateInterval }
 
 func (h *Hub) Run() {
 	for {

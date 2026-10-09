@@ -57,7 +57,7 @@ func TestEvents_NewChatEvent(t *testing.T) {
 func TestServeWs_DisallowedOrigin(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "http://allowed.example"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "http://allowed.example"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -92,7 +92,7 @@ func TestServeWs_DisallowedOrigin(t *testing.T) {
 func TestServeWs_MissingOrigin(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "http://allowed.example"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "http://allowed.example"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -115,7 +115,7 @@ func TestServeWs_AllowedOrigin(t *testing.T) {
 	go hub.Run()
 
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "http://allowed.example"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "http://allowed.example"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -143,7 +143,7 @@ func TestServeWs_AllowedOrigin(t *testing.T) {
 func TestServeWs_NotWebSocket(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 

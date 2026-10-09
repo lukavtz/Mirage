@@ -1,11 +1,12 @@
 name: C Stealer Build
 on:
   push:
-    branches: [feat/*, main, develop]
-    paths: ['src/**', 'include/**', 'Makefile', 'tools/**']
+    branches: [feat/*, main, develop, fix/*, dev]
+    paths: ['src/**', 'include/**', 'Makefile', 'tools/**', 'tests/**']
   pull_request:
-    branches: [main, develop]
-    paths: ['src/**', 'include/**', 'Makefile', 'tools/**']
+    branches: [main, develop, dev]
+    paths: ['src/**', 'include/**', 'Makefile', 'tools/**', 'tests/**']
+
 
 jobs:
   build:

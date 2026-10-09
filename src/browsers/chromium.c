@@ -1095,12 +1095,10 @@ char **extract_chromium_logins(const char *profile_path,
     *count = 0;
 
     unsigned char dec_buf[8192];
-    int short_row = 0;
 
     for (size_t r = 0; r < row_count; r++) {
         SqliteRow *row = &rows[r];
         if (row->count <= (size_t)(idx_pass > idx_origin ? idx_pass : idx_user)) {
-            short_row++;
             continue;
         }
 
@@ -1128,7 +1126,8 @@ char **extract_chromium_logins(const char *profile_path,
         size_t dec_len = 0;
         if (chrome_decrypt_password(enc, enc_len, key,
                                     dec_buf, sizeof(dec_buf), &dec_len) != 0) {
-            if (r < 3)
+            /* GCM auth failure or malformed blob — skip the row, never
+             * emit unauthenticated garbage as a password. */
             continue;
         }
 

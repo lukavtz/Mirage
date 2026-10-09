@@ -19,6 +19,6 @@
 %define SSL_NV_SAVE_BASE   0x68
 %define SSL_NV_SAVE_SIZE   0x40
 
-%define SSL_STASH_COUNT    7
-%define SSL_STASH_BASE     0xa8
-%define SSL_STASH_SIZE     0x38
+%define SSL_STASH_COUNT    8
+%define SSL_STASH_BASE     0xe8
+%define SSL_STASH_SIZE     0x40

@@ -13,7 +13,7 @@
  *
  * In spoof_call's own frame (below rbp) we keep:
  *   - non-volatile save area at NV_SAVE_BASE..+NV_SAVE_SIZE (8 slots)
- *   - arg stash area at STASH_BASE..+STASH_SIZE (7 slots)
+ *   - arg stash area at STASH_BASE..+STASH_SIZE (8 slots: a2 + a5..a11)
  * Both must lie ABOVE (lower address than) the arg-write window
  * [rsp+0x28..0x60] that the tail-jumped target consumes.
  *
@@ -24,7 +24,7 @@
  *                       overlaps a5's home slot — win64 lets the callee
  *                       reuse [rsp+0x20] as a5 home; args 6+ at 0x30..0x60)
  *   [rbp-NV_SAVE_BASE-8 .. ] non-volatile saves (8 qwords, ABOVE rsp+0x60)
- *   [rbp-STASH_BASE-8 .. ]  arg stashes (7 qwords, ABOVE rsp+0x60)
+ *   [rbp-STASH_BASE .. ]    arg stashes (8 qwords: a2 + a5..a11, ABOVE rsp+0x60)
  */
 #ifndef MIRAGE_STACK_SPOOF_LAYOUT_H
 #define MIRAGE_STACK_SPOOF_LAYOUT_H
@@ -49,9 +49,11 @@
 #define SSL_NV_SAVE_BASE   0x68    /* first save slot at [rbp-0x68] ... [rbp-0x30] */
 #define SSL_NV_SAVE_SIZE   (SSL_NV_COUNT * 8)   /* 0x40: covers rbp-0x68 down to rbp-0x29 */
 
-/* Arg stash region: 7 qwords (a5..a11) above the save region. */
-#define SSL_STASH_COUNT    7
-#define SSL_STASH_BASE     (0x68 + SSL_NV_SAVE_SIZE)  /* 0xa8: [rbp-0xa8] ... [rbp-0x70] */
-#define SSL_STASH_SIZE     (SSL_STASH_COUNT * 8)    /* 0x38 */
+/* Arg stash region: 8 qwords (a2 + a5..a11) above the save region.
+ * The asm stashes a2 here too (r9 is repurposed for arg4), so the
+ * region spans [rbp-0xe8] ... [rbp-0x70]. */
+#define SSL_STASH_COUNT    8
+#define SSL_STASH_BASE     (0x68 + SSL_NV_SAVE_SIZE + 0x08 + (SSL_STASH_COUNT - 1) * 8)  /* 0xe8: [rbp-0xe8] ... [rbp-0x70] */
+#define SSL_STASH_SIZE     (SSL_STASH_COUNT * 8)    /* 0x40 */
 
 #endif /* MIRAGE_STACK_SPOOF_LAYOUT_H */

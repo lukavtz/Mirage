@@ -51,9 +51,11 @@ static int chrome_derive_key(unsigned char *out32) {
 }
 
 /* ── Reimplemented chrome_decrypt_password (Linux path) ── */
+/* Local mirror of src/crypto/chrome_crypto.c contract: -1 implies *out_len == 0. */
 static int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
                                    const unsigned char *key32,
                                    unsigned char *out, size_t out_max, size_t *out_len) {
+    *out_len = 0;
     if (len < 3 + 12 + 16) return -1;
     if (memcmp(encrypted, "v10", 3) != 0 && memcmp(encrypted, "v11", 3) != 0 &&
         memcmp(encrypted, "v20", 3) != 0)
@@ -220,6 +222,32 @@ static void test_decrypt_empty_plaintext(void) {
     CHECK(out_len == 0, "empty");
 }
 
+static void test_decrypt_corrupted_tag(void) {
+    unsigned char key[32];
+    CHECK(chrome_derive_key(key) == 0, "derive");
+    unsigned char nonce[12] = {1,2,3,4,5,6,7,8,9,10,11,12};
+    unsigned char encrypted[256]; size_t enc_len = 0;
+    CHECK(chrome_encrypt_password((const unsigned char *)"secret", 6, key, nonce, encrypted, &enc_len) == 0, "enc");
+    /* Corrupt the last tag byte — GCM auth MUST fail */
+    encrypted[enc_len - 1] ^= 0x80;
+    unsigned char out[256]; size_t out_len = 42;
+    CHECK(chrome_decrypt_password(encrypted, enc_len, key, out, sizeof(out), &out_len) == -1, "corrupt-tag");
+    CHECK(out_len == 0, "corrupt-tag-outlen-zero");
+}
+
+static void test_decrypt_corrupted_ciphertext(void) {
+    unsigned char key[32];
+    CHECK(chrome_derive_key(key) == 0, "derive");
+    unsigned char nonce[12] = {1,2,3,4,5,6,7,8,9,10,11,12};
+    unsigned char encrypted[256]; size_t enc_len = 0;
+    CHECK(chrome_encrypt_password((const unsigned char *)"secret", 6, key, nonce, encrypted, &enc_len) == 0, "enc");
+    /* Corrupt first ciphertext byte — auth MUST fail */
+    encrypted[15] ^= 0x01;
+    unsigned char out[256]; size_t out_len = 42;
+    CHECK(chrome_decrypt_password(encrypted, enc_len, key, out, sizeof(out), &out_len) == -1, "corrupt-ct");
+    CHECK(out_len == 0, "corrupt-ct-outlen-zero");
+}
+
 int main(void) {
     printf("=== test_chrome_crypto ===\n"); fflush(stdout);
     test_extract_key_basic();     printf("  PASS: extract_basic\n"); fflush(stdout);
@@ -235,6 +263,8 @@ int main(void) {
     test_decrypt_bad_prefix();    printf("  PASS: decrypt_bad_prefix\n"); fflush(stdout);
     test_decrypt_short();         printf("  PASS: decrypt_short\n"); fflush(stdout);
     test_decrypt_empty_plaintext(); printf("  PASS: decrypt_empty\n"); fflush(stdout);
+    test_decrypt_corrupted_tag();    printf("  PASS: decrypt_corrupted_tag\n"); fflush(stdout);
+    test_decrypt_corrupted_ciphertext(); printf("  PASS: decrypt_corrupted_ciphertext\n"); fflush(stdout);
     printf("=== test_chrome_crypto: %d/%d PASSED ===\n", g_pass, g_pass + g_fail);
     fflush(stdout);
     return g_fail == 0 ? 0 : 1;

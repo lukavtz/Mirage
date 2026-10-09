@@ -209,7 +209,10 @@ int mi_cfg_load(void) {
 
 int mirage_syscall_resolve(void) {
     /* Generate dynamic SSN XOR key per-run */
-    ssn_xor_key = mi_cfg_load() ? g_mi_cfg.ssn_xor_key : (MIRAGE_SEED ^ (uint32_t)GetTickCount());
+    /* ponytail: GetTickCount is an import (breaks -nostdlib link); rdtsc is
+     * link-free entropy, adequate for a per-run XOR key. */
+    ssn_xor_key = mi_cfg_load() ? g_mi_cfg.ssn_xor_key
+                                : (MIRAGE_SEED ^ (uint32_t)__rdtsc());
 
     char dll_buf[32]; enc_decrypt(enc_ntdll, ENC_NTDLL_LEN, dll_buf);
     uint32_t h = mirage_encrypted_hash_module(dll_buf);

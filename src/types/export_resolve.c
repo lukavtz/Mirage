@@ -13,9 +13,11 @@
  */
 
 #include <windows.h>
+#include "peb.h"
 #include "export_resolve.h"
 #include "hash.h"
 #include "config.h"
+#include <string.h>
 #include <stddef.h>
 #include "enc_strings.h"
 
@@ -103,6 +105,46 @@ static void* walk_exports(void* module_base, uint32_t target_hash)
         if (h == target_hash) {
             uint16_t ordinal = ords[i];
             uint32_t func_rva = funcs[ordinal];
+
+            /* Forwarded export (e.g. advapi32!SystemFunction036 →
+             * CRYPTBASE.SystemFunction036): the RVA points into the
+             * export directory at a "DllName.FuncName" string, not at
+             * executable code. Calling such an address crashes. Resolve
+             * the forwarder target by PEB-walking the target DLL. */
+            if (func_rva >= export_rva &&
+                func_rva <  export_rva +
+                            nt->OptionalHeader.DataDirectory[0].Size) {
+                const char *fwd = (const char*)(base_bytes + func_rva);
+                const char *dot = fwd;
+                while (*dot && *dot != '.') dot++;
+                if (*dot == '.') {
+                    char dll_name[64];
+                    size_t dll_len = (size_t)(dot - fwd);
+                    if (dll_len < sizeof(dll_name) - 5) {
+                        /* forwarder strings are typically UPPERCASE
+                         * ("CRYPTBASE.SystemFunction036"); the PEB walk
+                         * hashes the real module name lowercase */
+                        for (size_t q = 0; q < dll_len; q++) {
+                            char ch = fwd[q];
+                            dll_name[q] = (ch >= 'A' && ch <= 'Z')
+                                        ? (char)(ch - 'A' + 'a') : ch;
+                        }
+                        strcpy(dll_name + dll_len, ".dll");
+                        /* find the .dll in PEB (case-insensitive
+                         * module hash walk) */
+                        uint32_t mod_hash =
+                            mirage_encrypted_hash_module(dll_name);
+                        void *target_mod =
+                            mirage_get_module_by_hash(mod_hash);
+                        if (target_mod) {
+                            uint32_t tgt_hash =
+                                mirage_encrypted_hash_func(dot + 1);
+                            return walk_exports(target_mod, tgt_hash);
+                        }
+                    }
+                }
+                return NULL;  /* unresolvable forwarder */
+            }
             return (void*)(base_bytes + func_rva);
         }
     }

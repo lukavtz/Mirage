@@ -42,6 +42,21 @@ size_t mirage_tzi_struct_size(void) {
 #include "detection.h"
 #include "config.h"
 #include <string.h>
+#include <stdint.h>
+
+/* Test hook (Phase 4): size of the struct passed to GetTimeZoneInformation.
+ * The real Windows TIME_ZONE_INFORMATION is 172 bytes; the LITE decl used
+ * at the call site was 132 — kernel wrote 40 bytes past it (stack overflow). */
+size_t mirage_tzi_struct_size(void);
+
+size_t mirage_tzi_struct_size(void) {
+    typedef struct {
+        int32_t Bias;
+        uint16_t StandardName[32];
+        /* mirrors the LITE decl used at the call site (pre-fix) */
+    } TIME_ZONE_INFORMATION_LITE_TEST;
+    return sizeof(TIME_ZONE_INFORMATION_LITE_TEST);
+}
 
 int is_cis_language(uint16_t lang_id) {
     uint16_t primary = lang_id & 0x3FF;

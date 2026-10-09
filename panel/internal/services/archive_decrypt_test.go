@@ -18,7 +18,7 @@ func TestDecryptArchive_ValidRoundtrip(t *testing.T) {
 	plaintext := []byte("hello from Mirage C stealer, this is test data for roundtrip verification")
 
 	// Encrypt using the same parameters as the C stealer
-	seed := []byte{0xEF, 0x00, 0xDC, 0x68, 0x00, 0x00, 0x00, 0x00}
+	seed := []byte{148, 229, 117, 173, 0, 0, 0, 0} // 0xAD75E594 LE — keep in sync with archiveSeed / MIRAGE_SEED
 	salt := make([]byte, 16)
 	for i := range salt {
 		salt[i] = byte(i + 1)

@@ -9,14 +9,23 @@
 #include "config.h"
 
 static inline void enc_decrypt(const uint8_t *enc, size_t len, char *out) {
-    for (size_t i = 0; i < len; i++)
-        out[i] = (char)(enc[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
+    for (size_t i = 0; i < len; i++) {
+        /* __asm__ memory barrier: prevents GCC from constant-folding the
+         * XOR (const array ^ const key) into movabs immediates of the
+         * PLAINTEXT, which leaked API names into .text. */
+        uint8_t k = MIRAGE_STRING_KEY_ENC[i % 16];
+        __asm__ volatile ("" : "+r" (k) : : "memory");
+        out[i] = (char)(enc[i] ^ k);
+    }
     out[len] = '\0';
 }
 
 static inline void enc_decrypt_wide(const uint8_t *enc, size_t enc_len, wchar_t *out) {
-    for (size_t i = 0; i < enc_len; i++)
-        out[i] = (wchar_t)(enc[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
+    for (size_t i = 0; i < enc_len; i++) {
+        uint8_t k = MIRAGE_STRING_KEY_ENC[i % 16];
+        __asm__ volatile ("" : "+r" (k) : : "memory");
+        out[i] = (wchar_t)(enc[i] ^ k);
+    }
     out[enc_len] = L'\0';
 }
 

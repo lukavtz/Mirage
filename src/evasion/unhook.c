@@ -58,18 +58,8 @@
 /* ── NTSTATUS helpers ──────────────────────────────────────────── */
 #define NT_SUCCESS(Status)  (((NTSTATUS)(Status)) >= 0)
 
-/* ── Encrypted strings for function resolution ────────────────── */
-/* ponytail: inline XOR-encrypted "NtOpenSection" — add to enc_strings.h generator */
-static const uint8_t enc_unhook_NtOpenSection[13] = {
-    0x5f, 0x1a, 0x0d, 0x63, 0xa4, 0xe8, 0x40, 0x06, 0xb7, 0x16, 0xa9, 0x96, 0xab
-};
-#define ENC_UNHOOK_NTOPENSECTION_LEN 13
-
-/* ponytail: inline XOR-encrypted "NtReadFile" — add to enc_strings.h generator */
-static const uint8_t enc_unhook_NtReadFile[9] = {
-    0x5f, 0x1a, 0x10, 0x76, 0xa0, 0xf5, 0x48, 0x0f, 0x8d
-};
-#define ENC_UNHOOK_NTREADFILE_LEN 9
+/* Encrypted NT function names: enc_strings.h (restored, key-consistent —
+ * the previous inline copies decrypted to garbage). */
 
 /* ── NT path strings ───────────────────────────────────────────── */
 /* ponytail: plaintext WCHAR paths — small and obfuscation benefit

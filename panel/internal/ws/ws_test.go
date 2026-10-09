@@ -30,7 +30,7 @@ func testHeader() http.Header {
 func setupTestServer(t *testing.T, hub *ws.Hub) (*httptest.Server, string) {
 	t.Helper()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
 	token, _, err := auth.GenerateToken("user-1", "admin", jwtSecret, "", 0)
 	if err != nil {
@@ -228,7 +228,7 @@ func TestHub_ConcurrentBroadcast(t *testing.T) {
 func TestServeWs_NoToken(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 
@@ -242,7 +242,7 @@ func TestServeWs_NoToken(t *testing.T) {
 func TestServeWs_InvalidToken(t *testing.T) {
 	hub := ws.NewHub()
 	r := chi.NewRouter()
-	r.Get("/ws", ws.ServeWs(hub, jwtSecret, "*"))
+	r.Get("/ws", ws.ServeWs(hub, nil, jwtSecret, "*"))
 	srv := httptest.NewServer(r)
 	defer srv.Close()
 

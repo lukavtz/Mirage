@@ -113,6 +113,43 @@ def rewrite_config(seed, key):
     with open(CONFIG_H, "w", encoding="utf-8") as f:
         f.write(text)
 
+    # Keep the panel's archiveSeed in lockstep with the client seed, or the
+    # Go panel can no longer decrypt client archives.
+    rewrite_archive_seed(ARCHIVE_DECRYPT_GO, seed)
+
+
+ARCHIVE_DECRYPT_GO = os.path.join(
+    ROOT, "panel", "internal", "services", "archive_decrypt.go"
+)
+
+
+def rewrite_archive_seed(path, seed):
+    """Rewrite the panel's archiveSeed Go constant from a fresh MIRAGE_SEED.
+
+    path: archive_decrypt.go to rewrite (tests pass a temp copy).
+    seed: the new 32-bit MIRAGE_SEED.
+    """
+    with open(path, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    le4 = seed.to_bytes(4, "little")
+    new_const = (
+        "var archiveSeed = []byte{"
+        + ", ".join(str(b) for b in le4)
+        + ", 0, 0, 0, 0}"
+    )
+    pattern = re.compile(r"var archiveSeed = \[\]byte\{[^}]*\}")
+    text, n = pattern.subn(new_const, text, count=1)
+    if n != 1:
+        raise SystemExit(
+            "[!] archive_decrypt.go: archiveSeed constant not found"
+        )
+
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    print(f"[+] archiveSeed synced to MIRAGE_SEED 0x{seed:08X} ({path})")
+
 
 def rewrite_c2_token():
     token = ''.join(random.choices('0123456789abcdef', k=32))

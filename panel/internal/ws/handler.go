@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 
@@ -40,7 +41,8 @@ func extractToken(r *http.Request) string {
 	return ""
 }
 
-func ServeWs(hub *Hub, jwtSecret string, allowedOrigins string) http.HandlerFunc {
+func ServeWs(hub *Hub, dbConn *sql.DB, jwtSecret string, allowedOrigins string) http.HandlerFunc {
+	hub.dbConn = dbConn // for readPump's periodic revalidation
 	allowed := map[string]bool{}
 	for _, o := range strings.Split(allowedOrigins, ",") {
 		o = strings.TrimSpace(o)
@@ -77,6 +79,21 @@ func ServeWs(hub *Hub, jwtSecret string, allowedOrigins string) http.HandlerFunc
 			return
 		}
 
+		// Same revocation check as AuthMiddleware: token_version must match
+		// the DB or the JWT (valid signature or not) is stale. Skipped when
+		// no DB handle is wired (nil DB = no revocation surface).
+		if dbConn != nil {
+			var dbVersion int
+			if err := dbConn.QueryRow("SELECT COALESCE(token_version, 0) FROM users WHERE id = $1", claims.UserID).Scan(&dbVersion); err != nil {
+				http.Error(w, "user not found", http.StatusUnauthorized)
+				return
+			}
+			if claims.TokenVersion != dbVersion {
+				http.Error(w, "token has been revoked", http.StatusUnauthorized)
+				return
+			}
+		}
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			return
@@ -87,6 +104,8 @@ func ServeWs(hub *Hub, jwtSecret string, allowedOrigins string) http.HandlerFunc
 			conn:   conn,
 			send:   make(chan []byte, sendBufSize),
 			userID: claims.UserID,
+			// token_version snapshot; 0 when no DB is wired (check skipped).
+			dbVersion: claims.TokenVersion,
 			channels: []string{
 				"sessions:" + claims.UserID,
 				"stats:" + claims.UserID,
@@ -101,5 +120,6 @@ func ServeWs(hub *Hub, jwtSecret string, allowedOrigins string) http.HandlerFunc
 
 		go client.writePump()
 		go client.readPump()
+		go client.revalidationLoop()
 	}
 }

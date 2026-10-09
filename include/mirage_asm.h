@@ -41,7 +41,7 @@ extern uint32_t ssn_NtOpenKey;
 extern uint32_t ssn_NtQueryValueKey;
 extern uint32_t ssn_NtSetInformationProcess;
 extern uint32_t ssn_NtSetInformationFile;
-extern uint32_t ssn_NtUserGetSystemMetrics;
+/* ssn_NtUserGetSystemMetrics removed — win32u.dll syscall, unresolvable from ntdll */
 extern uint32_t ssn_NtGetContextThread;
 extern uint32_t ssn_NtSetContextThread;
 extern uint32_t ssn_NtOpenSection;
@@ -79,7 +79,6 @@ uint64_t NtOpenKey_stub(uint64_t, uint64_t, uint64_t);
 uint64_t NtQueryValueKey_stub(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
 uint64_t NtSetInformationProcess_stub(uint64_t, uint64_t, uint64_t, uint64_t);
 uint64_t NtSetInformationFile_stub(uint64_t, uint64_t, uint64_t, uint64_t, uint64_t);
-uint64_t NtUserGetSystemMetrics_stub(uint64_t);
 uint64_t NtGetContextThread_stub(uint64_t, uint64_t);
 uint64_t NtSetContextThread_stub(uint64_t, uint64_t);
 uint64_t NtOpenSection_stub(uint64_t, uint64_t, uint64_t);

@@ -134,7 +134,7 @@ func TestDecryptAndDecompress_FullPipeline(t *testing.T) {
 	copy(lz4Payload[5:], compressed)
 
 	// Step 2: ChaCha20-Poly1305 encrypt
-	seed := []byte{0xEF, 0x00, 0xDC, 0x68, 0x00, 0x00, 0x00, 0x00}
+	seed := []byte{0x94, 0xE5, 0x75, 0xAD, 0x00, 0x00, 0x00, 0x00} // 0xAD75E594 LE — current MIRAGE_SEED, sync with archiveSeed
 	salt := make([]byte, 16)
 	for i := range salt {
 		salt[i] = byte(i + 0x42)

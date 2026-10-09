@@ -58,7 +58,8 @@
 /* ── NTSTATUS helpers ──────────────────────────────────────────── */
 #define NT_SUCCESS(Status)  (((NTSTATUS)(Status)) >= 0)
 
-/* ── Encrypted strings: moved to include/enc_strings.h (Phase 4) ── */
+/* Encrypted NT function names: enc_strings.h (restored, key-consistent —
+ * the previous inline copies decrypted to garbage). */
 
 /* ── NT path strings ───────────────────────────────────────────── */
 /* ponytail: plaintext WCHAR paths — small and obfuscation benefit

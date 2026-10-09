@@ -19,6 +19,9 @@
 
 /* Use real is_cis_language from detection.c */
 extern int is_cis_language(uint16_t lang_id);
+/* TIME_ZONE_INFORMATION size hook: detection.c in TEST_EVASION_STANDALONE
+ * mode exports it; the declaration was missing (implicit-decl error). */
+extern size_t mirage_tzi_struct_size(void);
 #include "hash.h"
 
 /* ── Stub implementations for platform-specific functions ────── */
@@ -465,9 +468,7 @@ static void test_decoded_array(const char *name, const uint8_t *enc, size_t len)
     char out[256];
     mirage_xor_decrypt(enc, (uint8_t *)out, len);
     for (size_t i = 0; i < len; i++) {
-        unsigned char c = (unsigned char)out[i];
-        /* allow CR/LF — the HTTP request template legitimately contains them */
-        if ((c < 0x20 && c != '\r' && c != '\n') || c > 0x7E) {
+        if ((out[i] < 0x20 && out[i] != '\r' && out[i] != '\n') || out[i] > 0x7E) {
             fprintf(stderr, "  FAIL: %s decodes to non-printable byte 0x%02x at %zu\n",
                     name, c, i);
             assert(0 && "enc array does not decode to printable ASCII");

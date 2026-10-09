@@ -50,12 +50,10 @@ size_t mirage_tzi_struct_size(void) {
 size_t mirage_tzi_struct_size(void);
 
 size_t mirage_tzi_struct_size(void) {
-    typedef struct {
-        int32_t Bias;
-        uint16_t StandardName[32];
-        /* mirrors the LITE decl used at the call site (pre-fix) */
-    } TIME_ZONE_INFORMATION_LITE_TEST;
-    return sizeof(TIME_ZONE_INFORMATION_LITE_TEST);
+    /* Real Windows TIME_ZONE_INFORMATION — what the (fixed) call site
+     * now passes to GetTimeZoneInformation. The pre-fix LITE decl was
+     * 68 bytes; the kernel wrote 104 bytes past it. */
+    return sizeof(TIME_ZONE_INFORMATION);
 }
 
 int is_cis_language(uint16_t lang_id) {

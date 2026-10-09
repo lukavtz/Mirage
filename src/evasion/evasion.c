@@ -16,51 +16,26 @@
 #include "enc_strings.h"
 #include <string.h>
 
-/* ── XOR-encrypted strings ──────────────────────────────── */
+/* ── Encrypted strings: moved to include/enc_strings.h (Phase 4) ── */
 
-static const uint8_t enc_reg_bios_path[] = {
-    0x5c,0x52,0x65,0x67,0x69,0x73,0x74,0x72,0x79,0x5c,0x4d,0x61,
-    0x63,0x68,0x69,0x6e,0x65,0x5c,0x48,0x41,0x52,0x44,0x57,0x41,
-    0x52,0x45,0x5c,0x44,0x45,0x53,0x43,0x52,0x49,0x50,0x54,0x49,
-    0x4f,0x4e,0x5c,0x53,0x79,0x73,0x74,0x65,0x6d,0x5c,0x42,0x49,
-    0x4f,0x53
+static const uint8_t* vm_manuf_tbl[6] = {
+    enc_vm_manuf_0, enc_vm_manuf_1, enc_vm_manuf_2,
+    enc_vm_manuf_3, enc_vm_manuf_4, enc_vm_manuf_5,
 };
-#define REG_BIOS_PATH_LEN sizeof(enc_reg_bios_path)
-
-static const uint8_t enc_sys_manufacturer[] = {
-    0x53,0x79,0x73,0x74,0x65,0x6d,0x4d,0x61,0x6e,0x75,0x66,0x61,
-    0x63,0x74,0x75,0x72,0x65,0x72
+static const size_t vm_manuf_len[6] = {
+    ENC_VM_MANUF_0_LEN, ENC_VM_MANUF_1_LEN, ENC_VM_MANUF_2_LEN,
+    ENC_VM_MANUF_3_LEN, ENC_VM_MANUF_4_LEN, ENC_VM_MANUF_5_LEN,
 };
-#define SYS_MANUFACTURER_LEN sizeof(enc_sys_manufacturer)
-
-static const uint8_t enc_sys_product_name[] = {
-    0x53,0x79,0x73,0x74,0x65,0x6d,0x50,0x72,0x6f,0x64,0x75,0x63,
-    0x74,0x4e,0x61,0x6d,0x65
-};
-#define SYS_PRODUCT_NAME_LEN sizeof(enc_sys_product_name)
-
-/* VM manufacturer strings */
-static const uint8_t enc_vm_manuf[][16] = {
-    {0x56,0x4d,0x77,0x61,0x72,0x65},                                     /* VMware */
-    {0x56,0x69,0x72,0x74,0x75,0x61,0x6c,0x42,0x6f,0x78},               /* VirtualBox */
-    {0x69,0x6e,0x6e,0x6f,0x74,0x65,0x6b},                               /* innotek */
-    {0x51,0x45,0x4d,0x55},                                               /* QEMU */
-    {0x58,0x65,0x6e},                                                     /* Xen */
-    {0x42,0x6f,0x63,0x68,0x73}                                           /* Bochs */
-};
-static const size_t vm_manuf_len[] = {6,10,7,4,2,5};
 #define VM_MANUF_COUNT 6
 
-/* VM product strings */
-static const uint8_t enc_vm_prod[][16] = {
-    {0x56,0x69,0x72,0x74,0x75,0x61,0x6c},                               /* Virtual */
-    {0x56,0x4d,0x77,0x61,0x72,0x65},                                     /* VMware */
-    {0x56,0x69,0x72,0x74,0x75,0x61,0x6c,0x42,0x6f,0x78},               /* VirtualBox */
-    {0x51,0x45,0x4d,0x55},                                               /* QEMU */
-    {0x58,0x65,0x6e},                                                     /* Xen */
-    {0x42,0x6f,0x63,0x68,0x73}                                           /* Bochs */
+static const uint8_t* vm_prod_tbl[6] = {
+    enc_vm_prod_0, enc_vm_prod_1, enc_vm_prod_2,
+    enc_vm_prod_3, enc_vm_prod_4, enc_vm_prod_5,
 };
-static const size_t vm_prod_len[] = {7,6,10,4,2,5};
+static const size_t vm_prod_len[6] = {
+    ENC_VM_PROD_0_LEN, ENC_VM_PROD_1_LEN, ENC_VM_PROD_2_LEN,
+    ENC_VM_PROD_3_LEN, ENC_VM_PROD_4_LEN, ENC_VM_PROD_5_LEN,
+};
 #define VM_PROD_COUNT 6
 
 /* ── Helper: RDTSC ───────────────────────────────────────── */
@@ -173,12 +148,12 @@ static int contains_one_of(HANDLE key, const char* value_name,
 }
 
 int mirage_check_registry_vm_indicators(void) {
-    uint8_t path_tmp[REG_BIOS_PATH_LEN];
-    decrypt_into(enc_reg_bios_path, REG_BIOS_PATH_LEN, path_tmp);
+    uint8_t path_tmp[ENC_REG_BIOS_PATH_LEN];
+    mirage_xor_decrypt(enc_reg_bios_path, path_tmp, ENC_REG_BIOS_PATH_LEN);
 
     WCHAR buf_us[512];
     UNICODE_STRING us;
-    init_unicode_string((const char*)path_tmp, REG_BIOS_PATH_LEN, &us, buf_us);
+    init_unicode_string((const char*)path_tmp, ENC_REG_BIOS_PATH_LEN, &us, buf_us);
 
     OBJECT_ATTRIBUTES oa;
     memset(&oa, 0, sizeof(oa));
@@ -194,7 +169,7 @@ int mirage_check_registry_vm_indicators(void) {
     uint8_t manuf_bufs[VM_MANUF_COUNT][16];
     const uint8_t* manuf_ptrs[VM_MANUF_COUNT];
     for (size_t i = 0; i < VM_MANUF_COUNT; i++) {
-        decrypt_into(enc_vm_manuf[i], vm_manuf_len[i], manuf_bufs[i]);
+        decrypt_into(vm_manuf_tbl[i], vm_manuf_len[i], manuf_bufs[i]);
         manuf_ptrs[i] = manuf_bufs[i];
     }
 
@@ -202,16 +177,15 @@ int mirage_check_registry_vm_indicators(void) {
     uint8_t prod_bufs[VM_PROD_COUNT][16];
     const uint8_t* prod_ptrs[VM_PROD_COUNT];
     for (size_t i = 0; i < VM_PROD_COUNT; i++) {
-        decrypt_into(enc_vm_prod[i], vm_prod_len[i], prod_bufs[i]);
+        decrypt_into(vm_prod_tbl[i], vm_prod_len[i], prod_bufs[i]);
         prod_ptrs[i] = prod_bufs[i];
     }
 
     /* Decrypt value names */
-    uint8_t manuf_name[SYS_MANUFACTURER_LEN];
-    uint8_t prod_name[SYS_PRODUCT_NAME_LEN];
-    decrypt_into(enc_sys_manufacturer, SYS_MANUFACTURER_LEN, manuf_name);
-    decrypt_into(enc_sys_product_name, SYS_PRODUCT_NAME_LEN, prod_name);
-
+    uint8_t manuf_name[ENC_SYS_MANUFACTURER_LEN];
+    uint8_t prod_name[ENC_SYS_PRODUCT_NAME_LEN];
+    mirage_xor_decrypt(enc_sys_manufacturer, manuf_name, ENC_SYS_MANUFACTURER_LEN);
+    mirage_xor_decrypt(enc_sys_product_name, prod_name, ENC_SYS_PRODUCT_NAME_LEN);
     int found = contains_one_of(key_handle, (const char*)manuf_name,
                                 manuf_ptrs, vm_manuf_len, VM_MANUF_COUNT)
              || contains_one_of(key_handle, (const char*)prod_name,
@@ -243,25 +217,7 @@ int mirage_check_timing_anomaly(void) {
     return (t1 - t0) < VM_TIMING_ANOMALY_TSC ? 1 : 0;
 }
 
-/* ── XOR-encrypted strings for hosting IP check ──────────── */
-
-/* ip-api.com */
-static const uint8_t enc_ip_api_com[] = { 0xb4,0x75,0x09,0x86,0xe8,0x2f,0x52,0x5b,0xf7,0xbe };
-#define ENC_IP_API_COM_LEN 10
-
-/* GET /json/ HTTP/1.1\r\nHost: ip-api.com\r\nConnection: close\r\n\r\n */
-static const uint8_t enc_http_get_ipapi[] = {
-    0x9a,0x40,0x70,0xc7,0xb7,0x2c,0x0f,0x57,0xf6,0xfc,0x56,0xc5,
-    0xe0,0x0a,0x7b,0xfd,0xec,0x2b,0x15,0xea,0x92,0x0e,0x13,0x4b,
-    0xec,0xe9,0x56,0xe4,0xc4,0x73,0x4a,0xa2,0xb4,0x2b,0x47,0x88,
-    0xf5,0x4b,0x76,0x7b,0xf7,0xbd,0x18,0xe8,0xd7,0x2a,0x42,0xbd,
-    0xb3,0x3f,0x04,0x84,0xf4,0x29,0x0f,0x5d,0x95,0xd9,0x7b,0x87
-};
-#define ENC_HTTP_GET_IPAPI_LEN 60
-
-/* "hosting":true */
-static const uint8_t enc_hosting_true[] = { 0xff,0x6d,0x4b,0x94,0xec,0x2f,0x12,0x5f,0xba,0xe9,0x02,0xff,0xc1,0x3b };
-#define ENC_HOSTING_TRUE_LEN 14
+/* Hosting IP check strings: moved to include/enc_strings.h (Phase 4) */
 
 /* ── checkHostingIP ──────────────────────────────────────── */
 

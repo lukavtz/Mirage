@@ -152,6 +152,10 @@ test-evasion: tests/test_evasion.c src/evasion/detection.c src/types/hash.c
 	$(TEST_CC) $(TEST_CFLAGS) -DTEST_EVASION_STANDALONE -o tests/test_evasion tests/test_evasion.c src/evasion/detection.c src/types/hash.c
 	./tests/test_evasion
 
+test-stack-spoof: tests/test_stack_spoof_offsets.c include/stack_spoof_layout.h include/stack_spoof_layout.inc
+	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_stack_spoof_offsets tests/test_stack_spoof_offsets.c
+	./tests/test_stack_spoof_offsets
+
 clean-tests:
 	rm -f tests/test_crypto tests/test_sqlite tests/test_peb tests/test_chromium \
 	      tests/test_wallets tests/test_messengers tests/test_network tests/test_evasion \

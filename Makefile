@@ -117,7 +117,7 @@ test-hash: tests/test_hash.c src/types/hash.c include/hash.h include/config.h
 TEST_CC = gcc
 TEST_CFLAGS = -Wall -Wextra -O2 -Iinclude -Isrc/parsers -Isrc/utils -std=c11
 
-test-unit: test-crypto test-peb test-chromium test-wallets test-messengers test-network test-evasion
+test-unit: test-crypto test-peb test-sqlite test-chromium test-wallets test-messengers test-network test-evasion
 	@echo "=== ALL UNIT TESTS PASSED ==="
 
 test-crypto: tests/test_crypto.c src/crypto/chacha_poly.c src/utils/secure_zero.c
@@ -155,7 +155,7 @@ test-evasion: tests/test_evasion.c src/evasion/detection.c src/types/hash.c
 clean-tests:
 	rm -f tests/test_crypto tests/test_sqlite tests/test_peb tests/test_chromium \
 	      tests/test_wallets tests/test_messengers tests/test_network tests/test_evasion \
-	      tests/test_lz4 tests/test_chunked tests/test_rt_str tests/test_rt tests/test_seed_grabber \
+	      tests/test_lz4 tests/test_chunked tests/test_rt tests/test_seed_grabber \
 	      tests/test_scoring tests/test_asn1 tests/test_base64 tests/test_json_extract \
 	      tests/*.o tests/*.gcda tests/*.gcno
 
@@ -167,10 +167,6 @@ test-lz4: tests/test_lz4.c src/utils/lz4.c
 test-chunked: tests/test_chunked.c src/network/chunked.c
 	$(TEST_CC) $(TEST_CFLAGS) -DZIALFI_TEST_MODE -Wno-error -Wno-cpp -Iinclude -Isrc -Isrc/network -Isrc/types -Isrc/utils -Isrc/parsers -std=c11 -o tests/test_chunked.exe tests/test_chunked.c src/network/chunked.c src/network/ws2.c src/network/ws2_peb.c src/types/hash.c src/types/export_resolve.c src/types/peb.c -lws2_32 -ladvapi32
 	tests/test_chunked.exe
-
-test-rt-str: tests/test_rt_str.c src/rt/rt_str.c
-	$(TEST_CC) $(TEST_CFLAGS) -o tests/test_rt_str tests/test_rt_str.c src/rt/rt_str.c
-	./tests/test_rt_str
 
 test-rt: tests/test_rt.c src/rt/rt_str.c src/rt/rt_mem.c src/rt/rt_conv.c src/rt/rt_snprintf.c
 	$(TEST_CC) $(TEST_CFLAGS) -Wno-error -Wl,--allow-multiple-definition -Isrc/rt -o tests/test_rt tests/test_rt.c src/rt/rt_str.c src/rt/rt_mem.c src/rt/rt_conv.c src/rt/rt_snprintf.c
@@ -206,7 +202,7 @@ test-archive-crypt: tests/test_archive_crypt.c
 
 test-json-extract: tests/test_json_extract.c
 	$(TEST_CC) $(TEST_CFLAGS) -DTEST_JSON_EXTRACT_STANDALONE -o tests/test_json_extract tests/test_json_extract.c
-	./tests/test_json-extract
+	./tests/test_json_extract
 
 
 # Phase 38 test targets
@@ -245,7 +241,7 @@ test-all: test-hash test-crypto test-sqlite test-peb test-chromium test-wallets 
           test-rt test-scoring test-asn1 test-base64 \
           test-mock-seams test-fixtures test-sqlite-fault test-network-mock test-crypto-mock test-clipper test-wifi test-keylogger test-gaming test-twofa test-vpn \
           test-export-resolve test-file-utils test-ws2 test-socks5 test-proxy test-panel-http test-schannel \
-          test-chrome-crypto test-firefox-crypto test-archive-crypt
+          test-chrome-crypto test-firefox-crypto test-archive-crypt test-chunked test-json-extract test-seed-grabber
 	@echo "=== ALL TEST SUITES PASSED ==="
 
 # ── Coverage ─────────────────────────────────────────────────

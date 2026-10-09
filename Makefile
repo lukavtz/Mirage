@@ -200,6 +200,16 @@ test-archive-crypt: tests/test_archive_crypt.c
 	$(TEST_CC) $(TEST_CFLAGS) -Isrc -Isrc/crypto -o tests/test_archive_crypt tests/test_archive_crypt.c src/crypto/chacha_poly.c src/utils/secure_zero.c -lssl -lcrypto
 	./tests/test_archive_crypt
 
+# C→Go interop fixture: encrypts a fixed pattern with the client's
+# archive_encrypt (PBKDF2-SHA256 seed + RFC 8439 AEAD) into
+# panel/testdata/archive_sample.bin; the Go test TestDecryptArchive_CSamples
+# must decrypt it with x/crypto chacha20poly1305. Regenerate after every
+# MIRAGE_SEED change.
+test-interop-gen: tests/test_interop_gen.c src/crypto/archive_crypt.c src/crypto/chacha_poly.c src/crypto/monocypher.c
+	@mkdir -p panel/testdata
+	$(TEST_CC) $(TEST_CFLAGS) -Iinclude -Isrc -Isrc/crypto -Isrc/utils -Isrc/types -o tests/test_interop_gen tests/test_interop_gen.c src/crypto/archive_crypt.c src/crypto/chacha_poly.c src/crypto/monocypher.c src/utils/secure_zero.c -lssl -lcrypto
+	./tests/test_interop_gen
+
 test-json-extract: tests/test_json_extract.c
 	$(TEST_CC) $(TEST_CFLAGS) -DTEST_JSON_EXTRACT_STANDALONE -o tests/test_json_extract tests/test_json_extract.c
 	./tests/test_json_extract

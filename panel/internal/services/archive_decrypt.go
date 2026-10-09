@@ -8,9 +8,13 @@ import (
 	"golang.org/x/crypto/pbkdf2"
 )
 
-// MIRAGE_SEED (0xE080BE35) as 8-byte little-endian — must match the C stealer's config.h.
-// This changes on each make_polymorphic.py run; update after regenerating.
-var archiveSeed = []byte{239, 0, 220, 104, 0, 0, 0, 0}
+// MIRAGE_SEED (0xAD75E594 from include/config.h) as 4-byte little-endian +
+// 4 zero bytes — must stay in sync with the C stealer's config.h.
+// NOTE: this constant must be regenerated from include/config.h MIRAGE_SEED
+// after every make_polymorphic.py run (the generator randomizes the seed).
+// A make_polymorphic.py rewrite of this Go constant is planned separately;
+// until then this file must be kept manually synced.
+var archiveSeed = []byte{148, 229, 117, 173, 0, 0, 0, 0}
 
 const archivePBKDF2Iter = 210000
 
